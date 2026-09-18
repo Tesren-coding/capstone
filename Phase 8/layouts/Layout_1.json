@@ -1,0 +1,188 @@
+{
+  "stations": {
+    "1": {
+      "x": 150,
+      "y": 480
+    },
+    "2": {
+      "x": 280,
+      "y": 480
+    },
+    "3": {
+      "x": 410,
+      "y": 480
+    },
+    "4": {
+      "x": 800,
+      "y": 480
+    },
+    "5": {
+      "x": 1060,
+      "y": 480
+    },
+    "6": {
+      "x": 1320,
+      "y": 480
+    },
+    "7": {
+      "x": 1580,
+      "y": 480
+    },
+    "8": {
+      "x": 1710,
+      "y": 480
+    },
+    "9": {
+      "x": 1840,
+      "y": 480
+    },
+    "10": {
+      "x": 1580,
+      "y": 280
+    },
+    "11": {
+      "x": 1190,
+      "y": 280
+    },
+    "12": {
+      "x": 1060,
+      "y": 280
+    },
+    "13": {
+      "x": 670,
+      "y": 280
+    },
+    "14": {
+      "x": 410,
+      "y": 280
+    },
+    "15": {
+      "x": 280,
+      "y": 280
+    },
+    "16": {
+      "x": 150,
+      "y": 280
+    }
+  },
+  "boxes": {
+    "Incoming": {
+      "x": 20,
+      "y": 480
+    },
+    "HT_Out": {
+      "x": 540,
+      "y": 480
+    },
+    "HT_In": {
+      "x": 670,
+      "y": 480
+    },
+    "SWIP_1": {
+      "x": 930,
+      "y": 480
+    },
+    "SWIP_2": {
+      "x": 1190,
+      "y": 480
+    },
+    "SWIP_3": {
+      "x": 1450,
+      "y": 480
+    },
+    "Packing": {
+      "x": 20,
+      "y": 280
+    },
+    "SWIP_7": {
+      "x": 481.06203995793896,
+      "y": 362.7980535279805
+    },
+    "SWIP_6": {
+      "x": 800,
+      "y": 280
+    },
+    "Coating_Out": {
+      "x": 930,
+      "y": 280
+    },
+    "SWIP_5": {
+      "x": 1320,
+      "y": 280
+    },
+    "Coating_In": {
+      "x": 1450,
+      "y": 280
+    },
+    "SWIP_4": {
+      "x": 1710,
+      "y": 280
+    }
+  },
+  "stationInfo": {
+    "1": {
+      "name": "Insp. Incoming Masking",
+      "cycle_time": 2
+    },
+    "2": {
+      "name": "Incoming Blasting AO24",
+      "cycle_time": 17
+    },
+    "3": {
+      "name": "Cosmetic Blasting AO220",
+      "cycle_time": 15
+    },
+    "4": {
+      "name": "Incoming FPI",
+      "cycle_time": 18
+    },
+    "5": {
+      "name": "Incoming Inspection",
+      "cycle_time": 15
+    },
+    "6": {
+      "name": "T800 Machining",
+      "cycle_time": 7
+    },
+    "7": {
+      "name": "Blending Defect",
+      "cycle_time": 18
+    },
+    "8": {
+      "name": "Swab Etch",
+      "cycle_time": 6
+    },
+    "9": {
+      "name": "Local FPI",
+      "cycle_time": 11
+    },
+    "10": {
+      "name": "Shotpeen",
+      "cycle_time": 6
+    },
+    "11": {
+      "name": "Post-peen CMM",
+      "cycle_time": 4
+    },
+    "12": {
+      "name": "Final CMM",
+      "cycle_time": 4
+    },
+    "13": {
+      "name": "Clear Overspray",
+      "cycle_time": 14
+    },
+    "14": {
+      "name": "Final Inspection",
+      "cycle_time": 8
+    },
+    "15": {
+      "name": "Part Marking",
+      "cycle_time": 2
+    },
+    "16": {
+      "name": "Moment Weight",
+      "cycle_time": 3
+    }
+  }
+}

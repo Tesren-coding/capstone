@@ -1,0 +1,864 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="card">
+    <h2>Scenario Builder</h2>
+    <p id="status-text">Click a button below, then click the canvas to place an item.</p>
+</section>
+
+<div id="toolbar" style="text-align:center; margin:12px 0;">
+    <button class="add-btn" data-type="station"  style="padding:10px 18px; margin-right:6px;">+ Station</button>
+    <button class="add-btn" data-type="operator" style="padding:10px 18px; margin-right:6px;">+ Operator</button>
+    <button class="add-btn" data-type="swip"      style="padding:10px 18px; margin-right:6px;">+ SWIP Box</button>
+    <button class="add-btn" data-type="in"        style="padding:10px 18px; margin-right:6px;">+ IN Box</button>
+    <button class="add-btn" data-type="out"       style="padding:10px 18px; margin-right:24px;">+ OUT Box</button>
+    <button id="cancel-place-btn" style="padding:10px 18px; display:none; background:#fde8e8; border:2px solid #b52a2a;">Cancel Placement</button>
+</div>
+
+<div id="toolbar2" style="text-align:center; margin:12px 0;">
+    <label style="margin-right:24px;">
+        Takt Time (min):
+        <input type="text" id="takt-time-input" value="30" style="width:60px; margin-left:4px;">
+    </label>
+
+    <button id="save-scenario-btn" style="padding:10px 18px; background:#e8f4ea; border:2px solid #2d7a3a; margin-right:8px;">Save Scenario</button>
+
+    <select id="scenario-select" style="padding:9px; margin-right:8px;">
+        <option value="">-- Select a saved scenario --</option>
+    </select>
+    <button id="load-scenario-btn" style="padding:10px 18px; background:#e8eef8; border:2px solid #1e3c78; margin-right:24px;">Load Scenario</button>
+
+    <button id="run-scenario-btn" style="padding:10px 18px; background:#fff4e0; border:2px solid #c47a00;">▶ Run Simulation</button>
+</div>
+
+<canvas id="builder-canvas" width="2400" height="1042"
+        style="border:1px solid #ccc; background:#ffffff; display:block;
+               margin:20px auto; max-width:100%;">
+</canvas>
+
+<div id="side-panel" style="position:fixed; top:150px; right:20px; width:260px; height:400px;
+     background:#f7f7f7; border:2px solid #1e3c78; border-radius:6px;
+     display:none; z-index:10; min-width:220px; min-height:200px;
+     max-width:600px; max-height:90vh; overflow:auto; resize:both;">
+    <div id="panel-header" style="background:#1e3c78; color:#fff; padding:8px 12px;
+         cursor:move; border-radius:4px 4px 0 0; font-weight:bold; user-select:none;">
+        <span id="panel-title">Edit Item</span>
+    </div>
+    <div style="padding:16px;">
+        <div id="panel-fields"></div>
+        <button id="delete-item-btn"
+                style="margin-top:12px; width:100%; padding:8px; background:#fde8e8; border:2px solid #b52a2a;">
+            Delete
+        </button>
+    </div>
+</div>
+
+<script>
+// ============================================================
+// PART 1 — Canvas + state setup
+// ============================================================
+const canvas     = document.getElementById("builder-canvas");
+const ctx        = canvas.getContext("2d");
+const statusText = document.getElementById("status-text");
+
+const scenario = {
+    stations:  {},
+    operators: {},
+    boxes:     {},
+};
+
+let nextStationId  = 1;
+let nextOperatorId = 1;
+let nextBoxId       = 1;
+
+const SIZES = {
+    station: { w: 120, h: 70 },
+    swip:    { w: 90,  h: 60 },
+    in:      { w: 90,  h: 60 },
+    out:     { w: 90,  h: 60 },
+};
+
+const DEFAULT_COLORS = [
+    [220, 60, 60], [60, 120, 220], [60, 180, 90],
+    [230, 160, 30], [150, 60, 200], [30, 170, 170],
+];
+let colorIndex = 0;
+
+let draggedItem  = null;
+let dragOffset   = { x: 0, y: 0 };
+let selectedItem = null;
+let placingType  = null;
+
+// ============================================================
+// PART 2 — Placement mode
+// ============================================================
+const cancelPlaceBtn = document.getElementById("cancel-place-btn");
+
+document.querySelectorAll(".add-btn").forEach(btn => {
+    btn.addEventListener("click", () => {
+        placingType = btn.getAttribute("data-type");
+        canvas.style.cursor = "crosshair";
+        cancelPlaceBtn.style.display = "inline-block";
+        statusText.textContent = `Click on the canvas to place a new &#36;{placingType}.`;
+    });
+});
+
+cancelPlaceBtn.addEventListener("click", () => {
+    exitPlacementMode();
+    statusText.textContent = "Placement cancelled.";
+});
+
+function exitPlacementMode() {
+    placingType = null;
+    canvas.style.cursor = "default";
+    cancelPlaceBtn.style.display = "none";
+}
+
+// ============================================================
+// PART 3 — Create new items
+// ============================================================
+function createStation(x, y) {
+    const id = nextStationId++;
+    scenario.stations[id] = {
+        x: x - SIZES.station.w / 2,
+        y: y - SIZES.station.h / 2,
+        w: SIZES.station.w,
+        h: SIZES.station.h,
+        name: "New Station",
+        cycle_time: 10,
+        has_part: false,
+    };
+    return id;
+}
+
+function createOperator(x, y) {
+    const id = "Op" + nextOperatorId++;
+    const color = DEFAULT_COLORS[colorIndex % DEFAULT_COLORS.length];
+    colorIndex++;
+    scenario.operators[id] = {
+        x: x,
+        y: y,
+        name: id,
+        color: color,
+        sequence: [],
+    };
+    return id;
+}
+
+function createBox(x, y, type) {
+    const id   = type.toUpperCase() + "_" + nextBoxId++;
+    const size = SIZES[type];
+
+    const box = {
+        x: x - size.w / 2,
+        y: y - size.h / 2,
+        w: size.w,
+        h: size.h,
+        type: type,
+        name: id,
+    };
+
+    if (type === "swip") {
+        box.has_part = false;
+    } else if (type === "in") {
+        box.start_count = 10;
+    } else if (type === "out") {
+        box.capacity = 50;
+    }
+
+    scenario.boxes[id] = box;
+    return id;
+}
+
+// ============================================================
+// PART 3b — Takt time tracking
+// ============================================================
+const taktTimeInput = document.getElementById("takt-time-input");
+
+taktTimeInput.addEventListener("input", (e) => {
+    e.target.value = e.target.value.replace(/[^0-9]/g, "");
+});
+
+// ============================================================
+// PART 4 — Canvas click handler (placement)
+// ============================================================
+function getCanvasMousePos(evt) {
+    const rect   = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top)  * scaleY,
+    };
+}
+
+canvas.addEventListener("click", (evt) => {
+    if (!placingType) return;
+
+    const pos = getCanvasMousePos(evt);
+
+    if (placingType === "station") {
+        createStation(pos.x, pos.y);
+    } else if (placingType === "operator") {
+        createOperator(pos.x, pos.y);
+    } else {
+        createBox(pos.x, pos.y, placingType);
+    }
+
+    exitPlacementMode();
+    statusText.textContent = `Added item. Drag it to reposition, or click another toolbar button to add more.`;
+    drawFrame();
+});
+
+// ============================================================
+// PART 5 — Drag + selection logic
+// ============================================================
+function findItemAtPosition(mx, my) {
+    for (const id in scenario.stations) {
+        const p = scenario.stations[id];
+        if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
+            return { type: "station", id, pos: p };
+        }
+    }
+    for (const id in scenario.boxes) {
+        const p = scenario.boxes[id];
+        if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
+            return { type: "box", id, pos: p };
+        }
+    }
+    for (const id in scenario.operators) {
+        const p = scenario.operators[id];
+        const dist = Math.hypot(mx - p.x, my - p.y);
+        if (dist <= 20) {
+            return { type: "operator", id, pos: p };
+        }
+    }
+    return null;
+}
+
+canvas.addEventListener("mousedown", (evt) => {
+    if (placingType) return;
+
+    const mouse = getCanvasMousePos(evt);
+    const item  = findItemAtPosition(mouse.x, mouse.y);
+
+    if (item) {
+        draggedItem = item;
+        selectedItem = item;
+        dragOffset.x = mouse.x - item.pos.x;
+        dragOffset.y = mouse.y - item.pos.y;
+        canvas.style.cursor = "grabbing";
+        openSidePanel(item);
+    } else {
+        selectedItem = null;
+        openSidePanel(null);
+    }
+
+    drawFrame();
+});
+
+canvas.addEventListener("mousemove", (evt) => {
+    if (!draggedItem) return;
+
+    const mouse = getCanvasMousePos(evt);
+    const newX  = mouse.x - dragOffset.x;
+    const newY  = mouse.y - dragOffset.y;
+
+    if (draggedItem.type === "operator") {
+        scenario.operators[draggedItem.id].x = newX;
+        scenario.operators[draggedItem.id].y = newY;
+    } else {
+        draggedItem.pos.x = newX;
+        draggedItem.pos.y = newY;
+    }
+
+    drawFrame();
+});
+
+canvas.addEventListener("mouseup", () => {
+    if (draggedItem) {
+        draggedItem = null;
+        canvas.style.cursor = placingType ? "crosshair" : "default";
+    }
+});
+
+canvas.addEventListener("mouseleave", () => {
+    if (draggedItem) {
+        draggedItem = null;
+        canvas.style.cursor = placingType ? "crosshair" : "default";
+    }
+});
+
+// ============================================================
+// PART 5b — Side panel (identity editing)
+// ============================================================
+const sidePanel     = document.getElementById("side-panel");
+const panelTitle     = document.getElementById("panel-title");
+const panelFields    = document.getElementById("panel-fields");
+const deleteItemBtn  = document.getElementById("delete-item-btn");
+
+function rgbToHex(rgbArr) {
+    return "#" + rgbArr.map(v => v.toString(16).padStart(2, "0")).join("");
+}
+
+function hexToRgb(hex) {
+    const bigint = parseInt(hex.slice(1), 16);
+    return [(bigint >> 16) & 255, (bigint >> 8) & 255, bigint & 255];
+}
+
+// ============================================================
+// PART 5c — Make the side panel draggable via its header bar
+// ============================================================
+const panelHeader = document.getElementById("panel-header");
+
+let panelDrag = null; // {offsetX, offsetY}
+
+panelHeader.addEventListener("mousedown", (evt) => {
+    const rect = sidePanel.getBoundingClientRect();
+    panelDrag = {
+        offsetX: evt.clientX - rect.left,
+        offsetY: evt.clientY - rect.top,
+    };
+    // Switch from right-anchored to left/top-anchored so dragging works predictably
+    sidePanel.style.right = "auto";
+    sidePanel.style.left  = rect.left + "px";
+    sidePanel.style.top   = rect.top + "px";
+    evt.preventDefault();
+});
+
+document.addEventListener("mousemove", (evt) => {
+    if (!panelDrag) return;
+    sidePanel.style.left = (evt.clientX - panelDrag.offsetX) + "px";
+    sidePanel.style.top  = (evt.clientY - panelDrag.offsetY) + "px";
+});
+
+document.addEventListener("mouseup", () => {
+    panelDrag = null;
+});
+
+// --------------------------------------------------------
+// Build <option> list for a location dropdown, filtered by action
+// --------------------------------------------------------
+function buildLocationOptions(action, selectedLoc) {
+    let options = `<option value="">-- select location --</option>`;
+
+    if (action === "work") {
+        for (const sid in scenario.stations) {
+            const s = scenario.stations[sid];
+            const sel = String(selectedLoc) === String(sid) ? "selected" : "";
+            options += `<option value="${sid}" ${sel}>S${sid} — ${s.name}</option>`;
+        }
+    } else {
+        for (const sid in scenario.stations) {
+            const s = scenario.stations[sid];
+            const sel = String(selectedLoc) === String(sid) ? "selected" : "";
+            options += `<option value="${sid}" ${sel}>S${sid} — ${s.name}</option>`;
+        }
+        for (const bid in scenario.boxes) {
+            const b = scenario.boxes[bid];
+            const sel = String(selectedLoc) === String(bid) ? "selected" : "";
+            options += `<option value="${bid}" ${sel}>${b.name} (${b.type.toUpperCase()})</option>`;
+        }
+    }
+
+    return options;
+}
+
+// --------------------------------------------------------
+// Render the ordered list of sequence steps for an operator
+// --------------------------------------------------------
+function renderSequenceList(op) {
+    const container = document.getElementById("sequence-list");
+    if (!container) return;
+
+    if (op.sequence.length === 0) {
+        container.innerHTML = `<p style="color:#888; font-size:12px;">No steps yet. Click "+ Add Step" below.</p>`;
+        return;
+    }
+
+    let html = "";
+    op.sequence.forEach((step, i) => {
+        html += `
+            <div style="display:flex; gap:4px; align-items:center; margin-bottom:6px; background:#fff; padding:4px; border:1px solid #ccc; border-radius:4px;">
+                <span style="font-size:11px; color:#888; width:16px;">${i + 1}.</span>
+                <select class="step-action" data-idx="${i}" style="flex:0 0 70px; font-size:11px;">
+                    <option value="pick" ${step.action === "pick" ? "selected" : ""}>Pick</option>
+                    <option value="work" ${step.action === "work" ? "selected" : ""}>Work</option>
+                    <option value="drop" ${step.action === "drop" ? "selected" : ""}>Drop</option>
+                </select>
+                <select class="step-loc" data-idx="${i}" style="flex:1; font-size:11px; min-width:0;">
+                    ${buildLocationOptions(step.action, step.loc)}
+                </select>
+                <button class="step-up"     data-idx="${i}" style="padding:2px 6px;" ${i === 0 ? "disabled" : ""}>↑</button>
+                <button class="step-down"   data-idx="${i}" style="padding:2px 6px;" ${i === op.sequence.length - 1 ? "disabled" : ""}>↓</button>
+                <button class="step-remove" data-idx="${i}" style="padding:2px 6px; background:#fde8e8;">✕</button>
+            </div>
+        `;
+    });
+    container.innerHTML = html;
+
+    container.querySelectorAll(".step-action").forEach(sel => {
+        sel.addEventListener("change", (e) => {
+            const idx = parseInt(e.target.getAttribute("data-idx"));
+            op.sequence[idx].action = e.target.value;
+            op.sequence[idx].loc = "";
+            renderSequenceList(op);
+        });
+    });
+
+    container.querySelectorAll(".step-loc").forEach(sel => {
+        sel.addEventListener("change", (e) => {
+            const idx = parseInt(e.target.getAttribute("data-idx"));
+            op.sequence[idx].loc = e.target.value;
+        });
+    });
+
+    container.querySelectorAll(".step-up").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            const idx = parseInt(e.target.getAttribute("data-idx"));
+            if (idx > 0) {
+                [op.sequence[idx - 1], op.sequence[idx]] = [op.sequence[idx], op.sequence[idx - 1]];
+                renderSequenceList(op);
+            }
+        });
+    });
+
+    container.querySelectorAll(".step-down").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            const idx = parseInt(e.target.getAttribute("data-idx"));
+            if (idx < op.sequence.length - 1) {
+                [op.sequence[idx + 1], op.sequence[idx]] = [op.sequence[idx], op.sequence[idx + 1]];
+                renderSequenceList(op);
+            }
+        });
+    });
+
+    container.querySelectorAll(".step-remove").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+            const idx = parseInt(e.target.getAttribute("data-idx"));
+            op.sequence.splice(idx, 1);
+            renderSequenceList(op);
+        });
+    });
+}
+
+// --------------------------------------------------------
+// Open the side panel for a selected item
+// --------------------------------------------------------
+function openSidePanel(item) {
+    if (!item) {
+        sidePanel.style.display = "none";
+        return;
+    }
+    sidePanel.style.display = "block";
+
+    if (item.type === "station") {
+        const s = scenario.stations[item.id];
+        panelTitle.textContent = `Station S${item.id}`;
+        panelFields.innerHTML = `
+            <label>Name</label>
+            <input type="text" id="field-name" value="${s.name}" style="width:100%; margin-bottom:8px;">
+            <label>Cycle Time (min)</label>
+            <input type="text" id="field-cycle" value="${s.cycle_time}" style="width:100%; margin-bottom:8px;">
+            <label style="display:flex; align-items:center; gap:6px;">
+                <input type="checkbox" id="field-haspart" ${s.has_part ? "checked" : ""}>
+                Starts with a part
+            </label>
+        `;
+        document.getElementById("field-name").addEventListener("input", (e) => {
+            s.name = e.target.value;
+            drawFrame();
+        });
+        document.getElementById("field-cycle").addEventListener("input", (e) => {
+            e.target.value = e.target.value.replace(/[^0-9]/g, "");
+            s.cycle_time = parseInt(e.target.value) || 1;
+            drawFrame();
+        });
+        document.getElementById("field-haspart").addEventListener("change", (e) => {
+            s.has_part = e.target.checked;
+            drawFrame();
+        });
+
+    } else if (item.type === "operator") {
+        const op = scenario.operators[item.id];
+        panelTitle.textContent = `Operator ${op.name}`;
+        panelFields.innerHTML = `
+            <label>Name</label>
+            <input type="text" id="field-name" value="${op.name}" style="width:100%; margin-bottom:8px;">
+            <label>Color</label>
+            <input type="color" id="field-color" value="${rgbToHex(op.color)}" style="width:100%; margin-bottom:12px;">
+            <hr>
+            <label>Sequence</label>
+            <div id="sequence-list" style="margin-bottom:8px;"></div>
+            <button id="add-step-btn" style="width:100%; padding:6px; background:#e8eef8; border:2px solid #1e3c78;">+ Add Step</button>
+        `;
+
+        document.getElementById("field-name").addEventListener("input", (e) => {
+            op.name = e.target.value;
+            drawFrame();
+        });
+        document.getElementById("field-color").addEventListener("input", (e) => {
+            op.color = hexToRgb(e.target.value);
+            drawFrame();
+        });
+
+        renderSequenceList(op);
+
+        document.getElementById("add-step-btn").addEventListener("click", () => {
+            op.sequence.push({ action: "pick", loc: "" });
+            renderSequenceList(op);
+        });
+
+    } else if (item.type === "box") {
+        const b = scenario.boxes[item.id];
+        panelTitle.textContent = `${b.type.toUpperCase()} Box`;
+
+        let extraFieldsHtml = "";
+        if (b.type === "swip") {
+            extraFieldsHtml = `
+                <label style="display:flex; align-items:center; gap:6px;">
+                    <input type="checkbox" id="field-haspart" ${b.has_part ? "checked" : ""}>
+                    Starts with a part
+                </label>
+            `;
+        } else if (b.type === "in") {
+            extraFieldsHtml = `
+                <label>Starting Parts (reservoir)</label>
+                <input type="text" id="field-startcount" value="${b.start_count}" style="width:100%; margin-bottom:8px;">
+            `;
+        } else if (b.type === "out") {
+            extraFieldsHtml = `
+                <label>Capacity (hard cap)</label>
+                <input type="text" id="field-capacity" value="${b.capacity}" style="width:100%; margin-bottom:8px;">
+            `;
+        }
+
+        panelFields.innerHTML = `
+            <label>Name</label>
+            <input type="text" id="field-name" value="${b.name}" style="width:100%; margin-bottom:8px;">
+            ${extraFieldsHtml}
+        `;
+
+        document.getElementById("field-name").addEventListener("input", (e) => {
+            b.name = e.target.value;
+            drawFrame();
+        });
+
+        if (b.type === "swip") {
+            document.getElementById("field-haspart").addEventListener("change", (e) => {
+                b.has_part = e.target.checked;
+                drawFrame();
+            });
+        } else if (b.type === "in") {
+            document.getElementById("field-startcount").addEventListener("input", (e) => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, "");
+                b.start_count = parseInt(e.target.value) || 0;
+                drawFrame();
+            });
+        } else if (b.type === "out") {
+            document.getElementById("field-capacity").addEventListener("input", (e) => {
+                e.target.value = e.target.value.replace(/[^0-9]/g, "");
+                b.capacity = parseInt(e.target.value) || 1;
+                drawFrame();
+            });
+        }
+    }
+}
+
+deleteItemBtn.addEventListener("click", () => {
+    if (!selectedItem) return;
+
+    if (selectedItem.type === "station") {
+        delete scenario.stations[selectedItem.id];
+    } else if (selectedItem.type === "operator") {
+        delete scenario.operators[selectedItem.id];
+    } else if (selectedItem.type === "box") {
+        delete scenario.boxes[selectedItem.id];
+    }
+
+    selectedItem = null;
+    openSidePanel(null);
+    drawFrame();
+});
+
+// ============================================================
+// PART 6 — Drawing
+// ============================================================
+const BOX_COLORS = {
+    swip: "#1e3c78",
+    in:   "#32b432",
+    out:  "#dc3232",
+};
+
+function drawFrame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // ---- draw boxes ----
+    for (const id in scenario.boxes) {
+        const b = scenario.boxes[id];
+        const color = BOX_COLORS[b.type] || "#888888";
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(b.x, b.y, b.w, b.h);
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = color;
+        ctx.font = "12px Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(b.name, b.x + 5, b.y + 5);
+
+        ctx.textAlign = "center";
+        ctx.font = "18px Arial";
+
+        if (b.type === "swip") {
+            ctx.fillStyle = b.has_part ? "#1e3c78" : "#aaaaaa";
+            ctx.fillText(b.has_part ? "●" : "○", b.x + b.w / 2, b.y + b.h / 2 + 6);
+            ctx.font = "10px Arial";
+            ctx.fillStyle = "#888888";
+            ctx.fillText(b.has_part ? "has part" : "empty", b.x + b.w / 2, b.y + b.h - 12);
+        } else if (b.type === "in") {
+            ctx.fillStyle = "#000000";
+            ctx.fillText(b.start_count, b.x + b.w / 2, b.y + b.h / 2 + 6);
+            ctx.font = "10px Arial";
+            ctx.fillStyle = "#888888";
+            ctx.fillText("reservoir", b.x + b.w / 2, b.y + b.h - 12);
+        } else if (b.type === "out") {
+            ctx.fillStyle = "#000000";
+            ctx.fillText(`0 / ${b.capacity}`, b.x + b.w / 2, b.y + b.h / 2 + 6);
+            ctx.font = "10px Arial";
+            ctx.fillStyle = "#888888";
+            ctx.fillText("capacity", b.x + b.w / 2, b.y + b.h - 12);
+        }
+
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+
+        if (selectedItem && selectedItem.type === "box" && selectedItem.id === id) {
+            ctx.strokeStyle = "#0066ff";
+            ctx.lineWidth = 3;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(b.x - 5, b.y - 5, b.w + 10, b.h + 10);
+            ctx.setLineDash([]);
+        }
+    }
+
+    // ---- draw stations ----
+    for (const id in scenario.stations) {
+        const s = scenario.stations[id];
+
+        ctx.fillStyle = "#c8c8c8";
+        ctx.fillRect(s.x, s.y, s.w, s.h);
+
+        ctx.fillStyle = "#000000";
+        ctx.font = "11px Arial";
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+        ctx.fillText(`S${id}`, s.x + 4, s.y + 4);
+        ctx.fillText(s.name, s.x + 4, s.y + 22);
+        ctx.fillText(`CT: ${s.cycle_time}m`, s.x + 4, s.y + 40);
+
+        if (s.has_part) {
+            ctx.fillStyle = "#1e3c78";
+            ctx.beginPath();
+            ctx.arc(s.x + s.w - 10, s.y + 10, 5, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        if (selectedItem && selectedItem.type === "station" && selectedItem.id === id) {
+            ctx.strokeStyle = "#0066ff";
+            ctx.lineWidth = 3;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(s.x - 5, s.y - 5, s.w + 10, s.h + 10);
+            ctx.setLineDash([]);
+        }
+    }
+
+    // ---- draw operators ----
+    for (const id in scenario.operators) {
+        const op = scenario.operators[id];
+        const [r, g, b2] = op.color;
+
+        ctx.fillStyle = `rgb(${r}, ${g}, ${b2})`;
+        ctx.beginPath();
+        ctx.arc(op.x, op.y, 16, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "11px Arial";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(op.name, op.x, op.y);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+
+        if (selectedItem && selectedItem.type === "operator" && selectedItem.id === id) {
+            ctx.strokeStyle = "#0066ff";
+            ctx.lineWidth = 3;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.arc(op.x, op.y, 24, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+    }
+}
+
+// ============================================================
+// PART 7 — Save / Load full scenario
+// ============================================================
+function serializeScenario() {
+    return {
+        takt_time: parseInt(taktTimeInput.value) || 30,
+        stations:  scenario.stations,
+        operators: scenario.operators,
+        boxes:     scenario.boxes,
+    };
+}
+
+function applyLoadedScenario(data) {
+    for (const k in scenario.stations)  delete scenario.stations[k];
+    for (const k in scenario.operators) delete scenario.operators[k];
+    for (const k in scenario.boxes)     delete scenario.boxes[k];
+
+    Object.assign(scenario.stations,  data.stations  || {});
+    Object.assign(scenario.operators, data.operators || {});
+    Object.assign(scenario.boxes,     data.boxes     || {});
+
+    taktTimeInput.value = data.takt_time || 30;
+
+    Object.keys(scenario.stations).forEach(sid => {
+        const n = parseInt(sid, 10);
+        if (!isNaN(n) && n >= nextStationId) nextStationId = n + 1;
+    });
+    Object.keys(scenario.operators).forEach(oid => {
+        const n = parseInt(oid.replace("Op", ""), 10);
+        if (!isNaN(n) && n >= nextOperatorId) nextOperatorId = n + 1;
+    });
+    Object.keys(scenario.boxes).forEach(bid => {
+        const parts = bid.split("_");
+        const n = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(n) && n >= nextBoxId) nextBoxId = n + 1;
+    });
+
+    selectedItem = null;
+    openSidePanel(null);
+    drawFrame();
+}
+
+document.getElementById("save-scenario-btn").addEventListener("click", () => {
+    const name = prompt("Enter a name for this scenario:", "My Scenario");
+    if (!name) return;
+
+    fetch("/save-scenario", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ name: name, scenario: serializeScenario() }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "saved") {
+            statusText.textContent = `Saved as "${name}"`;
+            setTimeout(() => { statusText.textContent = ""; }, 2000);
+            refreshScenarioList();
+        }
+    })
+    .catch(err => console.error("Error saving scenario:", err));
+});
+
+function refreshScenarioList() {
+    fetch("/list-scenarios")
+        .then(res => res.json())
+        .then(data => {
+            const select = document.getElementById("scenario-select");
+            select.innerHTML = '<option value="">-- Select a saved scenario --</option>';
+            data.files.forEach(filename => {
+                const label = filename.replace(".json", "").replace(/_/g, " ");
+                const opt = document.createElement("option");
+                opt.value = filename;
+                opt.textContent = label;
+                select.appendChild(opt);
+            });
+        })
+        .catch(err => console.error("Error listing scenarios:", err));
+}
+
+document.getElementById("load-scenario-btn").addEventListener("click", () => {
+    const filename = document.getElementById("scenario-select").value;
+    if (!filename) {
+        statusText.textContent = "Please select a scenario to load.";
+        setTimeout(() => { statusText.textContent = ""; }, 2000);
+        return;
+    }
+
+    fetch("/load-scenario/" + encodeURIComponent(filename))
+        .then(res => res.json())
+        .then(data => {
+            if (data.found) {
+                applyLoadedScenario(data.scenario);
+                statusText.textContent = `Loaded "${filename.replace(".json", "")}"`;
+                setTimeout(() => { statusText.textContent = ""; }, 2000);
+            } else {
+                statusText.textContent = "Scenario file not found.";
+                setTimeout(() => { statusText.textContent = ""; }, 2000);
+            }
+        })
+        .catch(err => console.error("Error loading scenario:", err));
+});
+// ============================================================
+// PART 7b — Run scenario simulation
+// ============================================================
+const runScenarioBtn = document.getElementById("run-scenario-btn");
+
+runScenarioBtn.addEventListener("click", () => {
+    runScenarioBtn.disabled = true;
+    runScenarioBtn.textContent = "Running...";
+
+    fetch("/launch", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(serializeScenario()),
+    })
+    .then(res => res.json().then(data => ({ status: res.status, body: data })))
+    .then(({ status, body }) => {
+        runScenarioBtn.disabled = false;
+        runScenarioBtn.textContent = "▶ Run Simulation";
+
+        if (status !== 200) {
+            if (body.status === "invalid") {
+                alert("Scenario has errors:\n\n" + body.errors.join("\n"));
+            } else if (body.status === "runtime_error") {
+                alert("Simulation failed at runtime:\n\n" + body.error);
+            } else {
+                alert("Unexpected error running scenario.");
+            }
+            return;
+        }
+
+        window.location.href = "/simulate";
+    })
+    .catch(err => {
+        runScenarioBtn.disabled = false;
+        runScenarioBtn.textContent = "▶ Run Simulation";
+        console.error("Error launching scenario:", err);
+        alert("Could not reach the server. Check the console for details.");
+    });
+});
+// ============================================================
+// PART 8 — Initialize
+// ============================================================
+refreshScenarioList();
+drawFrame();
+</script>
+
+{% endblock %}

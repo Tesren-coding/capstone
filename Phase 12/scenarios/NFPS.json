@@ -1,0 +1,606 @@
+{
+  "takt_time": 36,
+  "stations": {
+    "1": {
+      "cycle_time": 2,
+      "h": 70,
+      "has_part": false,
+      "name": "Insp Incoming masking",
+      "w": 120,
+      "x": 118.37872535534157,
+      "y": 583.0656640542257
+    },
+    "2": {
+      "cycle_time": 17,
+      "h": 70,
+      "has_part": false,
+      "name": "Incoming blasting (AO24)",
+      "w": 120,
+      "x": 252.188904172398,
+      "y": 587.5121796229612
+    },
+    "3": {
+      "cycle_time": 15,
+      "h": 70,
+      "has_part": false,
+      "name": "Cosmetic blast (AO220)",
+      "w": 120,
+      "x": 385.9990829894544,
+      "y": 587.5121796229612
+    },
+    "4": {
+      "cycle_time": 18,
+      "h": 70,
+      "has_part": false,
+      "name": "Incoming FPI",
+      "w": 120,
+      "x": 722.7546996790462,
+      "y": 589.735437407329
+    },
+    "5": {
+      "cycle_time": 15,
+      "h": 70,
+      "has_part": false,
+      "name": "Incoming Inspection",
+      "w": 120,
+      "x": 961.3828519027969,
+      "y": 594.1819529760644
+    },
+    "6": {
+      "cycle_time": 7,
+      "h": 70,
+      "has_part": true,
+      "name": "T800 Machining",
+      "w": 120,
+      "x": 1193.3204951856949,
+      "y": 596.405210760432
+    },
+    "7": {
+      "cycle_time": 18,
+      "h": 70,
+      "has_part": false,
+      "name": "Blend defect",
+      "w": 120,
+      "x": 1429.7184777624943,
+      "y": 596.405210760432
+    },
+    "8": {
+      "cycle_time": 6,
+      "h": 70,
+      "has_part": true,
+      "name": "Swab Etch",
+      "w": 120,
+      "x": 1563.528656579551,
+      "y": 596.4052107604322
+    },
+    "9": {
+      "cycle_time": 11,
+      "h": 70,
+      "has_part": false,
+      "name": "Local FPI",
+      "w": 120,
+      "x": 1695.1086657496562,
+      "y": 598.6284685447997
+    },
+    "10": {
+      "cycle_time": 6,
+      "h": 70,
+      "has_part": true,
+      "name": "Shotpeen",
+      "w": 120,
+      "x": 1565.7588262265017,
+      "y": 385.1957212454988
+    },
+    "11": {
+      "cycle_time": 4,
+      "h": 70,
+      "has_part": true,
+      "name": "Post-peen CMM",
+      "w": 120,
+      "x": 1244.6143970655662,
+      "y": 387.41897902986653
+    },
+    "12": {
+      "cycle_time": 4,
+      "h": 70,
+      "has_part": false,
+      "name": "Final CMM",
+      "w": 120,
+      "x": 1117.494727189363,
+      "y": 389.64223681423425
+    },
+    "13": {
+      "cycle_time": 14,
+      "h": 70,
+      "has_part": false,
+      "name": "Clear Overspray",
+      "w": 120,
+      "x": 749.5167354424576,
+      "y": 387.41897902986653
+    },
+    "14": {
+      "cycle_time": 8,
+      "h": 70,
+      "has_part": false,
+      "name": "Final Inspection",
+      "w": 120,
+      "x": 486.35671710224665,
+      "y": 391.86549459860197
+    },
+    "15": {
+      "cycle_time": 2,
+      "h": 70,
+      "has_part": false,
+      "name": "Part Marking",
+      "w": 120,
+      "x": 357.0068775790922,
+      "y": 387.41897902986653
+    },
+    "16": {
+      "cycle_time": 3,
+      "h": 70,
+      "has_part": false,
+      "name": "Moment Weigh",
+      "w": 120,
+      "x": 227.65703805593768,
+      "y": 389.64223681423425
+    }
+  },
+  "operators": {
+    "Op1": {
+      "color": [
+        220,
+        60,
+        60
+      ],
+      "name": "Op1",
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": "IN_1"
+        },
+        {
+          "action": "drop",
+          "loc": "1"
+        },
+        {
+          "action": "work",
+          "loc": "1"
+        },
+        {
+          "action": "pick",
+          "loc": "1"
+        },
+        {
+          "action": "drop",
+          "loc": "2"
+        },
+        {
+          "action": "work",
+          "loc": "2"
+        },
+        {
+          "action": "pick",
+          "loc": "2"
+        },
+        {
+          "action": "drop",
+          "loc": "3"
+        },
+        {
+          "action": "work",
+          "loc": "3"
+        },
+        {
+          "action": "pick",
+          "loc": "3"
+        },
+        {
+          "action": "drop",
+          "loc": "OUT_3"
+        }
+      ],
+      "x": 162.76753782668501,
+      "y": 544.6981571700911
+    },
+    "Op2": {
+      "color": [
+        60,
+        120,
+        220
+      ],
+      "name": "Op2",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "10"
+        },
+        {
+          "action": "pick",
+          "loc": "10"
+        },
+        {
+          "action": "drop",
+          "loc": "SWIP_9"
+        },
+        {
+          "action": "pick",
+          "loc": "SWIP_8"
+        },
+        {
+          "action": "drop",
+          "loc": "10"
+        },
+        {
+          "action": "work",
+          "loc": "10"
+        },
+        {
+          "action": "pick",
+          "loc": "11"
+        },
+        {
+          "action": "drop",
+          "loc": "OUT_10"
+        },
+        {
+          "action": "pick",
+          "loc": "IN_11"
+        },
+        {
+          "action": "drop",
+          "loc": "12"
+        },
+        {
+          "action": "work",
+          "loc": "12"
+        },
+        {
+          "action": "pick",
+          "loc": "6"
+        },
+        {
+          "action": "drop",
+          "loc": "SWIP_7"
+        },
+        {
+          "action": "pick",
+          "loc": "SWIP_6"
+        },
+        {
+          "action": "drop",
+          "loc": "6"
+        },
+        {
+          "action": "work",
+          "loc": "6"
+        },
+        {
+          "action": "pick",
+          "loc": "12"
+        },
+        {
+          "action": "drop",
+          "loc": "SWIP_12"
+        },
+        {
+          "action": "pick",
+          "loc": "SWIP_9"
+        },
+        {
+          "action": "drop",
+          "loc": "11"
+        },
+        {
+          "action": "work",
+          "loc": "11"
+        }
+      ],
+      "x": 1623.5286565795507,
+      "y": 486.89345477653035
+    },
+    "Op3": {
+      "color": [
+        60,
+        180,
+        90
+      ],
+      "name": "Op3",
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": "IN_4"
+        },
+        {
+          "action": "drop",
+          "loc": "4"
+        },
+        {
+          "action": "work",
+          "loc": "4"
+        },
+        {
+          "action": "pick",
+          "loc": "4"
+        },
+        {
+          "action": "drop",
+          "loc": "SWIP_5"
+        },
+        {
+          "action": "work",
+          "loc": "8"
+        },
+        {
+          "action": "pick",
+          "loc": "8"
+        },
+        {
+          "action": "drop",
+          "loc": "9"
+        },
+        {
+          "action": "work",
+          "loc": "9"
+        },
+        {
+          "action": "pick",
+          "loc": "9"
+        },
+        {
+          "action": "drop",
+          "loc": "SWIP_8"
+        }
+      ],
+      "x": 789.4452086198994,
+      "y": 562.4842194450329
+    },
+    "Op4": {
+      "color": [
+        230,
+        160,
+        30
+      ],
+      "name": "Op4",
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": "SWIP_7"
+        },
+        {
+          "action": "drop",
+          "loc": "7"
+        },
+        {
+          "action": "work",
+          "loc": "7"
+        },
+        {
+          "action": "pick",
+          "loc": "7"
+        },
+        {
+          "action": "drop",
+          "loc": "8"
+        },
+        {
+          "action": "pick",
+          "loc": "SWIP_12"
+        },
+        {
+          "action": "drop",
+          "loc": "13"
+        },
+        {
+          "action": "work",
+          "loc": "13"
+        },
+        {
+          "action": "pick",
+          "loc": "13"
+        },
+        {
+          "action": "drop",
+          "loc": "SWIP_13"
+        }
+      ],
+      "x": 1478.5676295277394,
+      "y": 569.1539927981358
+    },
+    "Op5": {
+      "color": [
+        150,
+        60,
+        200
+      ],
+      "name": "Op5",
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": "SWIP_5"
+        },
+        {
+          "action": "drop",
+          "loc": "5"
+        },
+        {
+          "action": "work",
+          "loc": "5"
+        },
+        {
+          "action": "pick",
+          "loc": "5"
+        },
+        {
+          "action": "drop",
+          "loc": "SWIP_6"
+        },
+        {
+          "action": "pick",
+          "loc": "SWIP_13"
+        },
+        {
+          "action": "drop",
+          "loc": "14"
+        },
+        {
+          "action": "work",
+          "loc": "14"
+        },
+        {
+          "action": "pick",
+          "loc": "14"
+        },
+        {
+          "action": "drop",
+          "loc": "15"
+        },
+        {
+          "action": "work",
+          "loc": "15"
+        },
+        {
+          "action": "pick",
+          "loc": "15"
+        },
+        {
+          "action": "drop",
+          "loc": "16"
+        },
+        {
+          "action": "work",
+          "loc": "16"
+        },
+        {
+          "action": "pick",
+          "loc": "16"
+        },
+        {
+          "action": "drop",
+          "loc": "OUT_2"
+        }
+      ],
+      "x": 1019.152682255846,
+      "y": 566.9307350137682
+    }
+  },
+  "boxes": {
+    "IN_1": {
+      "h": 60,
+      "name": "IN_1",
+      "start_count": 12,
+      "type": "in",
+      "w": 90,
+      "x": 26.330582301696452,
+      "y": 581.3958907011227
+    },
+    "IN_11": {
+      "h": 60,
+      "name": "Coating IN",
+      "start_count": 12,
+      "type": "in",
+      "w": 90,
+      "x": 1471.4805135259055,
+      "y": 387.9724634611311
+    },
+    "IN_4": {
+      "h": 60,
+      "name": "HT IN",
+      "start_count": 12,
+      "type": "in",
+      "w": 90,
+      "x": 624.0160476845484,
+      "y": 590.2889218385935
+    },
+    "OUT_10": {
+      "capacity": 12,
+      "h": 60,
+      "name": "Coating OUT",
+      "type": "out",
+      "w": 90,
+      "x": 1012.0655662540119,
+      "y": 381.30269010802795
+    },
+    "OUT_2": {
+      "capacity": 50,
+      "h": 60,
+      "name": "OUT_2",
+      "type": "out",
+      "w": 90,
+      "x": 122.2278771205869,
+      "y": 385.7492056767634
+    },
+    "OUT_3": {
+      "capacity": 12,
+      "h": 60,
+      "name": "HT OUT ",
+      "type": "out",
+      "w": 90,
+      "x": 516.9679046309033,
+      "y": 590.2889218385935
+    },
+    "SWIP_12": {
+      "h": 60,
+      "has_part": true,
+      "name": "SWIP_6",
+      "type": "swip",
+      "w": 90,
+      "x": 902.7872535534159,
+      "y": 385.7492056767634
+    },
+    "SWIP_13": {
+      "h": 60,
+      "has_part": true,
+      "name": "SWIP_7",
+      "type": "swip",
+      "w": 90,
+      "x": 635.1668959193031,
+      "y": 381.30269010802795
+    },
+    "SWIP_5": {
+      "h": 60,
+      "has_part": true,
+      "name": "SWIP_1",
+      "type": "swip",
+      "w": 90,
+      "x": 855.9536909674462,
+      "y": 592.5121796229612
+    },
+    "SWIP_6": {
+      "h": 60,
+      "has_part": true,
+      "name": "SWIP_2",
+      "type": "swip",
+      "w": 90,
+      "x": 1094.581663294522,
+      "y": 596.9586951916966
+    },
+    "SWIP_7": {
+      "h": 60,
+      "has_part": true,
+      "name": "SWIP_3",
+      "type": "swip",
+      "w": 90,
+      "x": 1324.2893168271435,
+      "y": 601.405210760432
+    },
+    "SWIP_8": {
+      "h": 60,
+      "has_part": true,
+      "name": "SWIP_4",
+      "type": "swip",
+      "w": 90,
+      "x": 1692.2673085740487,
+      "y": 381.30269010802795
+    },
+    "SWIP_9": {
+      "h": 60,
+      "has_part": false,
+      "name": "SWIP_5",
+      "type": "swip",
+      "w": 90,
+      "x": 1375.583128758678,
+      "y": 385.7492056767634
+    }
+  }
+}

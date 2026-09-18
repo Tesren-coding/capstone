@@ -1,0 +1,823 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="card">
+    <h2>Simulation</h2>
+    <p id="status-text">Loading layout...</p>
+</section>
+
+<canvas id="sim-canvas" width="1900" height="820"
+        style="border:1px solid #ccc; background:#ffffff; display:block; margin:0 auto;">
+</canvas>
+
+<!-- ============================================================ -->
+<!-- Load JS files — order matters, state.js needs layout.js and 
+     draw.js concepts available, but since these are just function
+     definitions, order between layout/draw/state doesn't matter
+     as long as all three load before they are used below -->
+<!-- ============================================================ -->
+<script src="{{ url_for('static', filename='js/layout.js') }}"></script>
+<script src="{{ url_for('static', filename='js/draw.js') }}"></script>
+<script src="{{ url_for('static', filename='js/state.js') }}"></script>
+
+<script>
+// ============================================================
+// PART 1 — Setup variables
+// ============================================================
+const canvas = document.getElementById("sim-canvas");
+const ctx    = canvas.getContext("2d");
+const statusText = document.getElementById("status-text");
+
+let layoutData   = null;
+let originalLayoutData = null;   // ADDED
+let positions    = null;
+let images       = {};
+let partImage    = null;
+let simEvents    = [];
+let taktTime     = 36;
+
+let opState        = null;
+let isRunning       = false;
+let simClock        = 0.0;
+let taktResetCount  = 0;
+let lastFrameTime   = null;
+const speed          = 3;
+const msPerSimMinute = 1000;
+
+// ============================================================
+// PART 2 — Image loading helper
+// ============================================================
+function loadImage(src) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload  = () => resolve(img);
+        img.onerror = () => resolve(img);
+        img.src = src;
+    });
+}
+
+// --------------------------------------------------------
+// Apply a saved layout on top of the default positions
+// Only overwrites x, y — width/height stay from data.py
+// --------------------------------------------------------
+function applySavedLayout(savedLayout) {
+    if (savedLayout.stations) {
+        for (const sid in savedLayout.stations) {
+            if (positions.stationPositions[sid]) {
+                // existing default station — just move it
+                const p = positions.stationPositions[sid];
+                p.x = savedLayout.stations[sid].x;
+                p.y = savedLayout.stations[sid].y;
+                positions.stationCenters[sid] = {
+                    x: p.x + p.w / 2,
+                    y: p.y + p.h / 2,
+                };
+            } else {
+                // custom station that no longer exists — recreate it
+                const info = savedLayout.stationInfo && savedLayout.stationInfo[sid];
+                const newPos = {
+                    x: savedLayout.stations[sid].x,
+                    y: savedLayout.stations[sid].y,
+                    w: layoutData.dimensions.station_width,
+                    h: layoutData.dimensions.station_height,
+                };
+                positions.stationPositions[sid] = newPos;
+                positions.stationCenters[sid] = {
+                    x: newPos.x + newPos.w / 2,
+                    y: newPos.y + newPos.h / 2,
+                };
+                layoutData.stations[sid] = info || { name: "New Station", cycle_time: 10 };
+
+                // keep the ID counter ahead of any restored custom stations
+                const numericId = parseInt(sid, 10);
+                if (!isNaN(numericId) && numericId >= nextNewStationId) {
+                    nextNewStationId = numericId + 1;
+                }
+            }
+        }
+    }
+
+    if (savedLayout.boxes) {
+        for (const key in savedLayout.boxes) {
+            if (positions.boxPositions[key]) {
+                const p = positions.boxPositions[key];
+                p.x = savedLayout.boxes[key].x;
+                p.y = savedLayout.boxes[key].y;
+                positions.boxCenters[key] = {
+                    x: p.x + p.w / 2,
+                    y: p.y + p.h / 2,
+                };
+            }
+        }
+    }
+}
+
+// ============================================================
+// PART 3 — Start/Stop buttons (created dynamically)
+// ============================================================
+const controlBar = document.createElement("div");
+controlBar.style.textAlign = "center";
+controlBar.style.margin    = "12px 0";
+controlBar.innerHTML = `
+    <button id="start-btn" style="padding:10px 24px; font-size:14px; margin-right:8px;">START</button>
+    <button id="stop-btn"  style="padding:10px 24px; font-size:14px; margin-right:24px;">STOP</button>
+    <button id="edit-btn"  style="padding:10px 24px; font-size:14px; background:#e8ecf0; border:2px solid #1e3c78; margin-right:8px;">EDIT LAYOUT</button>
+    <button id="save-btn"  style="padding:10px 24px; font-size:14px; background:#e8f4ea; border:2px solid #2d7a3a; margin-right:8px; display:none;">SAVE LAYOUT</button>
+    <select id="layout-select" style="padding:9px; font-size:14px; margin-right:8px; display:none;">
+        <option value="">-- Select a saved layout --</option>
+    </select>
+    <button id="load-btn"  style="padding:10px 24px; font-size:14px; background:#e8eef8; border:2px solid #1e3c78; margin-right:8px; display:none;">LOAD</button>
+    <button id="reset-btn" style="padding:10px 24px; font-size:14px; background:#fde8e8; border:2px solid #b52a2a; margin-right:8px; display:none;">RESET TO LOADED</button>
+    <button id="add-btn"   style="padding:10px 24px; font-size:14px; background:#e8eef8; border:2px solid #1e3c78; margin-right:8px; display:none;">ADD STATION</button>
+    <button id="delete-btn" style="padding:10px 24px; font-size:14px; background:#fde8e8; border:2px solid #b52a2a; display:none;">DELETE SELECTED</button>
+`;
+canvas.parentNode.insertBefore(controlBar, canvas);
+
+const saveBtn  = document.getElementById("save-btn");
+const resetBtn = document.getElementById("reset-btn");
+const addBtn        = document.getElementById("add-btn");
+const deleteBtn      = document.getElementById("delete-btn");
+const layoutSelect   = document.getElementById("layout-select");
+const loadBtn        = document.getElementById("load-btn");
+
+let currentLayoutName = null;   // name of the layout currently loaded/saved
+let lastLoadedLayout   = null;   // snapshot to revert to on Reset (Option B)
+
+document.getElementById("start-btn").addEventListener("click", () => {
+    if (isEditMode) return; // block start while editing
+    isRunning = true;
+    lastFrameTime = null;
+});
+document.getElementById("stop-btn").addEventListener("click", () => {
+    isRunning = false;
+});
+// --------------------------------------------------------
+// Refresh the dropdown list of saved layout files
+// --------------------------------------------------------
+function refreshLayoutList() {
+    fetch("/list-layouts")
+        .then(res => res.json())
+        .then(data => {
+            layoutSelect.innerHTML = '<option value="">-- Select a saved layout --</option>';
+            data.files.forEach(filename => {
+                const label = filename.replace(".json", "").replace(/_/g, " ");
+                const opt   = document.createElement("option");
+                opt.value = filename;
+                opt.textContent = label;
+                layoutSelect.appendChild(opt);
+            });
+        })
+        .catch(err => console.error("Error listing layouts:", err));
+}
+// --------------------------------------------------------
+// Load the selected layout file
+// --------------------------------------------------------
+loadBtn.addEventListener("click", () => {
+    const filename = layoutSelect.value;
+
+    if (!filename) {
+        statusText.textContent = "Please select a layout to load.";
+        setTimeout(() => { statusText.textContent = ""; }, 2000);
+        return;
+    }
+
+    fetch("/load-layout/" + encodeURIComponent(filename))
+        .then(res => res.json())
+        .then(data => {
+            if (data.found) {
+                // start from factory defaults, then apply the loaded file on top
+                layoutData.stations      = JSON.parse(JSON.stringify(originalLayoutData.stations));
+                layoutData.special_boxes = JSON.parse(JSON.stringify(originalLayoutData.special_boxes));
+                positions = buildPositions(layoutData.dimensions);
+
+                applySavedLayout(data.layout);
+
+                currentLayoutName = filename.replace(".json", "");
+                lastLoadedLayout  = JSON.parse(JSON.stringify(data.layout)); // set revert point
+                selectedItem = null;
+
+                statusText.textContent = `Loaded "${currentLayoutName}"`;
+                setTimeout(() => { statusText.textContent = ""; }, 2000);
+                drawFrame();
+            } else {
+                statusText.textContent = "Layout file not found.";
+                setTimeout(() => { statusText.textContent = ""; }, 2000);
+            }
+        })
+        .catch(err => console.error("Error loading layout:", err));
+});
+// --------------------------------------------------------
+// Edit mode toggle
+// --------------------------------------------------------
+let isEditMode = false;
+const editBtn = document.getElementById("edit-btn");
+
+editBtn.addEventListener("click", () => {
+    isEditMode = !isEditMode;
+
+    if (isEditMode) {
+        isRunning = false;
+        editBtn.textContent = "EXIT EDIT MODE";
+        editBtn.style.background = "#fde8e8";
+        editBtn.style.borderColor = "#b52a2a";
+        canvas.style.cursor = "grab";
+        saveBtn.style.display     = "inline-block";
+        resetBtn.style.display    = "inline-block";
+        addBtn.style.display      = "inline-block";
+        deleteBtn.style.display   = "inline-block";
+        layoutSelect.style.display = "inline-block";
+        loadBtn.style.display      = "inline-block";
+        refreshLayoutList();
+    } else {
+        editBtn.textContent = "EDIT LAYOUT";
+        editBtn.style.background = "#e8ecf0";
+        editBtn.style.borderColor = "#1e3c78";
+        canvas.style.cursor = "default";
+        saveBtn.style.display     = "none";
+        resetBtn.style.display    = "none";
+        addBtn.style.display      = "none";
+        deleteBtn.style.display   = "none";
+        layoutSelect.style.display = "none";
+        loadBtn.style.display      = "none";
+        selectedItem = null;
+    }
+});
+// --------------------------------------------------------
+// Save current layout to the server
+// --------------------------------------------------------
+saveBtn.addEventListener("click", () => {
+    const defaultName = currentLayoutName || "My Layout";
+    const layoutName = prompt("Enter a name for this layout:", defaultName);
+
+    if (!layoutName) {
+        return; // user cancelled
+    }
+
+    const layoutToSave = {
+        stations:     {},
+        boxes:        {},
+        stationInfo:  {},
+    };
+
+    for (const sid in positions.stationPositions) {
+        const p = positions.stationPositions[sid];
+        layoutToSave.stations[sid] = { x: p.x, y: p.y };
+        layoutToSave.stationInfo[sid] = {
+            name:       layoutData.stations[sid].name,
+            cycle_time: layoutData.stations[sid].cycle_time,
+        };
+    }
+
+    for (const key in positions.boxPositions) {
+        const p = positions.boxPositions[key];
+        layoutToSave.boxes[key] = { x: p.x, y: p.y };
+    }
+
+    fetch("/save-layout", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ name: layoutName, layout: layoutToSave }),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "saved") {
+            currentLayoutName = layoutName;
+            lastLoadedLayout   = JSON.parse(JSON.stringify(layoutToSave)); // update revert point
+            statusText.textContent = `Saved as "${layoutName}"`;
+            setTimeout(() => { statusText.textContent = ""; }, 2000);
+            refreshLayoutList();
+        }
+    })
+    .catch(err => console.error("Error saving layout:", err));
+});
+
+// --------------------------------------------------------
+// Reset layout back to default positions from data.py
+// --------------------------------------------------------
+resetBtn.addEventListener("click", () => {
+    // always start from factory defaults, then reapply either the
+    // last loaded file, or nothing if no file has been loaded yet
+    layoutData.stations      = JSON.parse(JSON.stringify(originalLayoutData.stations));
+    layoutData.special_boxes = JSON.parse(JSON.stringify(originalLayoutData.special_boxes));
+    positions = buildPositions(layoutData.dimensions);
+
+    if (lastLoadedLayout) {
+        applySavedLayout(lastLoadedLayout);
+        statusText.textContent = `Reverted to "${currentLayoutName}"`;
+    } else {
+        statusText.textContent = "Reverted to factory defaults (no file was loaded).";
+    }
+
+    selectedItem = null;
+    setTimeout(() => { statusText.textContent = ""; }, 2000);
+    drawFrame();
+});
+// --------------------------------------------------------
+// Add a new station
+// --------------------------------------------------------
+addBtn.addEventListener("click", () => {
+    const newId = nextNewStationId++;
+
+    // place new station near the top-left of the canvas so it's easy to find
+    const newPos = {
+        x: 100 + (Math.random() * 100),
+        y: 200 + (Math.random() * 100),
+        w: layoutData.dimensions.station_width,
+        h: layoutData.dimensions.station_height,
+    };
+
+    positions.stationPositions[newId] = newPos;
+    positions.stationCenters[newId] = {
+        x: newPos.x + newPos.w / 2,
+        y: newPos.y + newPos.h / 2,
+    };
+
+    // add matching entry to layoutData so drawStation has info to show
+    layoutData.stations[newId] = {
+        name: "New Station",
+        cycle_time: 10,
+    };
+
+    selectedItem = { type: "station", id: String(newId) };
+
+    statusText.textContent = `Added Station ${newId}. Drag to position it.`;
+    drawFrame();
+});
+// --------------------------------------------------------
+// Delete the currently selected station/box
+// --------------------------------------------------------
+deleteBtn.addEventListener("click", () => {
+    if (!selectedItem) {
+        statusText.textContent = "Nothing selected to delete.";
+        setTimeout(() => { statusText.textContent = ""; }, 2000);
+        return;
+    }
+
+    if (selectedItem.type === "station") {
+        delete positions.stationPositions[selectedItem.id];
+        delete positions.stationCenters[selectedItem.id];
+        delete layoutData.stations[selectedItem.id];
+        statusText.textContent = `Deleted Station ${selectedItem.id}.`;
+    } else {
+        statusText.textContent = "Deleting boxes is not supported yet.";
+        setTimeout(() => { statusText.textContent = ""; }, 2000);
+        return;
+    }
+
+    selectedItem = null;
+    setTimeout(() => { statusText.textContent = ""; }, 2000);
+    drawFrame();
+});
+// --------------------------------------------------------
+// Drag and drop logic for stations/boxes in edit mode
+// --------------------------------------------------------
+let draggedItem   = null;  // { type: "station"|"box", id: sid or key }
+let dragOffset     = { x: 0, y: 0 };
+let selectedItem = null;  // { type: "station"|"box", id: sid or key }
+let nextNewStationId = 101; // start new custom stations at 101+ to avoid clashing with 1-16
+
+function getCanvasMousePos(evt) {
+    const rect  = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (evt.clientX - rect.left) * scaleX,
+        y: (evt.clientY - rect.top)  * scaleY,
+    };
+}
+
+
+function findItemAtPosition(mx, my) {
+    // check stations
+    for (const sid in positions.stationPositions) {
+        const p = positions.stationPositions[sid];
+        if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
+            return { type: "station", id: sid, pos: p };
+        }
+    }
+    // check boxes
+    for (const key in positions.boxPositions) {
+        const p = positions.boxPositions[key];
+        if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
+            return { type: "box", id: key, pos: p };
+        }
+    }
+    return null;
+}
+
+canvas.addEventListener("mousedown", (evt) => {
+    if (!isEditMode) return;
+
+    const mouse = getCanvasMousePos(evt);
+    const item  = findItemAtPosition(mouse.x, mouse.y);
+
+    if (item) {
+        draggedItem = item;
+        selectedItem = item; // mark as selected too
+        dragOffset.x = mouse.x - item.pos.x;
+        dragOffset.y = mouse.y - item.pos.y;
+        canvas.style.cursor = "grabbing";
+    } else {
+        selectedItem = null; // clicked empty space — deselect
+    }
+
+    drawFrame();
+});
+
+canvas.addEventListener("mousemove", (evt) => {
+    if (!isEditMode || !draggedItem) return;
+
+    const mouse = getCanvasMousePos(evt);
+    const newX  = mouse.x - dragOffset.x;
+    const newY  = mouse.y - dragOffset.y;
+
+    if (draggedItem.type === "station") {
+        const p = positions.stationPositions[draggedItem.id];
+        p.x = newX;
+        p.y = newY;
+        // keep center in sync so operators still walk to the right spot
+        positions.stationCenters[draggedItem.id] = {
+            x: p.x + p.w / 2,
+            y: p.y + p.h / 2,
+        };
+    } else {
+        const p = positions.boxPositions[draggedItem.id];
+        p.x = newX;
+        p.y = newY;
+        positions.boxCenters[draggedItem.id] = {
+            x: p.x + p.w / 2,
+            y: p.y + p.h / 2,
+        };
+    }
+
+    drawFrame(); // redraw immediately while dragging
+});
+
+canvas.addEventListener("mouseup", () => {
+    if (draggedItem) {
+        draggedItem = null;
+        canvas.style.cursor = isEditMode ? "grab" : "default";
+    }
+});
+
+canvas.addEventListener("mouseleave", () => {
+    if (draggedItem) {
+        draggedItem = null;
+        canvas.style.cursor = isEditMode ? "grab" : "default";
+    }
+});
+
+// ============================================================
+// Fetch layout data, then events, then start loop
+// ============================================================
+fetch("/layout-data")
+    .then(res => res.json())
+    .then(async (data) => {
+        layoutData = data;
+        originalLayoutData = JSON.parse(JSON.stringify(data));   // ADDED — snapshot of factory defaults
+        positions  = buildPositions(data.dimensions);
+
+        canvas.width  = data.dimensions.window_width;
+        canvas.height = data.dimensions.window_height;
+
+        // check for a saved layout and apply it on top of defaults
+        const savedRes  = await fetch("/load-layout");
+        const savedData = await savedRes.json();
+
+        if (savedData.found) {
+            applySavedLayout(savedData.layout);
+        }
+
+        partImage = await loadImage("/static/images/part.png");
+
+        const boxKeys = Object.keys(data.special_boxes);
+        for (const key of boxKeys) {
+            const boxInfo = data.special_boxes[key];
+            if (boxInfo.image) {
+                const fileName = boxInfo.image.split("/").pop();
+                images[key] = await loadImage("/static/images/" + fileName);
+            }
+        }
+
+        statusText.textContent = "Layout loaded. Fetching simulation events...";
+        return fetch("/events");
+    })
+    .then(res => res.json())
+    .then(eventData => {
+        simEvents = eventData.events;
+        taktTime  = eventData.takt_time;
+        statusText.textContent =
+            `Ready — ${simEvents.length} events loaded. Takt time: ${taktTime} min.`;
+
+        initOperatorState();
+        requestAnimationFrame(animationLoop);
+    })
+    .catch(err => {
+        console.error("Error loading simulation:", err);
+        statusText.textContent = "Error loading simulation. Check console.";
+    });
+
+// ============================================================
+// PART 5 — Initialize operator state
+// ============================================================
+function initOperatorState() {
+    const opNames = [...new Set(simEvents.map(e => e.operator))];
+    opState = buildOperatorState(
+        simEvents,
+        positions.stationCenters,
+        positions.boxCenters,
+        opNames,
+        layoutData.op_start_part,
+        layoutData.special_boxes["Incoming"].start,
+        layoutData.special_boxes["Packing"].start
+    );
+}
+
+// ============================================================
+// PART 6 — Main animation loop
+// ============================================================
+function animationLoop(timestamp) {
+    if (lastFrameTime === null) lastFrameTime = timestamp;
+    const deltaMs = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+
+    if (isRunning) {
+        simClock += deltaMs / msPerSimMinute;
+        if (simClock >= taktTime) {
+            simClock = 0;
+            taktResetCount++;
+        }
+        updateOperators();
+    }
+
+    drawFrame();
+    requestAnimationFrame(animationLoop);
+}
+
+// ============================================================
+// PART 7 — Update operator positions (movement only)
+// ============================================================
+function updateOperators() {
+    const opNames = Object.keys(layoutData.operators);
+    const adjustedClock = simClock + (taktResetCount * taktTime);
+
+    opNames.forEach(op => {
+        const evList = opState.opEvents[op];
+        const idx    = opState.opEventIndex[op];
+
+        if (idx < evList.length) {
+            const currentEv = evList[idx];
+            const loc       = currentEv.loc;
+
+            // set target only if not mid dropoff
+            if (opState.opPendingDropoff[op] === null) {
+                const center = opState.getLocCenter(loc);
+                if (center) {
+                    opState.opTargets[op] = center;
+                }
+            }
+
+            // ---- handle dropoff ----
+            if (currentEv.status === "dropoff") {
+                const toLoc      = currentEv.to;
+                const dropCenter = opState.getLocCenter(toLoc);
+
+                if (dropCenter && opState.opPendingDropoff[op] === null) {
+                    opState.opPendingDropoff[op] = currentEv;
+                    opState.opDropoffTarget[op]  = dropCenter;
+                    opState.opTargets[op]        = dropCenter;
+                    return; // skip rest of processing this frame for this op
+                }
+
+                if (opState.opPendingDropoff[op] !== null) {
+                    const pos = opState.opPositions[op];
+                    const tgt = opState.opDropoffTarget[op];
+
+                    if (Math.round(pos.x) === Math.round(tgt.x) &&
+                        Math.round(pos.y) === Math.round(tgt.y)) {
+
+                        if (toLoc === "Packing") {
+                            opState.counters.packing++;
+                        } else {
+                            const center = opState.getLocCenter(toLoc);
+                            if (center) {
+                                opState.droppedParts[toLoc] = { x: center.x, y: center.y };
+                            }
+                        }
+
+                        opState.opHasPart[op]        = false;
+                        opState.partPositions[op]    = null;
+                        opState.opPendingDropoff[op] = null;
+                        opState.opDropoffTarget[op]  = null;
+                        opState.opEventIndex[op]++;
+
+                        const nextIdx = opState.opEventIndex[op];
+                        if (nextIdx < evList.length) {
+                            const nextEv     = evList[nextIdx];
+                            const nextCenter = opState.getLocCenter(nextEv.loc);
+                            if (nextCenter) {
+                                opState.opTargets[op] = nextCenter;
+                            }
+                        }
+                    }
+                    return;
+                }
+            }
+
+            // ---- handle pickup ----
+            if (currentEv.status === "pickup") {
+                const fromLoc = currentEv.from;
+                const center  = opState.getLocCenter(loc);
+
+                if (center) {
+                    const pos = opState.opPositions[op];
+
+                    if (Math.round(pos.x) === Math.round(center.x) &&
+                        Math.round(pos.y) === Math.round(center.y)) {
+
+                        if (opState.droppedParts.hasOwnProperty(loc)) {
+                            delete opState.droppedParts[loc];
+                        }
+
+                        if (fromLoc === "Incoming") {
+                            opState.counters.incoming = Math.max(0, opState.counters.incoming - 1);
+                        }
+
+                        opState.opHasPart[op]     = true;
+                        opState.partPositions[op] = { x: pos.x, y: pos.y };
+                        opState.opEventIndex[op]++;
+                    }
+                }
+                return;
+            }
+
+            // ---- handle moving ----
+            if (currentEv.status === "moving") {
+                opState.opEventIndex[op]++;
+                return;
+            }
+        }
+
+        // advance to next event based on adjusted clock (for "working"/"idle" events)
+        if (idx < evList.length - 1) {
+            const nextEv = evList[idx + 1];
+            if (adjustedClock >= nextEv.time) {
+                const pos = opState.opPositions[op];
+                const tgt = opState.opTargets[op];
+                if (Math.round(pos.x) === Math.round(tgt.x) &&
+                    Math.round(pos.y) === Math.round(tgt.y)) {
+                    opState.opEventIndex[op]++;
+                }
+            }
+        } else if (idx >= evList.length - 1) {
+            const cycleLen = opState.opCycleLength[op];
+            opState.opEventIndex[op] = Math.max(0, evList.length - cycleLen);
+        }
+    });
+
+    // move each operator smoothly toward its target
+    opNames.forEach(op => {
+        const pos = opState.opPositions[op];
+        const tgt = opState.opTargets[op];
+
+        if (pos.x < tgt.x) pos.x += Math.min(speed, tgt.x - pos.x);
+        else if (pos.x > tgt.x) pos.x -= Math.min(speed, pos.x - tgt.x);
+
+        if (pos.y < tgt.y) pos.y += Math.min(speed, tgt.y - pos.y);
+        else if (pos.y > tgt.y) pos.y -= Math.min(speed, pos.y - tgt.y);
+
+        // update carried part position to follow operator (offset like Pygame)
+        if (opState.opHasPart[op] || opState.opPendingDropoff[op] !== null) {
+            opState.partPositions[op] = { x: pos.x + 16, y: pos.y - 16 };
+        } else {
+            opState.partPositions[op] = null;
+        }
+    });
+}
+
+// ============================================================
+// PART 8 — Draw a full frame
+// ============================================================
+function drawFrame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    drawBanner(ctx, simClock, taktTime, taktResetCount, canvas.width);
+
+    // use live counters from opState (not static defaults)
+    const counters = opState ? opState.counters : {
+        incoming: layoutData.special_boxes["Incoming"].start,
+        packing:  layoutData.special_boxes["Packing"].start,
+    };
+
+    // ---- get active stations (operator currently working there) ----
+    const activeStations = {};
+    if (opState) {
+        Object.keys(layoutData.operators).forEach(op => {
+            const evList = opState.opEvents[op];
+            const idx    = opState.opEventIndex[op];
+            if (idx < evList.length) {
+                const ev = evList[idx];
+                if (ev.status === "working" && typeof ev.loc === "number") {
+                    activeStations[ev.loc] = op;
+                }
+            }
+        });
+    }
+
+    // ---- draw boxes ----
+    for (const key in positions.boxPositions) {
+        drawBox(ctx, key, positions.boxPositions[key],
+                layoutData.special_boxes[key], counters, images, partImage);
+
+        if (isEditMode && selectedItem && selectedItem.type === "box" && selectedItem.id === key) {
+            const p = positions.boxPositions[key];
+            ctx.strokeStyle = "#0066ff";
+            ctx.lineWidth   = 3;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(p.x - 5, p.y - 5, p.w + 10, p.h + 10);
+            ctx.setLineDash([]);
+        }
+    }
+
+    // ---- draw dropped parts sitting at boxes ----
+    if (opState) {
+        for (const key in opState.droppedParts) {
+            const p = opState.droppedParts[key];
+            drawPart(ctx, p.x, p.y, partImage);
+        }
+    }
+
+    // ---- draw stations (highlight active ones, or selected in edit mode) ----
+    for (const sid in positions.stationPositions) {
+        const isActive   = activeStations.hasOwnProperty(sid);
+        const activeOp    = activeStations[sid];
+        const activeColor = isActive ? layoutData.operators[activeOp].color : null;
+
+        drawStation(ctx, sid, positions.stationPositions[sid],
+                    layoutData.stations[sid], isActive, activeColor);
+
+        // draw selection outline on top, if this station is selected
+        if (isEditMode && selectedItem && selectedItem.type === "station" && selectedItem.id === sid) {
+            const p = positions.stationPositions[sid];
+            ctx.strokeStyle = "#0066ff";
+            ctx.lineWidth   = 3;
+            ctx.setLineDash([4, 4]);
+            ctx.strokeRect(p.x - 5, p.y - 5, p.w + 10, p.h + 10);
+            ctx.setLineDash([]);
+        }
+    }
+
+    // ---- draw operators and the parts they carry ----
+    if (opState) {
+        const opNames = Object.keys(layoutData.operators);
+        opNames.forEach(op => {
+            const pos   = opState.opPositions[op];
+            const color = layoutData.operators[op].color;
+
+            // draw carried part first (so operator circle draws on top)
+            const partPos = opState.partPositions[op];
+            if (partPos) {
+                drawPart(ctx, partPos.x, partPos.y, partImage);
+            }
+
+            drawOperator(ctx, op, pos.x, pos.y, color);
+        });
+    }
+
+    // ---- draw legend ----
+    const opNames = Object.keys(layoutData.operators);
+    drawLegend(ctx, opNames, layoutData.operators, partImage, canvas.height);
+   
+    // ---- edit mode indicator ----
+    if (isEditMode) {
+        ctx.fillStyle = "rgba(255, 200, 0, 0.15)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle    = "#8a6d00";
+        ctx.font         = "16px Arial";
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "top";
+        ctx.fillText("EDIT MODE — drag stations and boxes to reposition",
+                     canvas.width / 2, 140);
+        ctx.textAlign    = "left";
+        ctx.textBaseline = "alphabetic";
+    }
+    
+    // ---- paused overlay ----
+    if (!isRunning && !isEditMode) {
+        ctx.fillStyle = "rgba(30, 60, 120, 0.85)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle    = "#ffffff";
+        ctx.font         = "28px Arial";
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("PAUSED — Press START to begin",
+                     canvas.width / 2, canvas.height / 2);
+        ctx.textAlign    = "left";
+        ctx.textBaseline = "alphabetic";
+    }
+}
+</script>
+
+{% endblock %}

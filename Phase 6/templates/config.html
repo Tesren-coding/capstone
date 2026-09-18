@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<form id="config-form">
+
+    <!-- ================================================ -->
+    <!-- LINE SETTINGS                                     -->
+    <!-- ================================================ -->
+    <section class="card">
+        <h2>Line Settings</h2>
+        <div class="form-row">
+            <label for="takt_time">Takt Time (min)</label>
+            <input type="number" id="takt_time" name="takt_time"
+                   value="{{ takt_time }}" min="1" max="999">
+        </div>
+        <div class="form-row">
+            <label for="incoming">Incoming Parts Count</label>
+            <input type="number" id="incoming" name="incoming"
+                   value="{{ incoming }}" min="1" max="999">
+        </div>
+    </section>
+
+    <!-- ================================================ -->
+    <!-- STATION CYCLE TIMES                               -->
+    <!-- ================================================ -->
+    <section class="card">
+        <h2>Station Cycle Times</h2>
+        <div class="station-grid">
+            {% for sid, station in stations.items() %}
+            <div class="station-row">
+                <span class="station-id">S{{ sid }}</span>
+                <span class="station-name">{{ station.name }}</span>
+                <input type="number"
+                    class="cycle-time-input"
+                    data-sid="{{ sid }}"
+                    value="{{ station.cycle_time }}"
+                    min="1" max="999">
+                <span class="unit">min</span>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- ================================================ -->
+    <!-- OPERATORS                                         -->
+    <!-- ================================================ -->
+    <section class="card">
+        <h2>Operators</h2>
+        <div class="operator-grid">
+            {% for op_name, steps in operators.items() %}
+            <div class="operator-row">
+                <span class="op-name">{{ op_name }}</span>
+                <div class="op-steps">
+                    {% for step in steps %}
+                    <span class="op-step {{ step.action }}">
+                        {% if step.loc is number %}
+                            S{{ step.loc }}
+                        {% else %}
+                            {{ step.loc }}
+                        {% endif %}
+                        <small>({{ step.action }})</small>
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- ================================================ -->
+    <!-- LAUNCH BUTTON                                     -->
+    <!-- ================================================ -->
+    <div class="launch-bar">
+        <button type="button" id="launch-btn" onclick="launchSimulation()">
+            Launch Simulation
+        </button>
+        <p id="status-msg" class="status-msg"></p>
+    </div>
+
+</form>
+
+<script>
+function launchSimulation() {
+    const form     = document.getElementById("config-form");
+    const btn      = document.getElementById("launch-btn");
+    const statusEl = document.getElementById("status-msg");
+
+    // collect takt time and incoming
+    const takt_time = document.getElementById("takt_time").value;
+    const incoming  = document.getElementById("incoming").value;
+
+    
+    // collect cycle times using data attributes — no Jinja needed here
+    const cycle_times = {};
+    document.querySelectorAll(".cycle-time-input").forEach(input => {
+        const sid = input.getAttribute("data-sid");
+        cycle_times[sid] = input.value;
+    });
+
+    const payload = {
+        takt_time:   takt_time,
+        incoming:    incoming,
+        cycle_times: cycle_times,
+    };
+
+    btn.disabled    = true;
+    btn.textContent = "Launching...";
+    statusEl.textContent = "";
+
+    fetch("/launch", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(payload),
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === "ok") {
+            statusEl.textContent = "Simulation ready! Redirecting...";
+            statusEl.className   = "status-msg success";
+            window.location.href = "/simulate";
+        } else {
+            statusEl.textContent = "Something went wrong.";
+            statusEl.className   = "status-msg error";
+            btn.disabled    = false;
+            btn.textContent = "Launch Simulation";
+        }
+    })
+    .catch(err => {
+        statusEl.textContent = "Error: " + err;
+        statusEl.className   = "status-msg error";
+        btn.disabled    = false;
+        btn.textContent = "Launch Simulation";
+    });
+}
+</script>
+
+{% endblock %}

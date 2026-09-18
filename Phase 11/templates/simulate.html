@@ -1,0 +1,248 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<section class="card">
+    <h2>Simulation</h2>
+    <p id="status-text">Loading scenario...</p>
+</section>
+
+<div style="text-align:center; margin:12px 0;">
+    <button id="start-btn" style="padding:10px 24px; font-size:14px; margin-right:8px;">START</button>
+    <button id="stop-btn"  style="padding:10px 24px; font-size:14px; margin-right:8px;">STOP</button>
+    <button id="back-btn"  style="padding:10px 24px; font-size:14px; background:#e8eef8; border:2px solid #1e3c78;">BACK TO BUILDER</button>
+</div>
+
+<canvas id="sim-canvas" width="1900" height="820"
+        style="border:1px solid #ccc; background:#ffffff; display:block; margin:0 auto;">
+</canvas>
+
+<script src="{{ url_for('static', filename='js/draw.js') }}"></script>
+<script src="{{ url_for('static', filename='js/positions.js') }}"></script>
+<script src="{{ url_for('static', filename='js/state.js') }}"></script>
+
+<script>
+// ============================================================
+// PART 1 — Setup variables
+// ============================================================
+const canvas     = document.getElementById("sim-canvas");
+const ctx        = canvas.getContext("2d");
+const statusText = document.getElementById("status-text");
+
+let scenario     = null;
+let positions    = null;
+let partImage    = null;
+let simEvents    = [];
+let taktTime     = 30;
+let opNames      = [];
+
+let opState        = null;
+let isRunning       = false;
+let simClock        = 0.0;
+let taktResetCount  = 0;
+let lastFrameTime   = null;
+const speed          = 3;
+const msPerSimMinute = 1000;
+
+// ============================================================
+// PART 2 — Image loading helper
+// ============================================================
+function loadImage(src) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload  = () => resolve(img);
+        img.onerror = () => resolve(img);
+        img.src = src;
+    });
+}
+
+// ============================================================
+// PART 3 — Buttons
+// ============================================================
+document.getElementById("start-btn").addEventListener("click", () => {
+    isRunning = true;
+    lastFrameTime = null;
+});
+
+document.getElementById("stop-btn").addEventListener("click", () => {
+    isRunning = false;
+});
+
+document.getElementById("back-btn").addEventListener("click", () => {
+    window.location.href = "/builder";
+});
+
+// ============================================================
+// PART 4 — Load scenario + events, then initialize
+// ============================================================
+function initOperatorState() {
+    opNames = Object.keys(scenario.operators);
+    positions = buildPositionsFromScenario(scenario);
+
+    opState = buildOperatorState(
+        simEvents,
+        positions.stationCenters,
+        positions.boxCenters,
+        opNames,
+        scenario
+    );
+}
+
+async function init() {
+    try {
+        partImage = await loadImage("{{ url_for('static', filename='images/part.png') }}");
+
+        const res  = await fetch("/events");
+        const data = await res.json();
+
+        console.log("DEBUG /events response:", data);
+
+        if (!data.scenario || !data.events || data.events.length === 0) {
+            statusText.textContent = "No simulation has been run yet. Go back to the builder and click Run Simulation.";
+            return;
+        }
+
+        scenario  = data.scenario;
+        simEvents = data.events;
+        taktTime  = data.takt_time;
+
+        initOperatorState();
+
+        console.log("DEBUG positions.stationPositions:", positions.stationPositions);
+        console.log("DEBUG scenario.stations:", scenario.stations);
+
+        statusText.textContent = "Ready. Press START.";
+        requestAnimationFrame(animationLoop);
+    } catch (err) {
+        console.error("Error during init():", err);
+        statusText.textContent = "Error loading simulation. Check console.";
+    }
+}
+
+init();
+
+// ============================================================
+// PART 5 — Main animation loop
+// ============================================================
+function animationLoop(timestamp) {
+    if (lastFrameTime === null) lastFrameTime = timestamp;
+    const deltaMs = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+
+    if (isRunning && opState) {
+        simClock += deltaMs / msPerSimMinute;
+        if (simClock >= taktTime) {
+            simClock = 0;
+            taktResetCount++;
+        }
+        updateOperators(opState, opNames, scenario, simClock, taktTime, taktResetCount, speed);
+    }
+
+    drawFrame();
+    requestAnimationFrame(animationLoop);
+}
+
+// ============================================================
+// PART 6 — Drawing
+// ============================================================
+function animationLoop(timestamp) {
+    if (lastFrameTime === null) lastFrameTime = timestamp;
+    const deltaMs = timestamp - lastFrameTime;
+    lastFrameTime = timestamp;
+
+    if (isRunning && opState) {
+        simClock += deltaMs / msPerSimMinute;
+        if (simClock >= taktTime) {
+            simClock = 0;
+            taktResetCount++;
+        }
+        updateOperators(opState, opNames, scenario, simClock, taktTime, taktResetCount, speed);
+    }
+
+    drawFrame(timestamp);
+    requestAnimationFrame(animationLoop);
+}
+
+function drawFrame(timestamp) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (!scenario || !opState) return;
+
+    drawBanner(ctx, simClock, taktTime, taktResetCount, canvas.width);
+
+    // ---- active stations (operator currently working there) ----
+    const activeStations = {};
+    opNames.forEach(op => {
+        const evList = opState.opEvents[op];
+        const idx    = opState.opEventIndex[op];
+        if (idx < evList.length) {
+            const ev = evList[idx];
+            if (ev.status === "working") {
+                activeStations[ev.loc] = op;
+            }
+        }
+    });
+
+        // ---- draw boxes ----
+    for (const bid in positions.boxPositions) {
+        drawBox(ctx, bid, positions.boxPositions[bid], scenario.boxes[bid],
+                opState.boxState[bid], partImage, timestamp);
+    }
+
+    // ---- draw dropped parts sitting at stations/boxes ----
+    for (const key in opState.droppedParts) {
+        const p = opState.droppedParts[key];
+        drawPart(ctx, p.x, p.y, partImage);
+    }
+
+    // ---- draw stations ----
+    for (const sid in positions.stationPositions) {
+        const isActive   = activeStations.hasOwnProperty(sid);
+        const activeOp    = activeStations[sid];
+        const activeColor = isActive ? scenario.operators[activeOp].color : null;
+
+        drawStation(ctx, sid, positions.stationPositions[sid],
+                    scenario.stations[sid], isActive, activeColor);
+    }
+
+    // ---- draw operators and the parts they carry ----
+    opNames.forEach(op => {
+        const pos       = opState.opPositions[op];
+        const baseColor = scenario.operators[op].color;
+        const color     = opState.isBlocked[op] ? [120, 120, 120] : baseColor;
+
+        const partPos = opState.partPositions[op];
+        if (partPos) {
+            drawPart(ctx, partPos.x, partPos.y, partImage);
+        }
+
+        drawOperator(ctx, scenario.operators[op].name || op, pos.x, pos.y, color);
+
+        if (opState.isBlocked[op]) {
+            ctx.fillStyle    = "#cc0000";
+            ctx.font         = "10px Arial";
+            ctx.textAlign    = "center";
+            ctx.fillText("BLOCKED", pos.x, pos.y + 26);
+            ctx.textAlign    = "left";
+        }
+    });
+
+    // ---- legend ----
+    drawLegend(ctx, opNames, scenario.operators, partImage, canvas.height);
+
+    // ---- paused overlay ----
+    if (!isRunning) {
+        ctx.fillStyle = "rgba(30, 60, 120, 0.85)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle    = "#ffffff";
+        ctx.font         = "28px Arial";
+        ctx.textAlign    = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("PAUSED — Press START to begin", canvas.width / 2, canvas.height / 2);
+        ctx.textAlign    = "left";
+        ctx.textBaseline = "alphabetic";
+    }
+}
+</script>
+
+{% endblock %}

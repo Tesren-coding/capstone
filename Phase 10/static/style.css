@@ -1,0 +1,257 @@
+/* ============================================================
+   style.css
+   NFPS Repair Line Simulator — Config Page
+   ============================================================ */
+
+* {
+    box-sizing: border-box;
+    margin:     0;
+    padding:    0;
+}
+
+body {
+    font-family:      "Segoe UI", Arial, sans-serif;
+    background-color: #f0f2f5;
+    color:            #1a1a2e;
+    min-height:       100vh;
+    display:          flex;
+    flex-direction:   column;
+}
+
+/* ---- Header ---- */
+header {
+    background-color: #1e3c78;
+    color:            white;
+    padding:          24px 40px;
+    box-shadow:       0 2px 8px rgba(0,0,0,0.2);
+}
+
+header h1 {
+    font-size:   28px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+header .subtitle {
+    font-size:   14px;
+    margin-top:  4px;
+    opacity:     0.8;
+}
+
+/* ---- Main ---- */
+main {
+    flex:       1;
+    max-width:  900px;
+    width:      100%;
+    margin:     32px auto;
+    padding:    0 24px;
+}
+
+/* ---- Cards ---- */
+.card {
+    background:    white;
+    border-radius: 8px;
+    padding:       24px;
+    margin-bottom: 24px;
+    box-shadow:    0 1px 4px rgba(0,0,0,0.1);
+}
+
+.card h2 {
+    font-size:     18px;
+    font-weight:   600;
+    margin-bottom: 16px;
+    color:         #1e3c78;
+    border-bottom: 2px solid #e8ecf0;
+    padding-bottom: 8px;
+}
+
+/* ---- Form rows ---- */
+.form-row {
+    display:     flex;
+    align-items: center;
+    gap:         16px;
+    margin-bottom: 12px;
+}
+
+.form-row label {
+    width:       200px;
+    font-size:   14px;
+    font-weight: 500;
+}
+
+.form-row input {
+    width:         80px;
+    padding:       6px 10px;
+    border:        1px solid #ccd0d5;
+    border-radius: 4px;
+    font-size:     14px;
+    text-align:    center;
+}
+
+.form-row input:focus {
+    outline:      none;
+    border-color: #1e3c78;
+    box-shadow:   0 0 0 2px rgba(30,60,120,0.15);
+}
+
+/* ---- Station grid ---- */
+.station-grid {
+    display:        flex;
+    flex-direction: column;
+    gap:            8px;
+}
+
+.station-row {
+    display:     flex;
+    align-items: center;
+    gap:         12px;
+    padding:     8px 12px;
+    background:  #f7f9fc;
+    border-radius: 4px;
+}
+
+.station-id {
+    width:       36px;
+    font-weight: 700;
+    color:       #1e3c78;
+    font-size:   13px;
+}
+
+.station-name {
+    flex:      1;
+    font-size: 13px;
+    color:     #444;
+}
+
+.station-row input {
+    width:         64px;
+    padding:       4px 8px;
+    border:        1px solid #ccd0d5;
+    border-radius: 4px;
+    font-size:     13px;
+    text-align:    center;
+}
+
+.station-row input:focus {
+    outline:      none;
+    border-color: #1e3c78;
+    box-shadow:   0 0 0 2px rgba(30,60,120,0.15);
+}
+
+.unit {
+    font-size: 12px;
+    color:     #888;
+}
+
+/* ---- Operator grid ---- */
+.operator-grid {
+    display:        flex;
+    flex-direction: column;
+    gap:            12px;
+}
+
+.operator-row {
+    display:     flex;
+    align-items: center;
+    gap:         16px;
+    padding:     10px 12px;
+    background:  #f7f9fc;
+    border-radius: 4px;
+}
+
+.op-name {
+    width:       48px;
+    font-weight: 700;
+    color:       #1e3c78;
+    font-size:   14px;
+}
+
+.op-steps {
+    display:   flex;
+    flex-wrap: wrap;
+    gap:       6px;
+}
+
+.op-step {
+    padding:       4px 8px;
+    border-radius: 4px;
+    font-size:     12px;
+    font-weight:   500;
+    display:       flex;
+    align-items:   center;
+    gap:           4px;
+}
+
+.op-step small {
+    font-weight: 400;
+    opacity:     0.7;
+}
+
+.op-step.work {
+    background: #e8f4ea;
+    color:      #2d7a3a;
+}
+
+.op-step.pick {
+    background: #e8eef8;
+    color:      #1e3c78;
+}
+
+.op-step.drop {
+    background: #fde8e8;
+    color:      #b52a2a;
+}
+
+/* ---- Launch bar ---- */
+.launch-bar {
+    display:        flex;
+    align-items:    center;
+    gap:            24px;
+    padding:        24px 0;
+    justify-content: center;
+}
+
+#launch-btn {
+    background:    #1e3c78;
+    color:         white;
+    border:        none;
+    padding:       14px 48px;
+    font-size:     16px;
+    font-weight:   600;
+    border-radius: 6px;
+    cursor:        pointer;
+    transition:    background 0.2s;
+    letter-spacing: 0.5px;
+}
+
+#launch-btn:hover {
+    background: #2a52a0;
+}
+
+#launch-btn:disabled {
+    background: #999;
+    cursor:     not-allowed;
+}
+
+.status-msg {
+    font-size:   14px;
+    font-weight: 500;
+}
+
+.status-msg.success {
+    color: #2d7a3a;
+}
+
+.status-msg.error {
+    color: #b52a2a;
+}
+
+/* ---- Footer ---- */
+footer {
+    text-align:       center;
+    padding:          16px;
+    font-size:        12px;
+    color:            #888;
+    border-top:       1px solid #e0e0e0;
+    background-color: white;
+}

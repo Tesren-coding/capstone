@@ -1,0 +1,462 @@
+{
+  "takt_time": 120,
+  "stations": {
+    "1": {
+      "cycle_time": 30,
+      "h": 70,
+      "has_part": true,
+      "name": "Unboxing",
+      "w": 120,
+      "x": 91.83432175853059,
+      "y": 510.20993249339006
+    },
+    "2": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "SN inspection",
+      "w": 120,
+      "x": 288.0814758287249,
+      "y": 507.98611791632493
+    },
+    "3": {
+      "cycle_time": 50,
+      "h": 70,
+      "has_part": true,
+      "name": "Incoming FPI",
+      "w": 120,
+      "x": 466.4878922993695,
+      "y": 501.3079763895033
+    },
+    "4": {
+      "cycle_time": 90,
+      "h": 70,
+      "has_part": true,
+      "name": "Blend defect",
+      "w": 120,
+      "x": 642.6643303598767,
+      "y": 499.08248736353164
+    },
+    "5": {
+      "cycle_time": 30,
+      "h": 70,
+      "has_part": true,
+      "name": "Incoming Inspection",
+      "w": 120,
+      "x": 805.4601598635186,
+      "y": 501.30295304278343
+    },
+    "6": {
+      "cycle_time": 30,
+      "h": 70,
+      "has_part": true,
+      "name": "Prep SR",
+      "w": 120,
+      "x": 961.565783501533,
+      "y": 496.85364943974673
+    },
+    "7": {
+      "cycle_time": 90,
+      "h": 70,
+      "has_part": true,
+      "name": "Weld & blend SR",
+      "w": 120,
+      "x": 1117.6713333299438,
+      "y": 496.8553238886534
+    },
+    "8": {
+      "cycle_time": 50,
+      "h": 70,
+      "has_part": true,
+      "name": "Post FPI",
+      "w": 120,
+      "x": 1276.0069353780957,
+      "y": 496.85699833755996
+    },
+    "9": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Robot polish",
+      "w": 120,
+      "x": 1476.7144153165848,
+      "y": 492.4043458367098
+    },
+    "10": {
+      "cycle_time": 50,
+      "h": 70,
+      "has_part": true,
+      "name": "Manual Polish",
+      "w": 120,
+      "x": 1483.4046949918165,
+      "y": 178.7476979850423
+    },
+    "11": {
+      "cycle_time": 60,
+      "h": 70,
+      "has_part": true,
+      "name": "Open Cooling Hole",
+      "w": 120,
+      "x": 1307.228404550517,
+      "y": 180.97653590882715
+    },
+    "12": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Shotpeen",
+      "w": 120,
+      "x": 1124.3617852275843,
+      "y": 180.97318701101392
+    },
+    "13": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Water Flow",
+      "w": 120,
+      "x": 945.9553687569395,
+      "y": 187.65132853783564
+    },
+    "14": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Part Marking",
+      "w": 120,
+      "x": 767.548804667087,
+      "y": 189.8734686659941
+    },
+    "15": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Final Inspection",
+      "w": 120,
+      "x": 604.752901353841,
+      "y": 187.6496540889291
+    },
+    "16": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Moment Weigh",
+      "w": 120,
+      "x": 435.266964397377,
+      "y": 189.87179421708748
+    },
+    "17": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Pin Installation",
+      "w": 120,
+      "x": 270.2409842611884,
+      "y": 192.09225989633944
+    },
+    "18": {
+      "cycle_time": 20,
+      "h": 70,
+      "has_part": true,
+      "name": "Packing ",
+      "w": 120,
+      "x": 87.37421731904746,
+      "y": 192.09058544743277
+    }
+  },
+  "operators": {
+    "Op2": {
+      "color": [
+        60,
+        120,
+        220
+      ],
+      "name": "Op2",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "3"
+        },
+        {
+          "action": "pick",
+          "loc": "3"
+        },
+        {
+          "action": "drop",
+          "loc": "4"
+        },
+        {
+          "action": "work",
+          "loc": "8"
+        },
+        {
+          "action": "pick",
+          "loc": "8"
+        },
+        {
+          "action": "drop",
+          "loc": "9"
+        }
+      ],
+      "x": 336.722073781701,
+      "y": 405.03900272684893
+    },
+    "Op3": {
+      "color": [
+        60,
+        180,
+        90
+      ],
+      "name": "Op3",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "4"
+        },
+        {
+          "action": "pick",
+          "loc": "4"
+        },
+        {
+          "action": "drop",
+          "loc": "5"
+        },
+        {
+          "action": "work",
+          "loc": "5"
+        },
+        {
+          "action": "pick",
+          "loc": "5"
+        },
+        {
+          "action": "drop",
+          "loc": "6"
+        }
+      ],
+      "x": 510.6699850209477,
+      "y": 396.1370466229621
+    },
+    "Op4": {
+      "color": [
+        230,
+        160,
+        30
+      ],
+      "name": "Op4",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "6"
+        },
+        {
+          "action": "pick",
+          "loc": "6"
+        },
+        {
+          "action": "drop",
+          "loc": "7"
+        },
+        {
+          "action": "work",
+          "loc": "7"
+        },
+        {
+          "action": "pick",
+          "loc": "7"
+        },
+        {
+          "action": "drop",
+          "loc": "8"
+        }
+      ],
+      "x": 706.9189105216362,
+      "y": 402.81351370087725
+    },
+    "Op5": {
+      "color": [
+        150,
+        60,
+        200
+      ],
+      "name": "Op5",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "9"
+        },
+        {
+          "action": "pick",
+          "loc": "9"
+        },
+        {
+          "action": "drop",
+          "loc": "10"
+        },
+        {
+          "action": "work",
+          "loc": "12"
+        },
+        {
+          "action": "pick",
+          "loc": "12"
+        },
+        {
+          "action": "drop",
+          "loc": "13"
+        },
+        {
+          "action": "work",
+          "loc": "13"
+        },
+        {
+          "action": "pick",
+          "loc": "13"
+        },
+        {
+          "action": "drop",
+          "loc": "14"
+        }
+      ],
+      "x": 871.9464160563062,
+      "y": 369.4311783113018
+    },
+    "Op6": {
+      "color": [
+        30,
+        170,
+        170
+      ],
+      "name": "Op6",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "10"
+        },
+        {
+          "action": "pick",
+          "loc": "10"
+        },
+        {
+          "action": "drop",
+          "loc": "11"
+        },
+        {
+          "action": "work",
+          "loc": "11"
+        },
+        {
+          "action": "pick",
+          "loc": "11"
+        },
+        {
+          "action": "drop",
+          "loc": "12"
+        }
+      ],
+      "x": 994.6019944942366,
+      "y": 364.98020025935836
+    },
+    "Op7": {
+      "color": [
+        220,
+        60,
+        60
+      ],
+      "name": "Op1",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "1"
+        },
+        {
+          "action": "pick",
+          "loc": "1"
+        },
+        {
+          "action": "drop",
+          "loc": "2"
+        },
+        {
+          "action": "work",
+          "loc": "2"
+        },
+        {
+          "action": "pick",
+          "loc": "2"
+        },
+        {
+          "action": "drop",
+          "loc": "3"
+        },
+        {
+          "action": "work",
+          "loc": "18"
+        }
+      ],
+      "x": 156.08385826402187,
+      "y": 467.35269545405635
+    },
+    "Op8": {
+      "color": [
+        0,
+        0,
+        0
+      ],
+      "name": "Op7",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "14"
+        },
+        {
+          "action": "pick",
+          "loc": "14"
+        },
+        {
+          "action": "drop",
+          "loc": "15"
+        },
+        {
+          "action": "work",
+          "loc": "15"
+        },
+        {
+          "action": "pick",
+          "loc": "15"
+        },
+        {
+          "action": "drop",
+          "loc": "16"
+        },
+        {
+          "action": "work",
+          "loc": "16"
+        },
+        {
+          "action": "pick",
+          "loc": "16"
+        },
+        {
+          "action": "drop",
+          "loc": "17"
+        },
+        {
+          "action": "work",
+          "loc": "17"
+        },
+        {
+          "action": "pick",
+          "loc": "17"
+        },
+        {
+          "action": "drop",
+          "loc": "17"
+        }
+      ],
+      "x": 1195.3111228472135,
+      "y": 380.55862344116025
+    }
+  },
+  "boxes": {}
+}

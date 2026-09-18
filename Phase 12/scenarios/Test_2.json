@@ -1,0 +1,89 @@
+{
+  "takt_time": 30,
+  "stations": {
+    "1": {
+      "cycle_time": 10,
+      "h": 70,
+      "has_part": false,
+      "name": "New Station",
+      "w": 120,
+      "x": 388.2171820383528,
+      "y": 588.0272945864024
+    },
+    "2": {
+      "cycle_time": 10,
+      "h": 70,
+      "has_part": false,
+      "name": "New Station",
+      "w": 120,
+      "x": 528.716949673282,
+      "y": 592.4782726383457
+    }
+  },
+  "operators": {
+    "Op1": {
+      "color": [
+        220,
+        60,
+        60
+      ],
+      "name": "Op1",
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": "IN_1"
+        },
+        {
+          "action": "drop",
+          "loc": "1"
+        },
+        {
+          "action": "work",
+          "loc": "1"
+        },
+        {
+          "action": "pick",
+          "loc": "1"
+        },
+        {
+          "action": "drop",
+          "loc": "2"
+        },
+        {
+          "action": "work",
+          "loc": "2"
+        },
+        {
+          "action": "pick",
+          "loc": "2"
+        },
+        {
+          "action": "drop",
+          "loc": "OUT_2"
+        }
+      ],
+      "x": 533.9109874284128,
+      "y": 294.6869631563249
+    }
+  },
+  "boxes": {
+    "IN_1": {
+      "h": 60,
+      "name": "IN_1",
+      "start_count": 10,
+      "type": "in",
+      "w": 90,
+      "x": 278.32834230822925,
+      "y": 584.1434216791588
+    },
+    "OUT_2": {
+      "capacity": 50,
+      "h": 60,
+      "name": "OUT_2",
+      "type": "out",
+      "w": 90,
+      "x": 664.1454775902188,
+      "y": 595.2527836123741
+    }
+  }
+}

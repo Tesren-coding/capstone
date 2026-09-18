@@ -1,0 +1,46 @@
+{
+  "takt_time": 30,
+  "stations": {
+    "1": {
+      "cycle_time": 10,
+      "h": 70,
+      "has_part": true,
+      "name": "New Station",
+      "w": 120,
+      "x": 349.42611463402375,
+      "y": 521.171702223084
+    },
+    "2": {
+      "cycle_time": 10,
+      "h": 70,
+      "has_part": false,
+      "name": "New Station",
+      "w": 120,
+      "x": 495.71443779201127,
+      "y": 518.6094606444831
+    }
+  },
+  "operators": {
+    "Op1": {
+      "color": [
+        220,
+        60,
+        60
+      ],
+      "name": "Op1",
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "1"
+        },
+        {
+          "action": "drop",
+          "loc": "2"
+        }
+      ],
+      "x": 430.24206735020846,
+      "y": 524.7780954575719
+    }
+  },
+  "boxes": {}
+}

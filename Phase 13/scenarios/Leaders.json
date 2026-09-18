@@ -1,0 +1,72 @@
+{
+  "takt_time": 120,
+  "stations": {
+    "1":  { "cycle_time": 30, "h": 88.95, "has_part": true, "name": "Unboxing", "w": 151.58, "x": 116.00, "y": 648.34 },
+    "2":  { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "SN inspection", "w": 151.58, "x": 363.89, "y": 645.31 },
+    "3":  { "cycle_time": 50, "h": 88.95, "has_part": true, "name": "Incoming FPI", "w": 151.58, "x": 589.45, "y": 637.03 },
+    "4":  { "cycle_time": 90, "h": 88.95, "has_part": true, "name": "Blend defect", "w": 151.58, "x": 811.79, "y": 634.19 },
+    "5":  { "cycle_time": 30, "h": 88.95, "has_part": true, "name": "Incoming Inspection", "w": 151.58, "x": 1017.43, "y": 637.02 },
+    "6":  { "cycle_time": 30, "h": 88.95, "has_part": true, "name": "Prep SR", "w": 151.58, "x": 1214.61, "y": 631.35 },
+    "7":  { "cycle_time": 90, "h": 88.95, "has_part": true, "name": "Weld & blend SR", "w": 151.58, "x": 1411.80, "y": 631.35 },
+    "8":  { "cycle_time": 50, "h": 88.95, "has_part": true, "name": "Post FPI", "w": 151.58, "x": 1611.80, "y": 631.35 },
+    "9":  { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Robot polish", "w": 151.58, "x": 1865.33, "y": 625.71 },
+    "10": { "cycle_time": 50, "h": 88.95, "has_part": true, "name": "Manual Polish", "w": 151.58, "x": 1873.78, "y": 227.14 },
+    "11": { "cycle_time": 60, "h": 88.95, "has_part": true, "name": "Open Cooling Hole", "w": 151.58, "x": 1651.24, "y": 229.97 },
+    "12": { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Shotpeen", "w": 151.58, "x": 1420.25, "y": 229.97 },
+    "13": { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Water Flow", "w": 151.58, "x": 1194.29, "y": 238.46 },
+    "14": { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Part Marking", "w": 151.58, "x": 969.53, "y": 241.28 },
+    "15": { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Final Inspection", "w": 151.58, "x": 763.90, "y": 238.46 },
+    "16": { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Moment Weigh", "w": 151.58, "x": 549.82, "y": 241.28 },
+    "17": { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Pin Installation", "w": 151.58, "x": 341.36, "y": 244.20 },
+    "18": { "cycle_time": 20, "h": 88.95, "has_part": true, "name": "Packing ", "w": 151.58, "x": 110.37, "y": 244.20 }
+  },
+  "operators": {
+    "Op2": { "color": [60,120,220], "name": "Op2", "x": 425.53, "y": 514.70,
+      "sequence": [
+        {"action":"work","loc":"3"},{"action":"pick","loc":"3"},{"action":"drop","loc":"4"},
+        {"action":"work","loc":"8"},{"action":"pick","loc":"8"},{"action":"drop","loc":"9"}
+      ]
+    },
+    "Op3": { "color": [60,180,90], "name": "Op3", "x": 645.05, "y": 503.38,
+      "sequence": [
+        {"action":"work","loc":"4"},{"action":"pick","loc":"4"},{"action":"drop","loc":"5"},
+        {"action":"work","loc":"5"},{"action":"pick","loc":"5"},{"action":"drop","loc":"6"}
+      ]
+    },
+    "Op4": { "color": [230,160,30], "name": "Op4", "x": 892.95, "y": 511.87,
+      "sequence": [
+        {"action":"work","loc":"6"},{"action":"pick","loc":"6"},{"action":"drop","loc":"7"},
+        {"action":"work","loc":"7"},{"action":"pick","loc":"7"},{"action":"drop","loc":"8"}
+      ]
+    },
+    "Op5": { "color": [150,60,200], "name": "Op5", "x": 1101.41, "y": 469.45,
+      "sequence": [
+        {"action":"work","loc":"9"},{"action":"pick","loc":"9"},{"action":"drop","loc":"10"},
+        {"action":"work","loc":"12"},{"action":"pick","loc":"12"},{"action":"drop","loc":"13"},
+        {"action":"work","loc":"13"},{"action":"pick","loc":"13"},{"action":"drop","loc":"14"}
+      ]
+    },
+    "Op6": { "color": [30,170,170], "name": "Op6", "x": 1256.34, "y": 463.79,
+      "sequence": [
+        {"action":"work","loc":"10"},{"action":"pick","loc":"10"},{"action":"drop","loc":"11"},
+        {"action":"work","loc":"11"},{"action":"pick","loc":"11"},{"action":"drop","loc":"12"}
+      ]
+    },
+    "Op7": { "color": [220,60,60], "name": "Op1", "x": 197.17, "y": 593.88,
+      "sequence": [
+        {"action":"work","loc":"1"},{"action":"pick","loc":"1"},{"action":"drop","loc":"2"},
+        {"action":"work","loc":"2"},{"action":"pick","loc":"2"},{"action":"drop","loc":"3"},
+        {"action":"work","loc":"18"}
+      ]
+    },
+    "Op8": { "color": [0,0,0], "name": "Op7", "x": 1510.27, "y": 483.59,
+      "sequence": [
+        {"action":"work","loc":"14"},{"action":"pick","loc":"14"},{"action":"drop","loc":"15"},
+        {"action":"work","loc":"15"},{"action":"pick","loc":"15"},{"action":"drop","loc":"16"},
+        {"action":"work","loc":"16"},{"action":"pick","loc":"16"},{"action":"drop","loc":"17"},
+        {"action":"work","loc":"17"},{"action":"pick","loc":"17"},{"action":"drop","loc":"17"}
+      ]
+    }
+  },
+  "boxes": {}
+}
