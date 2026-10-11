@@ -47,8 +47,8 @@ let isRunning       = false;
 let simClock        = 0.0;
 let taktResetCount  = 0;
 let lastFrameTime   = null;
-const speed              = 8640;  // pixels per SIMULATED MINUTE — fixed, realistic 1.2 m/s pace
-const baseMsPerSimMinute  = 1000; // "1.0x" reference speed: 1 sim-min = 1 real-sec
+const speed              = 1000;  // pixels per SIMULATED MINUTE — fixed, realistic 1.2 m/s pace
+const baseMsPerSimMinute  = 250; // "1.0x" reference speed: 1 sim-min = 1 real-sec
 let   speedMultiplier     = 1.0;
 let   msPerSimMinute      = baseMsPerSimMinute / speedMultiplier;
 

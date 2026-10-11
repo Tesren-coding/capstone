@@ -1,0 +1,478 @@
+{
+  "takt_time": 108,
+  "stations": {
+    "1": {
+      "cycle_time": 93,
+      "h": 70,
+      "has_part": true,
+      "name": "Hardware removal",
+      "w": 120,
+      "x": 2160.113660851116,
+      "y": 237.03274310390117
+    },
+    "2": {
+      "cycle_time": 60,
+      "h": 70,
+      "has_part": false,
+      "name": "Post Chem strip insp + blend",
+      "w": 120,
+      "x": 2012.3705736248126,
+      "y": 238.16193763631406
+    },
+    "3": {
+      "cycle_time": 14,
+      "h": 70,
+      "has_part": false,
+      "name": "Cavity flush",
+      "w": 120,
+      "x": 1883.3341146083203,
+      "y": 235.88677207049452
+    },
+    "4": {
+      "cycle_time": 87,
+      "h": 70,
+      "has_part": false,
+      "name": "Inc insp/fiber/workscope/CH check",
+      "w": 120,
+      "x": 1699.220106641712,
+      "y": 239.09379619682605
+    },
+    "5": {
+      "cycle_time": 15,
+      "h": 70,
+      "has_part": false,
+      "name": "sidewall masking",
+      "w": 120,
+      "x": 1574.9366742387342,
+      "y": 240.4314824264098
+    },
+    "6": {
+      "cycle_time": 60,
+      "h": 70,
+      "has_part": false,
+      "name": "Weld blend repair",
+      "w": 120,
+      "x": 1451.7309845141008,
+      "y": 240.43148242640984
+    },
+    "7": {
+      "cycle_time": 60,
+      "h": 70,
+      "has_part": false,
+      "name": "Mech for prep braze ",
+      "w": 120,
+      "x": 1325.7083384914902,
+      "y": 237.42179427197902
+    },
+    "8": {
+      "cycle_time": 60,
+      "h": 70,
+      "has_part": false,
+      "name": "Braze application",
+      "w": 120,
+      "x": 1201.9637774276841,
+      "y": 236.88460765526844
+    },
+    "9": {
+      "cycle_time": 5,
+      "h": 70,
+      "has_part": false,
+      "name": "sidewall masking core",
+      "w": 120,
+      "x": 1077.27731293038,
+      "y": 234.4121061175481
+    },
+    "10": {
+      "cycle_time": 90,
+      "h": 70,
+      "has_part": false,
+      "name": "Post braze insp + blend",
+      "w": 120,
+      "x": 952.5908484330757,
+      "y": 231.40241796311733
+    },
+    "11": {
+      "cycle_time": 5,
+      "h": 70,
+      "has_part": false,
+      "name": "Sidewall masking removal",
+      "w": 120,
+      "x": 813.0135382572339,
+      "y": 233.87491950083765
+    },
+    "13": {
+      "cycle_time": 40,
+      "h": 70,
+      "has_part": false,
+      "name": "Install sleeve",
+      "w": 120,
+      "x": 570.8607201342875,
+      "y": 233.53103982077397
+    },
+    "16": {
+      "cycle_time": 14,
+      "h": 70,
+      "has_part": false,
+      "name": "Cavity flush",
+      "w": 120,
+      "x": 341.2425007695342,
+      "y": 230.71868763824395
+    },
+    "17": {
+      "cycle_time": 40,
+      "h": 70,
+      "has_part": false,
+      "name": "Dymax",
+      "w": 120,
+      "x": 90.91081217006689,
+      "y": 218.4825990486199
+    },
+    "18": {
+      "cycle_time": 60,
+      "h": 70,
+      "has_part": false,
+      "name": "Clear overspray",
+      "w": 120,
+      "x": 733.8582267718544,
+      "y": 533.4966411871113
+    },
+    "20": {
+      "cycle_time": 75,
+      "h": 70,
+      "has_part": false,
+      "name": "Manual Polish",
+      "w": 120,
+      "x": 984.3914314184854,
+      "y": 536.5063293415421
+    },
+    "22": {
+      "cycle_time": 75,
+      "h": 70,
+      "has_part": false,
+      "name": "Clear cooling hole",
+      "w": 120,
+      "x": 1234.9246360651164,
+      "y": 536.5063293415421
+    },
+    "23": {
+      "cycle_time": 5,
+      "h": 70,
+      "has_part": false,
+      "name": "Bluelight",
+      "w": 120,
+      "x": 1358.6820022158618,
+      "y": 539.5160174959728
+    },
+    "24": {
+      "cycle_time": 40,
+      "h": 70,
+      "has_part": false,
+      "name": "Airflow",
+      "w": 120,
+      "x": 1488.4763130568872,
+      "y": 536.5063293415421
+    },
+    "25": {
+      "cycle_time": 39,
+      "h": 70,
+      "has_part": false,
+      "name": "Pre-assembly Insp + part mark",
+      "w": 120,
+      "x": 1618.2706238979129,
+      "y": 533.4966411871113
+    },
+    "26": {
+      "cycle_time": 63,
+      "h": 70,
+      "has_part": false,
+      "name": "Hardware install (ISW)",
+      "w": 120,
+      "x": 1742.0279900486582,
+      "y": 536.5063293415423
+    },
+    "27": {
+      "cycle_time": 84,
+      "h": 70,
+      "has_part": false,
+      "name": "Hardware Installation (OSW)",
+      "w": 120,
+      "x": 1865.7853561994036,
+      "y": 536.5063293415421
+    },
+    "28": {
+      "cycle_time": 60,
+      "h": 70,
+      "has_part": false,
+      "name": "TBC Patch repair",
+      "w": 120,
+      "x": 1998.5981393855693,
+      "y": 536.5063293415421
+    },
+    "29": {
+      "cycle_time": 35,
+      "h": 70,
+      "has_part": false,
+      "name": "Final insp",
+      "w": 120,
+      "x": 2125.373977881455,
+      "y": 536.5063293415421
+    },
+    "31": {
+      "x": 217.6994557528921,
+      "y": 225.50523535842294,
+      "w": 120,
+      "h": 70,
+      "name": "New Station",
+      "cycle_time": 10,
+      "has_part": false
+    }
+  },
+  "operators": {
+    "Op1": {
+      "color": [
+        220,
+        60,
+        60
+      ],
+      "name": "Op1",
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": "IN_1"
+        },
+        {
+          "action": "drop",
+          "loc": "1"
+        },
+        {
+          "action": "work",
+          "loc": "1"
+        },
+        {
+          "action": "pick",
+          "loc": "1"
+        },
+        {
+          "action": "drop",
+          "loc": "OUT_3"
+        }
+      ],
+      "x": 2220.9889818656948,
+      "y": 333.32307091778426
+    },
+    "Op12": {
+      "x": 2062.3641081644278,
+      "y": 344.4193772610709,
+      "name": "Op2",
+      "color": [
+        71,
+        60,
+        221
+      ],
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": ""
+        },
+        {
+          "action": "work",
+          "loc": "4"
+        }
+      ]
+    },
+    "Op13": {
+      "x": 1144.0010188081098,
+      "y": 329.72806291033186,
+      "name": "Op3",
+      "color": [
+        60,
+        120,
+        220
+      ],
+      "sequence": [
+        {
+          "action": "pick",
+          "loc": "IN_9"
+        },
+        {
+          "action": "drop",
+          "loc": "9"
+        },
+        {
+          "action": "work",
+          "loc": "9"
+        },
+        {
+          "action": "pick",
+          "loc": "9"
+        },
+        {
+          "action": "drop",
+          "loc": "10"
+        },
+        {
+          "action": "work",
+          "loc": "10"
+        },
+        {
+          "action": "pick",
+          "loc": "10"
+        },
+        {
+          "action": "drop",
+          "loc": "11"
+        },
+        {
+          "action": "work",
+          "loc": "11"
+        },
+        {
+          "action": "pick",
+          "loc": "11"
+        },
+        {
+          "action": "drop",
+          "loc": "OUT_7"
+        }
+      ]
+    },
+    "Op14": {
+      "x": 1795.991045358378,
+      "y": 508.30288957954417,
+      "name": "Op4",
+      "color": [
+        60,
+        180,
+        90
+      ],
+      "sequence": [
+        {
+          "action": "work",
+          "loc": "26"
+        },
+        {
+          "action": "pick",
+          "loc": "26"
+        },
+        {
+          "action": "drop",
+          "loc": "27"
+        },
+        {
+          "action": "work",
+          "loc": ""
+        }
+      ]
+    }
+  },
+  "boxes": {
+    "IN_1": {
+      "h": 60,
+      "name": "IN_1",
+      "start_count": 10,
+      "type": "in",
+      "w": 90,
+      "x": 2290.6088690681554,
+      "y": 235.67347323714108
+    },
+    "IN_11": {
+      "h": 60,
+      "name": "Coating IN",
+      "start_count": 10,
+      "type": "in",
+      "w": 90,
+      "x": 634.1562776565295,
+      "y": 538.4966411871114
+    },
+    "IN_4": {
+      "h": 60,
+      "name": "Chem strip IN",
+      "start_count": 10,
+      "type": "in",
+      "w": 90,
+      "x": 2040.7673180324268,
+      "y": 173.78186169168913
+    },
+    "IN_6": {
+      "h": 60,
+      "name": "BL IN",
+      "start_count": 10,
+      "type": "in",
+      "w": 90,
+      "x": 1744.9652172330595,
+      "y": 171.82977026968558
+    },
+    "IN_8": {
+      "h": 60,
+      "name": "EDM IN",
+      "start_count": 10,
+      "type": "in",
+      "w": 90,
+      "x": 595.4070292169525,
+      "y": 164.19321333496862
+    },
+    "IN_9": {
+      "h": 60,
+      "name": "IN_9",
+      "start_count": 10,
+      "type": "in",
+      "w": 90,
+      "x": 1102.0194911532499,
+      "y": 167.301738191179
+    },
+    "OUT_10": {
+      "capacity": 50,
+      "h": 60,
+      "name": "OUT_10",
+      "type": "out",
+      "w": 90,
+      "x": 1198.6106061977341,
+      "y": 167.301738191179
+    },
+    "OUT_12": {
+      "capacity": 50,
+      "h": 60,
+      "name": "Coating OUT",
+      "type": "out",
+      "w": 90,
+      "x": 128.4507309161927,
+      "y": 160.27914780557265
+    },
+    "OUT_2": {
+      "capacity": 50,
+      "h": 60,
+      "name": "OUT_2",
+      "type": "out",
+      "w": 90,
+      "x": 2278.534979687595,
+      "y": 547.1049130993803
+    },
+    "OUT_3": {
+      "capacity": 50,
+      "h": 60,
+      "name": "HT_1 OUT",
+      "type": "out",
+      "w": 90,
+      "x": 2163.3772136180896,
+      "y": 171.70403209777038
+    },
+    "OUT_5": {
+      "capacity": 50,
+      "h": 60,
+      "name": "BL Out",
+      "type": "out",
+      "w": 90,
+      "x": 1886.693527125381,
+      "y": 174.30227180740587
+    },
+    "OUT_7": {
+      "capacity": 50,
+      "h": 60,
+      "name": "HAAS OUT",
+      "type": "out",
+      "w": 90,
+      "x": 815.4797808380731,
+      "y": 164.9277359235799
+    }
+  }
+}

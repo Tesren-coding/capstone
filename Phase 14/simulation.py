@@ -1,6 +1,6 @@
 # ============================================================
 # scenario_simulation.py
-# Phase 9 — Builder-driven simulation engine
+# Phase 14 — Builder-driven simulation engine
 # Validates a user-built scenario, then runs it in SimPy.
 # Fails fast: any broken rule raises immediately with details.
 # ============================================================
