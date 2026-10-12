@@ -1,216 +1,112 @@
-# ============================================================
-# app.py
-# Flask server — builder homepage, scenario simulation, events API
-# ============================================================
+"""Flask request handlers. Scenario rules and persistence live in separate modules."""
+from pathlib import Path
 
-import os
-import json
-import re
-import hashlib
-import tempfile
-from threading import Lock
+from flask import Flask, jsonify, render_template, request
 
-from flask import Flask, render_template, request, jsonify
-
-from simulation import (
-    run_scenario_simulation,
-    ScenarioValidationError,
-    ScenarioRuntimeError,
-    normalize_scenario,
-)
+from scenario_schema import CURRENT_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, ScenarioValidationError, validate_scenario
+from scenario_store import ScenarioStore, ScenarioStorageError, file_stem
+from simulation import run_scenario_simulation, ScenarioRuntimeError
 
 app = Flask(__name__)
+scenario_store = ScenarioStore(Path(__file__).resolve().parent / 'scenarios')
 
-SCENARIOS_DIR = "scenarios"
-SCENARIO_SAVE_LOCK = Lock()
-
-
-def scenario_revision(filepath):
-    with open(filepath, "rb") as f:
-        return hashlib.sha256(f.read()).hexdigest()
-
-# --------------------------------------------------------
-# In-memory storage for the most recent simulation run.
-# Stores events + takt_time + the scenario itself, so the
-# animation page can derive positions/box types/operator
-# rosters directly from the scenario — no hardcoded layout.
-# --------------------------------------------------------
-LAST_SIMULATION = {
-    "events":    [],
-    "takt_time": 30,
-    "scenario":  None,
-}
+# One latest run per server process; per-user run storage is a separate enhancement.
+LAST_SIMULATION = {'events': [], 'takt_time': 30, 'scenario': None,
+                   'event_schema_version': EVENT_SCHEMA_VERSION}
 
 
-def safe_filename(name):
-    """Convert a user-entered name into a safe filename."""
-    name = name.strip()
-    name = re.sub(r'[^A-Za-z0-9_\- ]', '', name)  # strip unsafe chars
-    name = name.replace(" ", "_")
-    return name or "untitled"
+@app.context_processor
+def template_versions():
+    return {'scenario_schema_version': CURRENT_SCHEMA_VERSION,
+            'event_schema_version': EVENT_SCHEMA_VERSION}
 
 
-# --------------------------------------------------------
-# Route: homepage — the scenario builder
-# --------------------------------------------------------
-@app.route("/")
-def index():
-    return render_template("builder.html")
+@app.errorhandler(ScenarioValidationError)
+def validation_error(exc):
+    return jsonify(status='invalid', errors=exc.errors, error='\n'.join(exc.errors)), 400
 
 
-# --------------------------------------------------------
-# Route: run a builder-created scenario and store the result
-# --------------------------------------------------------
-@app.route("/launch", methods=["POST"])
+@app.errorhandler(ScenarioStorageError)
+def storage_error(exc):
+    return jsonify(status=exc.status, error=str(exc), **exc.details), exc.code
+
+
+@app.route('/')
+@app.route('/builder')
+def builder():
+    return render_template('builder.html')
+
+
+@app.route('/simulate')
+def simulate():
+    return render_template('simulate.html')
+
+
+@app.route('/launch', methods=['POST'])
 def launch():
     global LAST_SIMULATION
-    scenario = request.get_json()
-
+    scenario = validate_scenario(request.get_json(silent=True))
     try:
-        scenario = normalize_scenario(scenario)
         events, takt_time = run_scenario_simulation(scenario)
-    except ScenarioValidationError as e:
-        return jsonify({"status": "invalid", "errors": e.errors}), 400
-    except ScenarioRuntimeError as e:
-        return jsonify({"status": "runtime_error", "error": str(e)}), 400
-
-    LAST_SIMULATION["events"]    = events
-    LAST_SIMULATION["takt_time"] = takt_time
-    LAST_SIMULATION["scenario"]  = scenario
-
-    return jsonify({"status": "ok"})
+    except ScenarioRuntimeError as exc:
+        return jsonify(status='runtime_error', error=str(exc)), 400
+    LAST_SIMULATION = {'events': events, 'takt_time': takt_time, 'scenario': scenario,
+                       'event_schema_version': EVENT_SCHEMA_VERSION}
+    return jsonify(status='ok')
 
 
-# --------------------------------------------------------
-# Route: return the last simulation's events + scenario
-# --------------------------------------------------------
-@app.route("/events")
+@app.route('/events')
 def get_events():
     return jsonify(LAST_SIMULATION)
 
 
-# --------------------------------------------------------
-# Route: animation page
-# --------------------------------------------------------
-@app.route("/simulate")
-def simulate():
-    return render_template("simulate.html")
-
-
-# --------------------------------------------------------
-# Route: builder page (kept as its own path too, in case
-# you want /builder to still work as an alias to homepage)
-# --------------------------------------------------------
-@app.route("/builder")
-def builder():
-    return render_template("builder.html")
-
-
-# --------------------------------------------------------
-# Scenario save / load / list / delete
-# --------------------------------------------------------
-@app.route("/save-scenario", methods=["POST"])
+@app.route('/save-scenario', methods=['POST'])
 def save_scenario():
     payload = request.get_json(silent=True)
-    if not isinstance(payload, dict) or not isinstance(payload.get("scenario"), dict):
-        return jsonify(status="invalid", error="Scenario data is required."), 400
-    name = payload.get("filename") or payload.get("name", "untitled")
-    if not isinstance(name, str):
-        return jsonify(status="invalid", error="Scenario name must be text."), 400
-    if name.endswith(".json"):
-        name = name[:-5]
-    stem = safe_filename(name)
-    mode = payload.get("mode", "create")
-    if mode not in ("create", "overwrite", "duplicate"):
-        return jsonify(status="invalid", error="Unknown save mode."), 400
-
-    with SCENARIO_SAVE_LOCK:
-        os.makedirs(SCENARIOS_DIR, exist_ok=True)
-        filename = stem + ".json"
-        filepath = os.path.join(SCENARIOS_DIR, filename)
-        if mode == "duplicate":
-            # Repeated copies of Line_v2 continue as Line_v3, Line_v4, etc.
-            root = re.sub(r"_v[0-9]+$", "", stem)
-            version = 2
-            while True:
-                filename = f"{root}_v{version}.json"
-                filepath = os.path.join(SCENARIOS_DIR, filename)
-                try:
-                    f = open(filepath, "x", encoding="utf-8")
-                    break
-                except FileExistsError:
-                    version += 1
-            try:
-                with f:
-                    json.dump(payload["scenario"], f, indent=2)
-            except Exception:
-                os.remove(filepath)
-                raise
-        elif mode == "create":
-            try:
-                f = open(filepath, "x", encoding="utf-8")
-            except FileExistsError:
-                return jsonify(status="exists", filename=filename), 409
-            try:
-                with f:
-                    json.dump(payload["scenario"], f, indent=2)
-            except Exception:
-                os.remove(filepath)
-                raise
-        else:
-            if not os.path.exists(filepath):
-                return jsonify(status="missing", error="The original scenario no longer exists. Save a new version."), 409
-            expected = payload.get("expected_revision")
-            if expected and expected != scenario_revision(filepath):
-                return jsonify(status="conflict", error="This scenario changed since you loaded it. Reload it or save a new version."), 409
-            fd, temp_path = tempfile.mkstemp(dir=SCENARIOS_DIR, suffix=".tmp")
-            try:
-                with os.fdopen(fd, "w", encoding="utf-8") as f:
-                    json.dump(payload["scenario"], f, indent=2)
-                os.replace(temp_path, filepath)
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
-
-        revision = scenario_revision(filepath)
-    return jsonify(status="saved", filename=filename, revision=revision)
+    if not isinstance(payload, dict):
+        raise ScenarioStorageError('invalid', 'Scenario data is required.')
+    result = scenario_store.save(payload.get('filename') or payload.get('name', 'untitled'),
+                                 payload.get('scenario'), payload.get('mode', 'create'),
+                                 payload.get('expected_revision'))
+    return jsonify(result)
 
 
-@app.route("/list-scenarios")
+@app.route('/list-scenarios')
 def list_scenarios():
-    os.makedirs(SCENARIOS_DIR, exist_ok=True)
-    files = [f for f in os.listdir(SCENARIOS_DIR) if f.endswith(".json")]
-    files.sort()
-    return jsonify({"files": files})
+    return jsonify(files=scenario_store.list_files())
 
 
-@app.route("/load-scenario/<filename>")
+@app.route('/load-scenario/<filename>')
 def load_scenario(filename):
-    filename = safe_filename(filename.replace(".json", "")) + ".json"
-    filepath = os.path.join(SCENARIOS_DIR, filename)
-
-    if os.path.exists(filepath):
-        with SCENARIO_SAVE_LOCK:
-            with open(filepath, "rb") as f:
-                raw = f.read()
-            scenario_data = json.loads(raw)
-            revision = hashlib.sha256(raw).hexdigest()
-        return jsonify(found=True, scenario=scenario_data, filename=filename, revision=revision)
-
-    return jsonify({"found": False, "scenario": None})
+    return jsonify(scenario_store.load(filename))
 
 
-@app.route("/delete-scenario/<filename>", methods=["POST"])
+@app.route('/delete-scenario/<filename>', methods=['POST'])
 def delete_scenario(filename):
-    filename = safe_filename(filename.replace(".json", "")) + ".json"
-    filepath = os.path.join(SCENARIOS_DIR, filename)
-
-    if os.path.exists(filepath):
-        os.remove(filepath)
-        return jsonify({"status": "deleted"})
-
-    return jsonify({"status": "not_found"})
+    return jsonify(scenario_store.delete(filename))
 
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=False)
+@app.route('/import-scenario', methods=['POST'])
+def import_scenario():
+    payload = request.get_json(silent=True)
+    original = payload.get('scenario') if isinstance(payload, dict) else None
+    scenario = validate_scenario(original, require_runnable=False)
+    source_version = original.get('schema_version', 1)
+    return jsonify(status='imported', scenario=scenario,
+                   migrated_from=source_version if source_version != CURRENT_SCHEMA_VERSION else None)
+
+
+@app.route('/export-scenario', methods=['POST'])
+def export_scenario():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        raise ScenarioStorageError('invalid', 'Scenario data is required.')
+    scenario = validate_scenario(payload.get('scenario'), require_runnable=False)
+    filename = file_stem(payload.get('filename') or 'scenario') + '.json'
+    response = jsonify(scenario)
+    response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)

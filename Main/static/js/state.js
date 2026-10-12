@@ -1,5 +1,5 @@
 // Replay the SimPy event stream so machine rules and visible playback agree.
-function buildOperatorState(events, stationCenters, boxCenters, opNames, scenario) {
+export function buildOperatorState(events, stationCenters, boxCenters, opNames, scenario) {
     const state = {
         events, eventIndex: 0, time: 0, finished: false, stopReason: null,
         opPositions: {}, partPositions: {}, carrying: {}, phase: {}, moves: {},
@@ -99,7 +99,7 @@ function refreshPartPositions(state) {
     }
 }
 
-function updateOperators(state, targetTime) {
+export function updateOperators(state, targetTime) {
     if (state.stopReason || state.finished) return;
     while (state.eventIndex < state.events.length && state.events[state.eventIndex].time <= targetTime + 1e-9) {
         const event = state.events[state.eventIndex++];

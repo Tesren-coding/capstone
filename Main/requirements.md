@@ -32,10 +32,10 @@ Extract the project ZIP before running it. Keep these files and folders together
 
 | Location | Contents |
 | --- | --- |
-| Project root | `app.py`, `simulation.py`, `requirements.txt`; `main.py` is an optional launcher. |
+| Project root | `app.py`, `simulation.py`, `scenario_schema.py`, `scenario_store.py`, `requirements.txt`; `main.py` is an optional launcher. |
 | `templates/` | `base.html`, `builder.html`, `simulate.html`. |
 | `static/` | `style.css`. |
-| `static/js/` | `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
+| `static/js/` | `builder.js`, `playback.js`, `api.js`, `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
 | `static/images/` | `Part.png`, `SWIP.png`; keep the exact filenames and capitalisation. |
 | `scenarios/` | Saved scenario JSON files. The app creates this folder when needed. |
 
@@ -68,7 +68,10 @@ Once the server starts, open **http://localhost:5000** in your browser.
 You should see the Scenario Builder. Keep the terminal open while using the app.
 
 Create or load a scenario, configure its stations and operators, then select
-**Run Simulation**. Save layouts with **Save Scenario**.
+**Run Simulation**. Save layouts with **Save Scenario**. Use **Import JSON**
+to open a scenario file from your PC and **Export JSON** to download a portable
+copy. Older supported formats are converted without changing the original file.
+See `DATA_FORMAT.md` for compatibility rules.
 
 Press **Ctrl+C** in the terminal to stop the server.
 

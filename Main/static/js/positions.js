@@ -6,14 +6,14 @@
 // point directly (they have no w/h). centerOf() handles both cases
 // correctly since missing w/h defaults to 0.
 
-function centerOf(rect) {
+export function centerOf(rect) {
   return {
     x: rect.x + (rect.w || 0) / 2,
     y: rect.y + (rect.h || 0) / 2,
   };
 }
 
-function buildPositionsFromScenario(scenario) {
+export function buildPositionsFromScenario(scenario) {
   const stationPositions = {};
   const stationCenters   = {};
   for (const sid in scenario.stations || {}) {
@@ -40,4 +40,3 @@ function buildPositionsFromScenario(scenario) {
   };
 }
 
-window.buildPositionsFromScenario = buildPositionsFromScenario;

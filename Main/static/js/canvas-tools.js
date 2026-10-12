@@ -1,5 +1,5 @@
 // Shared canvas view controls. The view never changes saved layout coordinates.
-class CanvasViewport {
+export class CanvasViewport {
     constructor(canvas, controls, onChange = () => {}) {
         this.canvas = canvas;
         this.scale = 1;
@@ -67,7 +67,7 @@ class CanvasViewport {
 }
 
 // Wrap by measured width, including names with no spaces. Preserve every character.
-function wrapCanvasText(ctx, text, maxWidth) {
+export function wrapCanvasText(ctx, text, maxWidth) {
     const lines = [];
     for (const paragraph of String(text ?? '').split('\n')) {
         let line = '';
@@ -86,13 +86,13 @@ function wrapCanvasText(ctx, text, maxWidth) {
     return lines;
 }
 
-function stationProcesses(s) {
+export function stationProcesses(s) {
     return s.processes || [{id: 'p1', name: 'Process 1', manual_time: s.cycle_time ?? 10, auto_time: 0}];
 }
-function stationTotals(s) {
+export function stationTotals(s) {
     return stationProcesses(s).reduce((total, p) => ({manual: total.manual + Number(p.manual_time || 0), auto: total.auto + Number(p.auto_time || 0)}), {manual: 0, auto: 0});
 }
-function drawStationText(ctx, sid, s, pos = s) {
+export function drawStationText(ctx, sid, s, pos = s) {
     ctx.save();
     ctx.fillStyle = '#000000';
     ctx.font = '11px Arial';
@@ -114,10 +114,10 @@ function drawStationText(ctx, sid, s, pos = s) {
     const totals = stationTotals(s);
     ctx.font = '10px Arial';
     ctx.fillText(`M:${Number(totals.manual.toFixed(2))} A:${Number(totals.auto.toFixed(2))} min`, pos.x + 4, pos.y + pos.h - 28);
-    ctx.fillText(`${stationProcesses(s).length} process(es)`, pos.x + 4, pos.y + pos.h - 15);
+    ctx.fillText(`No. of processes: ${stationProcesses(s).length}`, pos.x + 4, pos.y + pos.h - 15);
     ctx.restore();
 }
 
-function escapeHtml(value) {
+export function escapeHtml(value) {
     return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[c]));
 }

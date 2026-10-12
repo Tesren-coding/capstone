@@ -1,3 +1,5 @@
+import {drawStationText} from "./canvas-tools.js";
+
 // ============================================================
 // draw.js
 // Canvas drawing functions
@@ -35,7 +37,7 @@ const COLORS = {
 // --------------------------------------------------------
 // Draw a station rectangle
 // --------------------------------------------------------
-function drawStation(ctx, sid, pos, stationInfo, isActive, activeColor) {
+export function drawStation(ctx, sid, pos, stationInfo, isActive, activeColor) {
     const { x, y, w, h } = pos;
 
     if (isActive) {
@@ -80,7 +82,7 @@ const BOX_COLORS = {
     out:  "#dc3232",
 };
 
-function drawBox(ctx, bid, pos, boxData, liveState, partImage, flashTime = 0) {
+export function drawBox(ctx, bid, pos, boxData, liveState, partImage, flashTime = 0) {
     const { x, y, w, h } = pos;
     const color = BOX_COLORS[boxData.type] || "#888888";
 
@@ -141,7 +143,7 @@ function drawBox(ctx, bid, pos, boxData, liveState, partImage, flashTime = 0) {
 // --------------------------------------------------------
 // Draw part image at a coordinate (centered)
 // --------------------------------------------------------
-function drawPart(ctx, cx, cy, partImage, size = 20) {
+export function drawPart(ctx, cx, cy, partImage, size = 20) {
     if (partImage && partImage.complete && partImage.naturalWidth > 0) {
         ctx.drawImage(partImage, cx - size / 2, cy - size / 2, size, size);
     } else {
@@ -175,7 +177,7 @@ function drawPartPlaceholder(ctx, cx, cy, radius = 10) {
 // --------------------------------------------------------
 // Draw an operator circle with label
 // --------------------------------------------------------
-function drawOperator(ctx, name, cx, cy, color) {
+export function drawOperator(ctx, name, cx, cy, color) {
     ctx.fillStyle = toRgbaString(color);
     ctx.beginPath();
     ctx.arc(cx, cy, 14, 0, Math.PI * 2);
@@ -197,7 +199,7 @@ function drawOperator(ctx, name, cx, cy, color) {
 // --------------------------------------------------------
 // Draw the top banner with clock and progress bar
 // --------------------------------------------------------
-function drawBanner(ctx, simClock, taktTime, taktResetCount, width) {
+export function drawBanner(ctx, simClock, taktTime, taktResetCount, width) {
     ctx.fillStyle = COLORS.darkBlue;
     ctx.fillRect(0, 0, width, 130);
 
@@ -218,7 +220,7 @@ function drawBanner(ctx, simClock, taktTime, taktResetCount, width) {
     ctx.font         = "24px Arial";
     ctx.textAlign    = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(`Takt Progress: ${simClock.toFixed(1)} / ${taktTime} min`, 20, 20);
+    ctx.fillText(`Cycle Time: ${simClock.toFixed(1)} / ${taktTime} min`, 20, 20);
 
     ctx.fillStyle = COLORS.yellow;
     ctx.font      = "16px Arial";
@@ -228,7 +230,7 @@ function drawBanner(ctx, simClock, taktTime, taktResetCount, width) {
 // --------------------------------------------------------
 // Draw legend at the bottom of the canvas
 // --------------------------------------------------------
-function drawLegend(ctx, operatorNames, operators, partImage, height) {
+export function drawLegend(ctx, operatorNames, operators, partImage, height) {
     let legendX = 20;
     const legendY = height - 30;
 

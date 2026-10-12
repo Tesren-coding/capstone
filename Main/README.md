@@ -17,6 +17,52 @@ Open http://localhost:5000 in your browser.
 
 For full Windows, macOS and Linux setup instructions, see `requirements.md`.
 
+## Code organization
+
+HTML templates contain markup and one module entry point per page. JavaScript
+uses explicit `import`/`export` dependencies; shared helpers are loaded by the
+browser module system rather than globals or manually ordered script tags.
+
+| File | Responsibility |
+| --- | --- |
+| `templates/` | Shared layout, builder markup and playback markup. |
+| `static/js/builder.js` | Builder state, placement, editor panels, import/export, save/load and launch. |
+| `static/js/playback.js` | Playback clock, seeking, controls, tooltips and frame composition. |
+| `static/js/api.js` | Shared JSON request handling. |
+| `static/js/state.js` | Replay events into simulation display state. |
+| `static/js/draw.js` | Draw canvas objects, banner and legend. |
+| `static/js/positions.js` | Derive coordinates from the scenario. |
+| `static/js/canvas-tools.js` | Shared zoom/pan, station text and helpers. |
+| `app.py` | Web requests and responses. |
+| `scenario_store.py` | Scenario JSON files, revisions and save modes. |
+| `scenario_schema.py` | Format versions, migrations and draft/run validation. |
+| `simulation.py` | SimPy processing and material-flow rules. |
+| `DATA_FORMAT.md` | Scenario/event contracts and future migration policy. |
+| `tests/test_scenario_compatibility.py` | Repeatable compatibility, storage and route checks. |
+
+Flask passes the part-image URL through the simulation canvas's
+`data-part-image-url` attribute and format versions through the body data
+attributes. Static JavaScript contains no Jinja expressions.
+
+## Import, export and compatibility
+
+Use **Import JSON** to choose a scenario from your PC. Supported older files
+are upgraded in memory; the original file stays unchanged. Invalid or newer,
+unsupported formats show a clear error and leave the current layout intact.
+An imported scenario is a new unsaved layout. Save Scenario lets you name it;
+existing-name conflicts still offer overwrite or a numbered copy.
+
+Use **Export JSON** to download the current layout for another PC or a backup.
+The downloaded file includes `schema_version: 2`. You can export/import drafts
+before operator sequences are complete; Run Simulation checks the references
+and sequence rules before calculating events. Imported metadata and extra
+fields are retained when saving/exporting.
+
+Unversioned and version-1 files are legacy inputs. Version-2 files must use the
+process-list format. Future data-format changes need explicit migrations;
+application bug-fix patches do not automatically change the scenario version.
+See `DATA_FORMAT.md` for the fields, units, event meanings and release policy.
+
 ## Playback timeline
 
 Use **PLAY**, **PAUSE** and **RESTART** to control playback. Restart returns to
@@ -104,12 +150,18 @@ operator references.
 
 ## Validation
 
-Checked process timing and machine concurrency, transfers during both phases,
-early-pick waits, multiple process selection, legacy migration, fractional and
-invalid times, reference updates, browser editing, save/reload, event playback,
-hover details and busy-transfer errors. Browser checks found no missing assets
-or page errors.
+Run the included automated checks after installing requirements:
 
-Playback checks also cover backward/forward seeking, movement interpolation,
-manual/automatic phases, part and inventory restoration, pause/resume, restart,
-keyboard seeking, completion and review before a simulation error.
+```powershell
+python -m unittest discover -s tests -v
+```
+
+These check legacy migration, unchanged input and simulation results, future
+format rejection, migration sequencing, draft/run validation, save conflicts,
+original-file preservation, import/export round trips and event versions.
+
+Browser checks cover module loading, import/export and rejection without data
+loss, metadata preservation, editing/reordering and ID references, save/load,
+duplicate versions, draft restoration, zoom, simulation launch, machine
+concurrency, tooltips, timeline restoration, pause/resume, restart, completion
+and busy-transfer errors.

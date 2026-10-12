@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Line building simulator</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-    <script src="{{ url_for('static', filename='js/canvas-tools.js') }}"></script>
 </head>
-<body>
+<body data-scenario-schema-version="{{ scenario_schema_version }}" data-event-schema-version="{{ event_schema_version }}">
     <header>
         <div class="header-inner">
             <h1>Line building simulator</h1>
@@ -22,5 +21,6 @@
     <footer>
         <p>GE Vernova — Capstone Project</p>
     </footer>
+    {% block scripts %}{% endblock %}
 </body>
 </html>
