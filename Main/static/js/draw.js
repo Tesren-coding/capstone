@@ -218,7 +218,7 @@ function drawBanner(ctx, simClock, taktTime, taktResetCount, width) {
     ctx.font         = "24px Arial";
     ctx.textAlign    = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(`Cycle Time: ${simClock.toFixed(1)} / ${taktTime} min`, 20, 20);
+    ctx.fillText(`Takt Progress: ${simClock.toFixed(1)} / ${taktTime} min`, 20, 20);
 
     ctx.fillStyle = COLORS.yellow;
     ctx.font      = "16px Arial";
