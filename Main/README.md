@@ -15,6 +15,24 @@ python app.py
 
 Open http://localhost:5000 in your browser.
 
+For full Windows, macOS and Linux setup instructions, see `requirements.md`.
+
+## Playback timeline
+
+Use **PLAY**, **PAUSE** and **RESTART** to control playback. Restart returns to
+the beginning and leaves playback paused. The speed dial changes viewing speed.
+
+Drag **Playback position** backward or forward to inspect any recorded moment,
+including a point between operator movements. Seeking pauses playback and
+restores operator positions, carried and waiting parts, box counts, machine
+phases and remaining times. Press PLAY to continue from the selected time.
+The slider also supports the keyboard arrow keys when focused.
+
+The time label shows elapsed / total simulated minutes. The timeline ends at
+100 takt periods or at the first simulation error. At an error or completion,
+seek backward to review and replay the preceding events. Seeking does not
+change the scenario or its result; fix errors in the builder and run again.
+
 ## Station processes and machine times
 
 Select a station to edit its list of processes. Each process has a name,
@@ -91,3 +109,7 @@ early-pick waits, multiple process selection, legacy migration, fractional and
 invalid times, reference updates, browser editing, save/reload, event playback,
 hover details and busy-transfer errors. Browser checks found no missing assets
 or page errors.
+
+Playback checks also cover backward/forward seeking, movement interpolation,
+manual/automatic phases, part and inventory restoration, pause/resume, restart,
+keyboard seeking, completion and review before a simulation error.

@@ -8,8 +8,9 @@
 </section>
 
 <div style="text-align:center; margin:12px 0;">
-    <button id="start-btn" style="padding:10px 24px; font-size:14px; margin-right:8px;">START</button>
-    <button id="stop-btn"  style="padding:10px 24px; font-size:14px; margin-right:8px;">STOP</button>
+    <button id="start-btn" disabled style="padding:10px 24px; font-size:14px; margin-right:8px;">PLAY</button>
+    <button id="stop-btn" disabled style="padding:10px 24px; font-size:14px; margin-right:8px;">PAUSE</button>
+    <button id="restart-btn" disabled style="padding:10px 24px; font-size:14px; margin-right:8px;">RESTART</button>
     <button id="back-btn"  style="padding:10px 24px; font-size:14px; background:#e8eef8; border:2px solid #1e3c78; margin-right:24px;">BACK TO BUILDER</button>
 
     <label for="speed-dial" style="font-weight:bold;">Speed:</label>
@@ -17,6 +18,13 @@
     <span id="speed-label" style="min-width:50px; font-weight:bold; display:inline-block;">1.00x</span>
 </div>
 
+<div style="max-width:900px; margin:16px auto; padding:0 16px;">
+    <label for="timeline" style="font-weight:bold;">Playback position</label>
+    <input id="timeline" type="range" min="0" max="0" step="any" value="0" disabled
+           aria-describedby="timeline-help" style="display:block; width:100%; margin:8px 0;">
+    <output id="timeline-label" for="timeline">0.00 / 0.00 min</output>
+    <span id="timeline-help" style="display:block; margin-top:4px;">Drag to review any moment. Playback pauses; press PLAY to continue.</span>
+</div>
 
 <div id="canvas-controls" class="canvas-controls">
     <button type="button" data-zoom-out aria-label="Zoom out">−</button>
@@ -103,6 +111,58 @@ const baseMsPerSimMinute  = 1000; // "1.0x" reference speed: 1 sim-min = 1 real-
 let   speedMultiplier     = 1.0;
 let   msPerSimMinute      = baseMsPerSimMinute / speedMultiplier;
 
+const timeline = document.getElementById('timeline');
+const timelineLabel = document.getElementById('timeline-label');
+const playButton = document.getElementById('start-btn');
+const pauseButton = document.getElementById('stop-btn');
+const restartButton = document.getElementById('restart-btn');
+let totalDuration = 0;
+
+function updatePlaybackControls() {
+    timeline.value = simulationTime;
+    timelineLabel.textContent = `${simulationTime.toFixed(2)} / ${totalDuration.toFixed(2)} min`;
+    timeline.setAttribute('aria-valuetext', `${simulationTime.toFixed(2)} of ${totalDuration.toFixed(2)} minutes`);
+    playButton.disabled = !opState || !!opState.stopReason || opState.finished;
+    pauseButton.disabled = !isRunning;
+    restartButton.disabled = !opState;
+    statusText.style.color = '';
+    statusText.style.fontWeight = '';
+    if (opState?.stopReason) {
+        statusText.textContent = '⛔ SIMULATION STOPPED — ' + opState.stopReason;
+        statusText.style.color = '#cc0000';
+        statusText.style.fontWeight = 'bold';
+    } else if (opState?.finished) {
+        statusText.textContent = 'Simulation complete — 100 takt periods.';
+    } else if (opState) {
+        statusText.textContent = isRunning ? 'Playing simulation.' : 'Paused. Press PLAY to continue.';
+    }
+}
+
+function pausePlayback() {
+    isRunning = false;
+    lastFrameTime = null;
+    updatePlaybackControls();
+}
+
+function seekTo(targetTime) {
+    if (!scenario || !opState || !Number.isFinite(targetTime)) return;
+    isRunning = false;
+    lastFrameTime = null;
+    // Events mutate state in forward order. Rebuild first so backward seeks
+    // restore inventory, parts, machine phases and error/completion flags.
+    initOperatorState();
+    updateOperators(opState, Math.max(0, Math.min(targetTime, totalDuration)));
+    simulationTime = opState.time;
+    taktResetCount = Math.floor(simulationTime / taktTime);
+    simClock = simulationTime % taktTime;
+    updatePlaybackControls();
+    drawFrame(performance.now());
+}
+
+timeline.addEventListener('pointerdown', pausePlayback);
+timeline.addEventListener('input', () => seekTo(Number(timeline.value)));
+restartButton.addEventListener('click', () => seekTo(0));
+
 // ============================================================
 // PART — Speed dial control
 // ============================================================
@@ -134,11 +194,10 @@ document.getElementById("start-btn").addEventListener("click", () => {
     if (!opState || opState.stopReason || opState.finished) return;
     isRunning = true;
     lastFrameTime = null;
+    updatePlaybackControls();
 });
 
-document.getElementById("stop-btn").addEventListener("click", () => {
-    isRunning = false;
-});
+document.getElementById("stop-btn").addEventListener("click", pausePlayback);
 
 document.getElementById("back-btn").addEventListener("click", () => {
     window.location.href = "/builder";
@@ -178,9 +237,11 @@ async function init() {
         taktTime  = data.takt_time;
 
         initOperatorState();
-
-
-        statusText.textContent = "Ready. Press START.";
+        totalDuration = simEvents.reduce((latest, event) => Math.max(latest, event.time), 0);
+        timeline.max = totalDuration;
+        timeline.disabled = totalDuration <= 0;
+        updatePlaybackControls();
+        statusText.textContent = "Ready. Press PLAY.";
         requestAnimationFrame(animationLoop);
     } catch (err) {
         console.error("Error during init():", err);
@@ -205,18 +266,10 @@ function animationLoop(timestamp) {
         taktResetCount = Math.floor(simulationTime / taktTime);
         simClock = simulationTime % taktTime;
 
-        if (opState.finished) {
+        if (opState.finished || opState.stopReason) {
             isRunning = false;
-            statusText.textContent = 'Simulation complete — 100 takt periods.';
-            document.getElementById('start-btn').disabled = true;
         }
-        if (opState.stopReason) {
-            isRunning = false;
-            document.getElementById('start-btn').disabled = true;
-            statusText.textContent = "⛔ SIMULATION STOPPED — " + opState.stopReason;
-            statusText.style.color = "#cc0000";
-            statusText.style.fontWeight = "bold";
-        }
+        updatePlaybackControls();
     }
 
     drawFrame(timestamp);
@@ -300,7 +353,7 @@ function drawFrame(timestamp) {
         ctx.font         = "28px Arial";
         ctx.textAlign    = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(opState.stopReason ? "STOPPED — See status above" : opState.finished ? "SIMULATION COMPLETE" : "PAUSED — Press START to begin", canvas.width / 2, canvas.height - 75);
+        ctx.fillText(opState.stopReason ? "STOPPED — See status above" : opState.finished ? "SIMULATION COMPLETE" : "PAUSED — Press PLAY to continue", canvas.width / 2, canvas.height - 75);
         ctx.textAlign    = "left";
         ctx.textBaseline = "alphabetic";
     }
