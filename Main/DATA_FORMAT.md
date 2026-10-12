@@ -3,6 +3,9 @@
 This is the contract shared by import/export, storage, the SimPy engine and
 browser playback. Runtime validation and migrations live in `scenario_schema.py`.
 
+PQPR projects use a separate version-1 contract documented in `PQPR_FORMAT.md`.
+They are stored in `pqpr_projects/`, not in the scenario directory.
+
 ## Version policy
 
 `CURRENT_SCHEMA_VERSION = 2` describes saved scenario data. It is independent

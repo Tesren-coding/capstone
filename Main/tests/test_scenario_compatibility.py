@@ -173,6 +173,26 @@ class StorageAndRouteTests(unittest.TestCase):
             self.assertIn(script, page)
             self.assertNotIn('<script>', page)
 
+    def test_dashboard_and_planned_modules_have_working_navigation(self):
+        dashboard = self.client.get('/').get_data(as_text=True)
+        self.assertIn('Your planning workspace', dashboard)
+        self.assertIn('Open Line Builder', dashboard)
+        self.assertNotIn('id="builder-canvas"', dashboard)
+        self.assertEqual(self.client.get('/dashboard').status_code, 200)
+        for path in ('/builder', '/pqpr', '/line-balancing'):
+            self.assertIn(f'href="{path}"', dashboard)
+            self.assertEqual(self.client.get(path).status_code, 200)
+        builder = self.client.get('/builder').get_data(as_text=True)
+        self.assertIn('id="builder-canvas"', builder)
+        self.assertIn('aria-current="page"', builder)
+        pqpr_page = self.client.get('/pqpr').get_data(as_text=True)
+        self.assertIn('id="pqpr-app"', pqpr_page)
+        for path in ('/line-balancing',):
+            page = self.client.get(path).get_data(as_text=True)
+            self.assertIn('This app is coming in a later stage', page)
+            self.assertIn('Planned capabilities', page)
+            self.assertNotIn('id="builder-canvas"', page)
+
 
 if __name__ == '__main__':
     unittest.main()

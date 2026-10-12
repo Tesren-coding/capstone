@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard-page">
+    <section class="dashboard-intro" aria-labelledby="dashboard-title">
+        <p class="eyebrow">Production planning</p>
+        <h2 id="dashboard-title">Your planning workspace</h2>
+        <p>Choose a tool to define product processes, balance operator work or test a line layout.</p>
+    </section>
+
+    <section class="app-grid" aria-label="Planning apps">
+        {% for module in modules %}
+        <article class="app-card app-card--{{ module.id }}">
+            <div class="app-card-top">
+                <span class="app-icon" aria-hidden="true">{{ module.icon }}</span>
+                <span class="module-status module-status--{{ module.status }}">{{ 'Available' if module.status == 'available' else 'Planned' }}</span>
+            </div>
+            <h3>{{ module.title }}</h3>
+            <p class="app-description">{{ module.description }}</p>
+            <ul class="app-features">
+                {% for feature in module.features %}<li>{{ feature }}</li>{% endfor %}
+            </ul>
+            <a class="app-link {{ 'app-link--primary' if module.status == 'available' else '' }}"
+               href="{{ url_for(module.endpoint) }}">
+                {% if module.status == 'available' %}Open {{ module.title }}{% else %}View planned module{% endif %}
+                <span aria-hidden="true">→</span>
+            </a>
+        </article>
+        {% endfor %}
+    </section>
+
+    <aside class="workspace-note">
+        <div class="workspace-note-icon" aria-hidden="true">i</div>
+        <div>
+            <h3>Continue with your line layout</h3>
+            <p>Your builder draft is kept in this browser tab when you return to the dashboard.
+               Save or export a scenario to keep a copy for later.</p>
+        </div>
+    </aside>
+</div>
+{% endblock %}

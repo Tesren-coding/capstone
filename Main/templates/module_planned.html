@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="planned-page">
+    <a class="back-link" href="{{ url_for('planning.dashboard') }}">← Back to dashboard</a>
+    <section class="planned-card" aria-labelledby="module-title">
+        <div class="app-card-top">
+            <span class="app-icon" aria-hidden="true">{{ module.icon }}</span>
+            <span class="module-status module-status--planned">Planned</span>
+        </div>
+        <h2 id="module-title">{{ module.title }}</h2>
+        <p class="planned-description">{{ module.description }}</p>
+        <div class="planned-notice">
+            <h3>This app is coming in a later stage</h3>
+            <p>Its editing and calculation tools are not available yet. You can use the Line Builder now.</p>
+        </div>
+        <h3 class="planned-features-heading">Planned capabilities</h3>
+        <ul class="app-features">
+            {% for feature in module.features %}<li>{{ feature }}</li>{% endfor %}
+        </ul>
+        <div class="planned-actions">
+            <a class="app-link app-link--primary" href="{{ url_for('builder') }}">Open Line Builder <span aria-hidden="true">→</span></a>
+            <a class="back-link" href="{{ url_for('planning.dashboard') }}">Return to dashboard</a>
+        </div>
+    </section>
+</div>
+{% endblock %}

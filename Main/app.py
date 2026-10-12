@@ -6,8 +6,12 @@ from flask import Flask, jsonify, render_template, request
 from scenario_schema import CURRENT_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, ScenarioValidationError, validate_scenario
 from scenario_store import ScenarioStore, ScenarioStorageError, file_stem
 from simulation import run_scenario_simulation, ScenarioRuntimeError
+from planning_pages import planning, MODULES
+from pqpr_routes import pqpr
 
 app = Flask(__name__)
+app.register_blueprint(planning)
+app.register_blueprint(pqpr)
 scenario_store = ScenarioStore(Path(__file__).resolve().parent / 'scenarios')
 
 # One latest run per server process; per-user run storage is a separate enhancement.
@@ -18,7 +22,8 @@ LAST_SIMULATION = {'events': [], 'takt_time': 30, 'scenario': None,
 @app.context_processor
 def template_versions():
     return {'scenario_schema_version': CURRENT_SCHEMA_VERSION,
-            'event_schema_version': EVENT_SCHEMA_VERSION}
+            'event_schema_version': EVENT_SCHEMA_VERSION,
+            'navigation_modules': MODULES}
 
 
 @app.errorhandler(ScenarioValidationError)
@@ -31,15 +36,14 @@ def storage_error(exc):
     return jsonify(status=exc.status, error=str(exc), **exc.details), exc.code
 
 
-@app.route('/')
 @app.route('/builder')
 def builder():
-    return render_template('builder.html')
+    return render_template('builder.html', page_title='Line Builder', active_module='line-builder')
 
 
 @app.route('/simulate')
 def simulate():
-    return render_template('simulate.html')
+    return render_template('simulate.html', page_title='Simulation', active_module='line-builder')
 
 
 @app.route('/launch', methods=['POST'])

@@ -1,7 +1,8 @@
 # Requirements and setup
 
 This guide explains how to run the Capstone Line Building Simulator on your own PC.
-The application uses Python, Flask and SimPy, with a browser interface.
+The toolkit uses Python, Flask and SimPy, with a browser dashboard.
+Line Builder and PQPR are its currently available apps.
 
 ## 1. Requirements
 
@@ -19,9 +20,11 @@ Required third-party Python packages are defined in `requirements.txt`:
 ```text
 Flask>=3.1,<4
 simpy>=4.1,<5
+openpyxl>=3.1,<4
 ```
 
 Flask runs the web application; SimPy runs the production-line simulation.
+Openpyxl reads Excel PQPR imports.
 Installing from `requirements.txt` also installs their dependent packages.
 
 **`requirements.md` is this guide. `requirements.txt` is the package list used by pip.**
@@ -32,15 +35,16 @@ Extract the project ZIP before running it. Keep these files and folders together
 
 | Location | Contents |
 | --- | --- |
-| Project root | `app.py`, `simulation.py`, `scenario_schema.py`, `scenario_store.py`, `requirements.txt`; `main.py` is an optional launcher. |
-| `templates/` | `base.html`, `builder.html`, `simulate.html`. |
-| `static/` | `style.css`. |
-| `static/js/` | `builder.js`, `playback.js`, `api.js`, `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
+| Project root | `app.py`, `simulation.py`, `scenario_schema.py`, `scenario_store.py`, `planning_pages.py`, `pqpr_routes.py`, `pqpr_schema.py`, `pqpr_store.py`, `pqpr_excel.py`, `requirements.txt`; `main.py` is an optional launcher. |
+| `templates/` | `base.html`, `dashboard.html`, `module_planned.html`, `builder.html`, `simulate.html`, `pqpr.html`. |
+| `static/` | `style.css`, `pqpr.css`. |
+| `static/js/` | `builder.js`, `playback.js`, `api.js`, `pqpr.js`, `pqpr-model.js`, `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
 | `static/images/` | `Part.png`, `SWIP.png`; keep the exact filenames and capitalisation. |
-| `scenarios/` | Saved scenario JSON files. The app creates this folder when needed. |
+| `scenarios/` | Saved line-builder scenario JSON files; created when needed. |
+| `pqpr_projects/` | Saved PQPR project JSON files; created when needed. |
 
-When transferring the project to another PC, copy your `scenarios/` folder if
-you want to keep your saved layouts. Create a fresh virtual environment on each PC.
+When transferring the project to another PC, copy your `scenarios/` and `pqpr_projects/` folders if
+you want to keep your saved layouts and PQPR projects. Create a fresh virtual environment on each PC.
 
 ## 3. First-time setup on Windows
 
@@ -65,7 +69,10 @@ commands use its Python directly, so you do not need to activate it first.
 ## 4. Open and use the application
 
 Once the server starts, open **http://localhost:5000** in your browser.
-You should see the Scenario Builder. Keep the terminal open while using the app.
+You should see the dashboard. Select **Open Line Builder** to use the existing
+editor and simulation, or **Open PQPR** for project/process planning. Line
+Balancing & Yamazumi remains Planned for the next stage. Keep the terminal open while
+using the app.
 
 Create or load a scenario, configure its stations and operators, then select
 **Run Simulation**. Save layouts with **Save Scenario**. Use **Import JSON**
@@ -115,7 +122,7 @@ Python packages through your distribution's package manager.
 | Problem | What to check |
 | --- | --- |
 | `python` or `py` is not recognised | Check that Python is installed, reopen the terminal, and check its PATH configuration. |
-| `No module named flask` or `simpy` | Run the dependency-install command using the same `.venv` Python used to start the app. |
+| `No module named flask`, `simpy` or `openpyxl` | Run the dependency-install command using the same `.venv` Python used to start the app. |
 | `requirements.txt` or `app.py` cannot be found | Open the terminal in the extracted folder containing those files. |
 | Port 5000 is already in use | Stop the other copy of the app with Ctrl+C, then start it again. |
 | Browser cannot connect | Check the terminal for errors and confirm the server is still running. Use `localhost:5000`, not a file opened directly in the browser. |

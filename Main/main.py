@@ -8,7 +8,7 @@ import threading
 from app import app
 
 def open_browser():
-    webbrowser.open("http://localhost:5000/builder")
+    webbrowser.open("http://localhost:5000/")
 
 if __name__ == "__main__":
     # open browser after short delay to let Flask start

@@ -31,9 +31,10 @@ def revision(raw):
 
 
 class ScenarioStore:
-    def __init__(self, directory):
+    def __init__(self, directory, normalizer=None):
         self.directory = Path(directory)
         self.lock = Lock()
+        self.normalizer = normalizer or (lambda data: validate_scenario(data, require_runnable=False))
 
     def list_files(self):
         with self.lock:
@@ -51,7 +52,7 @@ class ScenarioStore:
             original = json.loads(raw)
         except (ValueError, UnicodeDecodeError) as exc:
             raise ScenarioStorageError('invalid', 'Saved scenario is not valid JSON.') from exc
-        scenario = validate_scenario(original, require_runnable=False)
+        scenario = self.normalizer(original)
         source_version = original.get('schema_version', 1)
         return {'found': True, 'filename': filename, 'scenario': scenario,
                 'revision': revision(raw), 'migrated_from': source_version if source_version != scenario['schema_version'] else None}
@@ -60,7 +61,7 @@ class ScenarioStore:
         stem = file_stem(name)
         if mode not in ('create', 'duplicate', 'overwrite'):
             raise ScenarioStorageError('invalid', 'Unknown save mode.')
-        scenario = validate_scenario(scenario, require_runnable=False)
+        scenario = self.normalizer(scenario)
         raw = (json.dumps(scenario, indent=2, ensure_ascii=False, allow_nan=False) + '\n').encode('utf-8')
         with self.lock:
             self.directory.mkdir(parents=True, exist_ok=True)

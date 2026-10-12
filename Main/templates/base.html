@@ -3,15 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Line building simulator</title>
+    <title>{{ page_title | default('Dashboard') }} · Line Planning Toolkit</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    {% block styles %}{% endblock %}
 </head>
 <body data-scenario-schema-version="{{ scenario_schema_version }}" data-event-schema-version="{{ event_schema_version }}">
     <header>
         <div class="header-inner">
-            <h1>Line building simulator</h1>
-            <p class="subtitle">Configure your line and launch the simulation</p>
+            <a class="brand-link" href="{{ url_for('planning.dashboard') }}"><h1>Line Planning Toolkit</h1></a>
+            <p class="subtitle">Product processes, operator workloads and line simulation</p>
         </div>
+        <nav class="app-navigation" aria-label="Main navigation">
+            <a href="{{ url_for('planning.dashboard') }}" {% if active_module == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
+            {% for module in navigation_modules %}
+            <a href="{{ url_for(module.endpoint) }}" {% if active_module == module.id %}aria-current="page"{% endif %}>
+                {{ module.title }}{% if module.status == 'planned' %}<span class="nav-planned">Planned</span>{% endif %}
+            </a>
+            {% endfor %}
+        </nav>
     </header>
 
     <main>

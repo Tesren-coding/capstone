@@ -1,9 +1,9 @@
-# Capstone line building simulator
+# Capstone Line Planning Toolkit
 
 ## Install this update
 
 Copy these files into the matching folders in your project. Keep your existing
-`scenarios` folder. Restart the Python app and refresh the browser (Ctrl+F5 if
+`scenarios` and `pqpr_projects` folders. Restart the Python app and refresh the browser (Ctrl+F5 if
 an old interface is still cached).
 
 Open PowerShell in the project folder:
@@ -13,9 +13,52 @@ python -m pip install -r requirements.txt
 python app.py
 ```
 
-Open http://localhost:5000 in your browser.
+Open http://localhost:5000 in your browser to see the dashboard. Select
+**Open Line Builder** to edit or simulate a line, or **Open PQPR** to plan
+product/process applicability. Existing `/builder` links
+still open the builder directly.
 
 For full Windows, macOS and Linux setup instructions, see `requirements.md`.
+
+## Dashboard and PQPR: stages 1–2
+
+The main page is a hub for three apps:
+
+| App | Current availability |
+| --- | --- |
+| Line Builder | Available: the existing editor, scenario files and simulation. |
+| PQPR | Available: projects, framesizes, shared processes, applicability, manual/auto timings and colors. |
+| Line Balancing & Yamazumi | Planned: operator/process assignments and workload charts. |
+
+Use the header navigation to move between apps. Returning to Line Builder in
+this tab restores its draft. Save or export scenarios to retain them beyond
+this session. `main.py` now opens the dashboard automatically.
+
+`/` and `/dashboard` are dashboard URLs. `/pqpr` opens the PQPR editor;
+`/line-balancing` remains a planned-module page. See `DEVELOPMENT_PLAN.md` for the staged feature and acceptance
+plan. Scenario schema version 2 and event version 1 remain unchanged.
+
+## PQPR projects
+
+Name the project/line, add framesizes and shared processes, then check the
+applicable matrix cells. Choose Always (P) or Sometimes (X) for checked steps.
+Open **Edit shared processes** to set decimal manual/auto minutes and colors:
+**green = in line**, **orange = out of line**, **blue = low hit rate / unique**.
+Timings and colors are shared across framesizes in this version.
+
+Process counts and nominal row timing totals update as you edit. Blank timing
+fields mean unknown, and affected row totals show Incomplete. Sometimes steps
+are included once in the counts/totals, without probability weighting.
+
+Save/load projects in `pqpr_projects/`, with overwrite or numbered copies.
+Import/export portable PQPR JSON. You can also import the supplied-style Excel
+workbook and choose its CS/FS worksheet. P/X and recognized header colors are
+retained; manual/auto times start blank and unsupported colors need review.
+See `PQPR_FORMAT.md` for the full contract, import rules and timing assumptions.
+
+Install updated requirements before running this release: Excel import adds
+`openpyxl`. Scenario format 2 and event format 1 remain unchanged; PQPR uses its
+own document type and format version 1.
 
 ## Code organization
 
@@ -33,8 +76,11 @@ browser module system rather than globals or manually ordered script tags.
 | `static/js/draw.js` | Draw canvas objects, banner and legend. |
 | `static/js/positions.js` | Derive coordinates from the scenario. |
 | `static/js/canvas-tools.js` | Shared zoom/pan, station text and helpers. |
-| `app.py` | Web requests and responses. |
-| `scenario_store.py` | Scenario JSON files, revisions and save modes. |
+| `app.py` | Line-builder web requests and application setup. |
+| `planning_pages.py` | Dashboard, module registry and staged app entry pages. |
+| `scenario_store.py` | JSON file revisions/save modes, with scenario or PQPR validation. |
+| `pqpr_routes.py`, `pqpr_store.py`, `pqpr_schema.py`, `pqpr_excel.py` | PQPR HTTP, persistence, validation and Excel import. |
+| `static/js/pqpr.js`, `pqpr-model.js` | PQPR editing and display calculations. |
 | `scenario_schema.py` | Format versions, migrations and draft/run validation. |
 | `simulation.py` | SimPy processing and material-flow rules. |
 | `DATA_FORMAT.md` | Scenario/event contracts and future migration policy. |
@@ -164,4 +210,8 @@ Browser checks cover module loading, import/export and rejection without data
 loss, metadata preservation, editing/reordering and ID references, save/load,
 duplicate versions, draft restoration, zoom, simulation launch, machine
 concurrency, tooltips, timeline restoration, pause/resume, restart, completion
-and busy-transfer errors.
+and busy-transfer errors. Dashboard checks cover app navigation, planned
+module labels, responsive layouts and builder draft restoration. PQPR checks
+cover applicable steps, P/X, time totals and missing values, category changes,
+reordering/deletion, save/load/version copies, JSON round trips, metadata,
+failed-import preservation, Excel selection/cancel and the reference worksheets.
