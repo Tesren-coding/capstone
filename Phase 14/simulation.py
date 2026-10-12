@@ -1,293 +1,302 @@
-# ============================================================
-# scenario_simulation.py
-# Phase 14 — Builder-driven simulation engine
-# Validates a user-built scenario, then runs it in SimPy.
-# Fails fast: any broken rule raises immediately with details.
-# ============================================================
-
+"""Production-line simulation. This event stream also drives browser playback."""
+from copy import deepcopy
+import math
 import simpy
+
+WALK_SPEED = 1000.0  # layout pixels per simulated minute
 
 
 class ScenarioValidationError(Exception):
-    """Raised when a scenario fails one or more validation rules."""
     def __init__(self, errors):
         self.errors = errors
-        super().__init__("Scenario validation failed:\n" + "\n".join(errors))
+        super().__init__('Scenario validation failed:\n' + '\n'.join(errors))
 
 
 class ScenarioRuntimeError(Exception):
-    """Raised when the simulation itself hits an unrecoverable state
-    (e.g. picking from an empty IN box, exceeding OUT capacity)."""
     pass
 
 
-# ============================================================
-# VALIDATION
-# ============================================================
-def validate_scenario(scenario):
-    errors = []
+def is_number(value, minimum=0, positive=False):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and (value > minimum if positive else value >= minimum))
 
-    takt_time  = scenario.get("takt_time")
-    stations   = scenario.get("stations", {})
-    operators  = scenario.get("operators", {})
-    boxes      = scenario.get("boxes", {})
 
-    # ---- 1. takt_time ----
-    if not isinstance(takt_time, int) or takt_time <= 0:
-        errors.append("takt_time must be a positive integer.")
-
-    # ---- 2. at least 1 station and 1 operator ----
-    if len(stations) == 0:
-        errors.append("Scenario must contain at least one station.")
-    if len(operators) == 0:
-        errors.append("Scenario must contain at least one operator.")
-
-    all_loc_ids = set(stations.keys()) | set(boxes.keys())
-
-    # ---- 8. station cycle_time ----
-    for sid, s in stations.items():
-        ct = s.get("cycle_time")
-        if not isinstance(ct, int) or ct <= 0:
-            errors.append(f"Station {sid} ('{s.get('name', sid)}') has invalid cycle_time: {ct}")
-
-    # ---- 9/10. box value sanity ----
-    for bid, b in boxes.items():
-        btype = b.get("type")
-        if btype == "in":
-            sc = b.get("start_count")
-            if not isinstance(sc, int) or sc < 0:
-                errors.append(f"IN box {bid} has invalid start_count: {sc}")
-        elif btype == "out":
-            cap = b.get("capacity")
-            if not isinstance(cap, int) or cap <= 0:
-                errors.append(f"OUT box {bid} has invalid capacity: {cap}")
-
-    # ---- 3/4/5/6/7/11/12. operator sequence rules ----
-    for op_name, op in operators.items():
-        sequence = op.get("sequence", [])
-
-        if len(sequence) == 0:
-            errors.append(f"Operator '{op_name}' has an empty sequence.")
+def normalize_scenario(scenario):
+    """Upgrade old cycle_time stations without changing the caller's data."""
+    if not isinstance(scenario, dict):
+        raise ScenarioValidationError(['Scenario must be an object.'])
+    data = deepcopy(scenario)
+    data['schema_version'] = 2
+    station_map = data.get('stations', {})
+    operator_map = data.get('operators', {})
+    if not isinstance(station_map, dict) or not isinstance(operator_map, dict):
+        raise ScenarioValidationError(['Stations and operators must be objects.'])
+    for station in station_map.values():
+        if not isinstance(station, dict):
             continue
-
-        holding_part = False
-        first_pick_seen = False
-
-        for i, step in enumerate(sequence):
-            action = step.get("action")
-            loc    = step.get("loc")
-
-            # ---- 4. loc must be filled ----
-            if loc is None or loc == "":
-                errors.append(f"Operator '{op_name}' step {i+1}: no location selected.")
+        if 'processes' not in station:
+            station['processes'] = [{'id': 'p1', 'name': 'Process 1',
+                                     'manual_time': station.get('cycle_time', 10), 'auto_time': 0}]
+        processes = station.get('processes')
+        if isinstance(processes, list) and all(isinstance(p, dict) for p in processes):
+            # Retain a derived total for old integrations; processes are authoritative.
+            times = [p.get(k) for p in processes for k in ('manual_time', 'auto_time')]
+            if all(is_number(t) for t in times):
+                station['cycle_time'] = sum(times)
+    for operator in operator_map.values():
+        if not isinstance(operator, dict):
+            continue
+        sequence = operator.get('sequence', [])
+        if not isinstance(sequence, list):
+            continue
+        for step in sequence:
+            if not isinstance(step, dict):
                 continue
+            if step.get('loc') is not None:
+                step['loc'] = str(step['loc'])
+            if step.get('action') == 'work' and 'process' not in step:
+                station = (data.get('stations') or {}).get(step.get('loc'), {})
+                processes = station.get('processes', [])
+                if isinstance(processes, list) and len(processes) == 1 and isinstance(processes[0], dict):
+                    step['process'] = processes[0].get('id')
+    return data
 
-            # ---- 5. loc must exist ----
-            if loc not in all_loc_ids:
-                errors.append(f"Operator '{op_name}' step {i+1}: location '{loc}' does not exist.")
-                continue
 
-            # ---- 6. work must target a station ----
-            if action == "work" and loc not in stations:
-                errors.append(f"Operator '{op_name}' step {i+1}: 'work' action must target a station, not box '{loc}'.")
-
-            # ---- 7. pick/drop must target station or box (always true given all_loc_ids check) ----
-
-            # ---- 11/12. pick/drop ordering sanity ----
-            if action == "pick":
-                if holding_part:
-                    errors.append(f"Operator '{op_name}' step {i+1}: cannot 'pick' — already holding a part (missing 'drop').")
-                else:
-                    # is this the very first pick, and does it rely on has_part being true?
-                    if not first_pick_seen:
-                        first_pick_seen = True
-                        target = stations.get(loc) or boxes.get(loc)
-                        starts_with_part = bool(target.get("has_part")) if target else False
-                        # Rule 11: fine either way — if starts_with_part is True, operator
-                        # is assumed to already be holding it (handled at runtime).
-                    holding_part = True
-
-            elif action == "drop":
-                if not holding_part:
-                    errors.append(f"Operator '{op_name}' step {i+1}: cannot 'drop' — not holding a part (missing 'pick').")
-                else:
-                    holding_part = False
-
+def validate_scenario(scenario):
+    data = normalize_scenario(scenario)
+    errors = []
+    if not is_number(data.get('takt_time'), positive=True):
+        errors.append('Takt time must be a positive number of minutes.')
+    for key in ('stations', 'operators', 'boxes'):
+        if not isinstance(data.get(key, {}), dict):
+            errors.append(f'{key} must be an object.')
     if errors:
         raise ScenarioValidationError(errors)
+    stations, operators, boxes = (data.get(k, {}) for k in ('stations', 'operators', 'boxes'))
+    if not stations or not operators:
+        errors.append('Scenario needs at least one station and one operator.')
+    if set(stations) & set(boxes):
+        errors.append('Station and box IDs must be unique across the layout.')
+    locations = {**stations, **boxes}
+    for loc, item in locations.items():
+        if not isinstance(item, dict):
+            errors.append(f'Location {loc} must be an object.')
+            continue
+        if any(not is_number(item.get(k), minimum=-float('inf')) for k in ('x', 'y')):
+            errors.append(f'Location {loc} needs finite X and Y coordinates.')
+        if any(not is_number(item.get(k), positive=True) for k in ('w', 'h')):
+            errors.append(f'Location {loc} needs positive width and height.')
+    for sid, station in stations.items():
+        if not isinstance(station, dict):
+            continue
+        processes = station.get('processes')
+        if not isinstance(processes, list) or not processes:
+            errors.append(f'Station S{sid} needs at least one process.')
+            continue
+        seen = set()
+        for index, process in enumerate(processes):
+            label = f'Station S{sid}, process {index + 1}'
+            if not isinstance(process, dict):
+                errors.append(f'{label} must be an object.')
+                continue
+            pid = process.get('id')
+            if not isinstance(pid, str) or not pid or pid in seen:
+                errors.append(f'{label} needs a unique process ID.')
+            else:
+                seen.add(pid)
+            if not isinstance(process.get('name'), str) or not process['name'].strip():
+                errors.append(f'{label} needs a name.')
+            manual, automatic = process.get('manual_time'), process.get('auto_time')
+            if not is_number(manual) or not is_number(automatic):
+                errors.append(f'{label}: manual and automatic time must be finite numbers ≥ 0.')
+            elif manual + automatic <= 0:
+                errors.append(f'{label}: total processing time must be greater than zero.')
+    for bid, box in boxes.items():
+        if not isinstance(box, dict):
+            continue
+        kind = box.get('type')
+        if kind not in ('in', 'out', 'swip'):
+            errors.append(f'Box {bid} has an invalid type.')
+        for field, minimum in [('start_count', 0)] if kind == 'in' else [('capacity', 1)] if kind == 'out' else []:
+            value = box.get(field)
+            if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
+                errors.append(f'Box {bid}: {field} must be an integer ≥ {minimum}.')
+    for op, operator in operators.items():
+        if not isinstance(operator, dict):
+            errors.append(f'Operator {op} must be an object.')
+            continue
+        if any(not is_number(operator.get(k), minimum=-float('inf')) for k in ('x', 'y')):
+            errors.append(f'Operator {op} needs finite X and Y coordinates.')
+        sequence = operator.get('sequence')
+        if not isinstance(sequence, list) or not sequence:
+            errors.append(f'Operator {op} needs a non-empty sequence.')
+            continue
+        carrying = False
+        for index, step in enumerate(sequence):
+            label = f'Operator {op}, step {index + 1}'
+            if not isinstance(step, dict):
+                errors.append(f'{label} must be an object.')
+                continue
+            action, loc = step.get('action'), step.get('loc')
+            if action not in ('pick', 'work', 'drop'):
+                errors.append(f'{label}: invalid action.')
+            if not isinstance(loc, str) or loc not in locations:
+                errors.append(f'{label}: select a valid location.')
+            if action == 'work':
+                if loc not in stations:
+                    errors.append(f'{label}: Work must target a station.')
+                elif isinstance(stations[loc], dict):
+                    processes = stations[loc].get('processes', [])
+                    ids = [p.get('id') for p in processes if isinstance(p, dict)] if isinstance(processes, list) else []
+                    if not isinstance(step.get('process'), str) or step.get('process') not in ids:
+                        errors.append(f'{label}: select a valid process at S{loc}.')
+                if carrying:
+                    errors.append(f'{label}: drop the carried part before working.')
+            elif action == 'pick':
+                if carrying:
+                    errors.append(f'{label}: already carrying a part.')
+                carrying = True
+            elif action == 'drop':
+                if not carrying:
+                    errors.append(f'{label}: no carried part to drop.')
+                carrying = False
+        if carrying:
+            errors.append(f'Operator {op}: sequence must drop its last carried part before repeating.')
+    if errors:
+        raise ScenarioValidationError(errors)
+    return data
 
 
-# ============================================================
-# SIMULATION (Option B — live flow-controlled)
-# ============================================================
 def run_scenario_simulation(scenario):
-    """
-    Validates the scenario, then runs it through SimPy.
-    Fails fast at runtime if:
-      - an operator tries to 'pick' from an empty IN box
-      - an operator tries to 'drop' into an OUT box that is already at capacity
-    """
-    validate_scenario(scenario)
-
-    takt_time  = scenario["takt_time"]
-    stations   = scenario["stations"]
-    operators  = scenario["operators"]
-    boxes      = scenario["boxes"]
-
-    env    = simpy.Environment()
+    data = validate_scenario(scenario)
+    stations, operators, boxes = (data.get(k, {}) for k in ('stations', 'operators', 'boxes'))
+    takt = data['takt_time']
+    env = simpy.Environment()
+    stop = env.event()
     events = []
+    machine = {sid: {'has_part': bool(s.get('has_part')), 'busy': False, 'done': None} for sid, s in stations.items()}
+    inventory = {bid: (b.get('start_count', 0) if b['type'] == 'in' else 0 if b['type'] == 'out' else int(bool(b.get('has_part')))) for bid, b in boxes.items()}
 
-    # ---- live state ----
-    station_has_part = {sid: bool(s.get("has_part", False)) for sid, s in stations.items()}
-    box_state = {}
-    for bid, b in boxes.items():
-        if b["type"] == "swip":
-            box_state[bid] = {"has_part": bool(b.get("has_part", False))}
-        elif b["type"] == "in":
-            box_state[bid] = {"remaining": b.get("start_count", 0)}
-        elif b["type"] == "out":
-            box_state[bid] = {"count": 0, "capacity": b.get("capacity", 1)}
+    def emit(status, op=None, loc=None, **extra):
+        if not stop.triggered:
+            events.append({'time': env.now, 'status': status, 'operator': op, 'loc': loc, **extra})
 
-    def loc_has_part(loc):
-        if loc in stations:
-            return station_has_part.get(loc, False)
-        b = box_state.get(loc)
-        if b is None:
-            return False
-        if "has_part" in b:
-            return b["has_part"]
-        if "remaining" in b:
-            return b["remaining"] > 0
-        if "count" in b:
-            return True  # OUT box always has "a part" conceptually once dropped
-        return False
+    def fail(op, loc, reason):
+        emit('blocked', op, loc, reason=reason)
+        if not stop.triggered:
+            stop.succeed()
 
-    def can_pick_from(loc):
-        """Check whether a part is actually available to pick, without mutating state."""
-        if loc in stations:
-            return station_has_part.get(loc, False)
-        b = box_state.get(loc)
-        if b is None:
-            return False
-        if "has_part" in b:
-            return b["has_part"]
-        if "remaining" in b:
-            return b["remaining"] > 0
-        if "count" in b:
-            return True
-        return False
+    def finish_machine(sid, op, process):
+        state = machine[sid]
+        emit('process_complete', op, sid, process=process['id'])
+        state['busy'] = False
+        done = state['done']
+        state['done'] = None
+        if done is not None and not done.triggered:
+            done.succeed()
 
-    def can_drop_to(loc):
-        """Check whether there's room to drop a part, without mutating state."""
-        if loc in stations:
-            return True  # stations always accept a drop
-        b = box_state.get(loc)
-        if b is None:
-            return True
-        if "count" in b:  # OUT box
-            return b["count"] < b["capacity"]
-        return True  # SWIP / IN boxes always accept a drop
+    def automatic_run(sid, op, process):
+        yield env.timeout(process['auto_time'])
+        if not stop.triggered:
+            finish_machine(sid, op, process)
 
-    def take_part_from(loc):
-        """Remove a part from the location's live state (pick). Assumes can_pick_from() was already checked."""
-        if loc in stations:
-            station_has_part[loc] = False
-        else:
-            b = box_state[loc]
-            if "has_part" in b:
-                b["has_part"] = False
-            elif "remaining" in b:
-                b["remaining"] -= 1
+    def center(loc):
+        item = stations.get(loc, boxes.get(loc))
+        return {'x': item['x'] + item['w'] / 2, 'y': item['y'] + item['h'] / 2}
 
-    def deposit_part_to(loc):
-        """Add a part to the location's live state (drop). Assumes can_drop_to() was already checked."""
-        if loc in stations:
-            station_has_part[loc] = True
-        else:
-            b = box_state[loc]
-            if "has_part" in b:
-                b["has_part"] = True
-            elif "count" in b:
-                b["count"] += 1
-            elif "remaining" in b:
-                b["remaining"] += 1
+    def operator_run(op, definition):
+        position = {'x': definition['x'], 'y': definition['y']}
+        home = dict(position)
+        holding = False
+        sequence = definition['sequence']
 
-    def operator_process(env, op_name, op_data):
-        sequence = op_data["sequence"]
-        has_part = False
-        first_cycle = True
+        def travel(target, loc):
+            nonlocal position
+            duration = math.hypot(target['x'] - position['x'], target['y'] - position['y']) / WALK_SPEED
+            if duration:
+                emit('moving', op, loc, start=dict(position), end=dict(target), duration=duration)
+                yield env.timeout(duration)
+            position = dict(target)
+            emit('arrived', op, loc, position=dict(position))
 
-        while True:
-            takt_start = env.now
-
-            for step in sequence:
-                loc    = step["loc"]
-                action = step["action"]
-
-                if action == "pick":
-                    if not has_part and not can_pick_from(loc):
-                        events.append({
-                            "time": env.now, "operator": op_name, "loc": loc,
-                            "status": "blocked", "part": False,
-                            "reason": f"'{loc}' has no part available to pick.",
-                        })
-                        return  # graceful stop — this operator's process ends here
-
-                    take_part_from(loc)
-                    has_part = True
-
-                    events.append({
-                        "time": env.now, "operator": op_name, "loc": loc,
-                        "status": "pickup", "part": True, "from": loc,
-                    })
-                    events.append({
-                        "time": env.now, "operator": op_name, "loc": loc,
-                        "status": "moving", "part": has_part,
-                    })
-
-                elif action == "drop":
-                    if has_part:
-                        if not can_drop_to(loc):
-                            events.append({
-                                "time": env.now, "operator": op_name, "loc": loc,
-                                "status": "blocked", "part": True,
-                                "reason": f"'{loc}' is at capacity — cannot drop part.",
-                            })
-                            return  # graceful stop
-
-                        deposit_part_to(loc)
-                        events.append({
-                            "time": env.now, "operator": op_name, "loc": loc,
-                            "status": "dropoff", "part": True, "to": loc,
-                        })
-                        has_part = False
-                    events.append({
-                        "time": env.now, "operator": op_name, "loc": loc,
-                        "status": "moving", "part": has_part,
-                    })
-
-                elif action == "work":
-                    events.append({
-                        "time": env.now, "operator": op_name, "loc": loc,
-                        "status": "working", "part": has_part,
-                    })
-                    yield env.timeout(stations[loc]["cycle_time"])
-
-            first_cycle = False
-
-            time_used = env.now - takt_start
-            remaining = takt_time - time_used
-
+        while not stop.triggered:
+            cycle_start = env.now
+            for index, step in enumerate(sequence):
+                loc, action = step['loc'], step['action']
+                yield from travel(center(loc), loc)
+                if stop.triggered:
+                    return
+                label = f"S{loc} ({stations[loc].get('name', loc)})" if loc in stations else boxes[loc].get('name', loc)
+                # Picking/next-process work can wait for the existing cycle. Drops never wait.
+                if action in ('pick', 'work') and loc in machine:
+                    while machine[loc]['busy']:
+                        emit('waiting', op, loc, reason=f'Waiting for {label} to finish processing.')
+                        yield machine[loc]['done']
+                        if stop.triggered:
+                            return
+                if action == 'pick':
+                    available = machine[loc]['has_part'] if loc in machine else inventory[loc] > 0
+                    if holding or not available:
+                        fail(op, loc, f'{op}: cannot pick from {label}; ' + ('already carrying a part.' if holding else 'no part is available.'))
+                        return
+                    if loc in machine:
+                        machine[loc]['has_part'] = False
+                    else:
+                        inventory[loc] -= 1
+                    holding = True
+                    emit('pickup', op, loc)
+                elif action == 'drop':
+                    if not holding:
+                        fail(op, loc, f'{op}: cannot drop at {label}; no part is being carried.')
+                        return
+                    if loc in machine:
+                        state = machine[loc]
+                        if state['busy']:
+                            fail(op, loc, f'{op}: cannot move/drop a part into {label}; station is in process.')
+                            return
+                        if state['has_part']:
+                            fail(op, loc, f'{op}: cannot drop at {label}; station already contains a part.')
+                            return
+                        state['has_part'] = True
+                    else:
+                        capacity = boxes[loc].get('capacity', 1) if boxes[loc]['type'] in ('out', 'swip') else float('inf')
+                        if inventory[loc] >= capacity:
+                            fail(op, loc, f'{op}: cannot drop at {label}; location is full.')
+                            return
+                        inventory[loc] += 1
+                    holding = False
+                    emit('dropoff', op, loc)
+                elif action == 'work':
+                    state = machine[loc]
+                    if not state['has_part']:
+                        fail(op, loc, f'{op}: cannot work at {label}; station has no part.')
+                        return
+                    process = next(p for p in stations[loc]['processes'] if p['id'] == step['process'])
+                    state['busy'] = True
+                    state['done'] = env.event()
+                    emit('manual_start', op, loc, process=process['id'], process_name=process['name'],
+                         duration=process['manual_time'], auto_time=process['auto_time'])
+                    if process['manual_time']:
+                        yield env.timeout(process['manual_time'])
+                    if stop.triggered:
+                        return
+                    if process['auto_time']:
+                        emit('auto_start', op, loc, process=process['id'], process_name=process['name'], duration=process['auto_time'])
+                        env.process(automatic_run(loc, op, process))
+                    else:
+                        finish_machine(loc, op, process)
+                    emit('operator_ready', op, loc)
+            yield from travel(home, None)
+            remaining = cycle_start + takt - env.now
             if remaining > 0:
-                events.append({
-                    "time": env.now, "operator": op_name, "loc": None,
-                    "status": "idle", "part": False,
-                })
+                emit('idle', op, None)
                 yield env.timeout(remaining)
-
-    for op_name, op_data in operators.items():
-        env.process(operator_process(env, op_name, op_data))
-
-    env.run(until=takt_time * 100)
-
-    return events, takt_time
+            if stop.triggered:
+                return
+    for op, definition in operators.items():
+        env.process(operator_run(op, definition))
+    horizon = takt * 100
+    env.run(until=simpy.events.AnyOf(env, [stop, env.timeout(horizon)]))
+    if not stop.triggered:
+        emit('simulation_complete', reason='Completed 100 takt periods.')
+    return events, takt

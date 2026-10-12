@@ -1,14 +1,23 @@
 {
+  "schema_version": 2,
   "takt_time": 216,
   "stations": {
     "1": {
       "cycle_time": 180,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "Hardware removal",
       "w": 120,
       "x": 2167.9359348622224,
-      "y": 290.702545760476
+      "y": 290.702545760476,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 180,
+          "auto_time": 0
+        }
+      ]
     },
     "2": {
       "cycle_time": 100,
@@ -17,7 +26,15 @@
       "name": "Pre-chem strip insp and blending",
       "w": 120,
       "x": 2041.8360666657863,
-      "y": 292.20318554949023
+      "y": 292.20318554949023,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 100,
+          "auto_time": 0
+        }
+      ]
     },
     "3": {
       "cycle_time": 180,
@@ -26,7 +43,15 @@
       "name": "TBC removal grit blast",
       "w": 120,
       "x": 1920.8015244576045,
-      "y": 289.391502659882
+      "y": 289.391502659882,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 180,
+          "auto_time": 0
+        }
+      ]
     },
     "4": {
       "cycle_time": 30,
@@ -35,7 +60,15 @@
       "name": "T/U mask",
       "w": 120,
       "x": 1795.6596040526044,
-      "y": 286.18380924062865
+      "y": 286.18380924062865,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 30,
+          "auto_time": 0
+        }
+      ]
     },
     "5": {
       "cycle_time": 60,
@@ -44,7 +77,15 @@
       "name": "post chem-strip insp and blend",
       "w": 120,
       "x": 1673.6326000665672,
-      "y": 284.2568099929785
+      "y": 284.2568099929785,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 60,
+          "auto_time": 0
+        }
+      ]
     },
     "6": {
       "cycle_time": 5,
@@ -53,7 +94,15 @@
       "name": "apply developer",
       "w": 120,
       "x": 1542.0039252821828,
-      "y": 288.34517129666
+      "y": 288.34517129666,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 5,
+          "auto_time": 0
+        }
+      ]
     },
     "7": {
       "cycle_time": 10,
@@ -62,7 +111,15 @@
       "name": "etching ",
       "w": 120,
       "x": 1424.4607100363194,
-      "y": 288.541837975639
+      "y": 288.541837975639,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 10,
+          "auto_time": 0
+        }
+      ]
     },
     "8": {
       "cycle_time": 10,
@@ -71,16 +128,32 @@
       "name": "FPI",
       "w": 120,
       "x": 1300.396192389988,
-      "y": 289.81918568263376
+      "y": 289.81918568263376,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 10,
+          "auto_time": 0
+        }
+      ]
     },
     "9": {
       "cycle_time": 80,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "Incoming insp",
       "w": 120,
       "x": 1175.928787945467,
-      "y": 290.015852361613
+      "y": 290.015852361613,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 80,
+          "auto_time": 0
+        }
+      ]
     },
     "10": {
       "cycle_time": 50,
@@ -89,7 +162,15 @@
       "name": "Weld blend repair",
       "w": 120,
       "x": 1056.8937316176896,
-      "y": 292.8288738370648
+      "y": 292.8288738370648,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 50,
+          "auto_time": 0
+        }
+      ]
     },
     "11": {
       "cycle_time": 60,
@@ -98,7 +179,15 @@
       "name": "Mech braze prep",
       "w": 120,
       "x": 927.3969627187058,
-      "y": 290.0191988262211
+      "y": 290.0191988262211,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 60,
+          "auto_time": 0
+        }
+      ]
     },
     "12": {
       "cycle_time": 20,
@@ -107,7 +196,15 @@
       "name": "Nickel blast",
       "w": 120,
       "x": 800.3508814870878,
-      "y": 294.29992689305254
+      "y": 294.29992689305254,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 20,
+          "auto_time": 0
+        }
+      ]
     },
     "13": {
       "cycle_time": 40,
@@ -116,7 +213,15 @@
       "name": "braze material application",
       "w": 120,
       "x": 674.0947025277969,
-      "y": 287.99418382815344
+      "y": 287.99418382815344,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 40,
+          "auto_time": 0
+        }
+      ]
     },
     "14": {
       "cycle_time": 90,
@@ -125,16 +230,32 @@
       "name": "Post braze blending",
       "w": 120,
       "x": 549.1598249168981,
-      "y": 286.60714761720595
+      "y": 286.60714761720595,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 90,
+          "auto_time": 0
+        }
+      ]
     },
     "15": {
       "cycle_time": 175,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "TE cooling Hole EDM",
       "w": 120,
       "x": 423.12901812742797,
-      "y": 288.6843079182033
+      "y": 288.6843079182033,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 175,
+          "auto_time": 0
+        }
+      ]
     },
     "16": {
       "cycle_time": 60,
@@ -143,7 +264,15 @@
       "name": "Dymax 750",
       "w": 120,
       "x": 301.3916289065234,
-      "y": 292.232521275188
+      "y": 292.232521275188,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 60,
+          "auto_time": 0
+        }
+      ]
     },
     "17": {
       "cycle_time": 90,
@@ -152,7 +281,15 @@
       "name": "Clear Overspray",
       "w": 120,
       "x": 1011.2530441363995,
-      "y": 689.0694557404976
+      "y": 689.0694557404976,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 90,
+          "auto_time": 0
+        }
+      ]
     },
     "18": {
       "cycle_time": 15,
@@ -161,7 +298,15 @@
       "name": "Robotic polish",
       "w": 120,
       "x": 1135.9950342526588,
-      "y": 690.899427979353
+      "y": 690.899427979353,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 15,
+          "auto_time": 0
+        }
+      ]
     },
     "19": {
       "cycle_time": 120,
@@ -170,7 +315,15 @@
       "name": "Manual polish",
       "w": 120,
       "x": 1263.8292842115266,
-      "y": 684.3927171440215
+      "y": 684.3927171440215,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 120,
+          "auto_time": 0
+        }
+      ]
     },
     "20": {
       "cycle_time": 150,
@@ -179,7 +332,15 @@
       "name": "clear cooling hole + install cover plate",
       "w": 120,
       "x": 1386.914747504278,
-      "y": 683.8555305273112
+      "y": 683.8555305273112,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 150,
+          "auto_time": 0
+        }
+      ]
     },
     "21": {
       "cycle_time": 10,
@@ -188,7 +349,15 @@
       "name": "Final Bluelight",
       "w": 120,
       "x": 1516.5783391332038,
-      "y": 680.8956944631208
+      "y": 680.8956944631208,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 10,
+          "auto_time": 0
+        }
+      ]
     },
     "22": {
       "cycle_time": 145,
@@ -197,7 +366,15 @@
       "name": "airflow",
       "w": 120,
       "x": 1643.8258879799405,
-      "y": 677.150814427157
+      "y": 677.150814427157,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 145,
+          "auto_time": 0
+        }
+      ]
     },
     "23": {
       "cycle_time": 60,
@@ -206,7 +383,15 @@
       "name": "pre-assembly insp + part mark",
       "w": 120,
       "x": 1772.9505114056049,
-      "y": 676.4156225456239
+      "y": 676.4156225456239,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 60,
+          "auto_time": 0
+        }
+      ]
     },
     "24": {
       "cycle_time": 120,
@@ -215,7 +400,15 @@
       "name": "hardware installation",
       "w": 120,
       "x": 1900.200130398836,
-      "y": 672.5232586279999
+      "y": 672.5232586279999,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 120,
+          "auto_time": 0
+        }
+      ]
     },
     "25": {
       "cycle_time": 60,
@@ -224,7 +417,15 @@
       "name": "TBC patch repair",
       "w": 120,
       "x": 2024.8233881281478,
-      "y": 671.5914000674877
+      "y": 671.5914000674877,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 60,
+          "auto_time": 0
+        }
+      ]
     },
     "26": {
       "cycle_time": 60,
@@ -233,7 +434,15 @@
       "name": "Final insp",
       "w": 120,
       "x": 2149.705036272377,
-      "y": 671.0535441578556
+      "y": 671.0535441578556,
+      "processes": [
+        {
+          "id": "p1",
+          "name": "Process 1",
+          "manual_time": 60,
+          "auto_time": 0
+        }
+      ]
     }
   },
   "operators": {
@@ -255,7 +464,8 @@
         },
         {
           "action": "work",
-          "loc": "1"
+          "loc": "1",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -279,7 +489,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "10"
+          "loc": "10",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -299,7 +510,8 @@
         },
         {
           "action": "work",
-          "loc": "20"
+          "loc": "20",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -331,7 +543,8 @@
         },
         {
           "action": "work",
-          "loc": "15"
+          "loc": "15",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -363,7 +576,8 @@
         },
         {
           "action": "work",
-          "loc": "2"
+          "loc": "2",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -383,7 +597,8 @@
         },
         {
           "action": "work",
-          "loc": "4"
+          "loc": "4",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -403,7 +618,8 @@
         },
         {
           "action": "work",
-          "loc": "16"
+          "loc": "16",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -435,7 +651,8 @@
         },
         {
           "action": "work",
-          "loc": "3"
+          "loc": "3",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -467,7 +684,8 @@
         },
         {
           "action": "work",
-          "loc": "5"
+          "loc": "5",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -487,7 +705,8 @@
         },
         {
           "action": "work",
-          "loc": "14"
+          "loc": "14",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -519,7 +738,8 @@
         },
         {
           "action": "work",
-          "loc": "6"
+          "loc": "6",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -531,7 +751,8 @@
         },
         {
           "action": "work",
-          "loc": "21"
+          "loc": "21",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -543,7 +764,8 @@
         },
         {
           "action": "work",
-          "loc": "24"
+          "loc": "24",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -571,7 +793,8 @@
         },
         {
           "action": "work",
-          "loc": "21"
+          "loc": "21",
+          "process": "p1"
         }
       ],
       "x": 1599.5058906173035,
@@ -587,7 +810,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "7"
+          "loc": "7",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -599,7 +823,8 @@
         },
         {
           "action": "work",
-          "loc": "8"
+          "loc": "8",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -611,7 +836,8 @@
         },
         {
           "action": "work",
-          "loc": "22"
+          "loc": "22",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -643,7 +869,8 @@
         },
         {
           "action": "work",
-          "loc": "9"
+          "loc": "9",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -655,7 +882,8 @@
         },
         {
           "action": "work",
-          "loc": "23"
+          "loc": "23",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -675,7 +903,8 @@
         },
         {
           "action": "work",
-          "loc": "26"
+          "loc": "26",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -707,7 +936,8 @@
         },
         {
           "action": "work",
-          "loc": "11"
+          "loc": "11",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -719,7 +949,8 @@
         },
         {
           "action": "work",
-          "loc": "12"
+          "loc": "12",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -731,7 +962,8 @@
         },
         {
           "action": "work",
-          "loc": "13"
+          "loc": "13",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -759,7 +991,8 @@
         },
         {
           "action": "work",
-          "loc": "18"
+          "loc": "18",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -771,7 +1004,8 @@
         },
         {
           "action": "work",
-          "loc": "25"
+          "loc": "25",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -795,7 +1029,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "17"
+          "loc": "17",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -815,7 +1050,8 @@
         },
         {
           "action": "work",
-          "loc": "19"
+          "loc": "19",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -932,7 +1168,7 @@
     },
     "SWIP_21": {
       "h": 60,
-      "has_part": true,
+      "has_part": false,
       "name": "Robotic polish",
       "type": "swip",
       "w": 90,

@@ -32,18 +32,26 @@
     <button id="run-scenario-btn" style="padding:10px 18px; background:#fff4e0; border:2px solid #c47a00;">▶ Run Simulation</button>
 </div>
 
+<div id="canvas-controls" class="canvas-controls">
+    <button type="button" data-zoom-out aria-label="Zoom out">−</button>
+    <span data-zoom-label>100%</span>
+    <button type="button" data-zoom-in aria-label="Zoom in">+</button>
+    <button type="button" data-zoom-reset>Reset view</button>
+    <span>Scroll to zoom · Shift + drag or middle mouse to pan</span>
+</div>
 <canvas id="builder-canvas" width="2400" height="1042"
         style="border:1px solid #ccc; background:#ffffff; display:block;
                margin:20px auto; max-width:100%;">
 </canvas>
 
-<div id="side-panel" style="position:fixed; top:150px; right:20px; width:260px; height:400px;
+<div id="side-panel" style="position:fixed; top:150px; right:20px; width:360px; height:560px;
      background:#f7f7f7; border:2px solid #1e3c78; border-radius:6px;
      display:none; z-index:10; min-width:220px; min-height:200px;
      max-width:600px; max-height:90vh; overflow:auto; resize:both;">
     <div id="panel-header" style="background:#1e3c78; color:#fff; padding:8px 12px;
          cursor:move; border-radius:4px 4px 0 0; font-weight:bold; user-select:none;">
         <span id="panel-title">Edit Item</span>
+        <button type="button" id="panel-close" aria-label="Close editor" style="float:right; padding:0 5px; cursor:pointer;">✕</button>
     </div>
     <div style="padding:16px;">
         <div id="panel-fields"></div>
@@ -53,6 +61,16 @@
         </button>
     </div>
 </div>
+
+<dialog id="save-dialog" class="save-dialog">
+    <h3>Save scenario</h3>
+    <p id="save-dialog-message"></p>
+    <div class="dialog-actions">
+        <button type="button" id="save-overwrite-btn">Overwrite and save</button>
+        <button type="button" id="save-duplicate-btn">Save new version</button>
+        <button type="button" id="save-cancel-btn">Cancel</button>
+    </div>
+</dialog>
 
 <script>
 // ============================================================
@@ -68,12 +86,18 @@ const scenario = {
     boxes:     {},
 };
 
+const view = new CanvasViewport(canvas, document.getElementById('canvas-controls'), () => drawFrame());
+let loadedFilename = null;
+let loadedRevision = null;
+let lastSavedSnapshot = null;
+const DRAFT_KEY = 'capstone-builder-draft';
+
 let nextStationId  = 1;
 let nextOperatorId = 1;
 let nextBoxId       = 1;
 
 const SIZES = {
-    station: { w: 120, h: 70 },
+    station: { w: 150, h: 96 },
     swip:    { w: 90,  h: 60 },
     in:      { w: 90,  h: 60 },
     out:     { w: 90,  h: 60 },
@@ -100,7 +124,7 @@ document.querySelectorAll(".add-btn").forEach(btn => {
         placingType = btn.getAttribute("data-type");
         canvas.style.cursor = "crosshair";
         cancelPlaceBtn.style.display = "inline-block";
-        statusText.textContent = `Click on the canvas to place a new &#36;{placingType}.`;
+        statusText.textContent = `Click on the canvas to place a new ${placingType}.`;
     });
 });
 
@@ -127,6 +151,7 @@ function createStation(x, y) {
         h: SIZES.station.h,
         name: "New Station",
         cycle_time: 10,
+        processes: [{id: 'p1', name: 'Process 1', manual_time: 10, auto_time: 0}],
         has_part: false,
     };
     return id;
@@ -177,20 +202,14 @@ function createBox(x, y, type) {
 const taktTimeInput = document.getElementById("takt-time-input");
 
 taktTimeInput.addEventListener("input", (e) => {
-    e.target.value = e.target.value.replace(/[^0-9]/g, "");
+    e.target.value = e.target.value.replace(/[^0-9.]/g, "");
 });
 
 // ============================================================
 // PART 4 — Canvas click handler (placement)
 // ============================================================
 function getCanvasMousePos(evt) {
-    const rect   = canvas.getBoundingClientRect();
-    const scaleX = canvas.width  / rect.width;
-    const scaleY = canvas.height / rect.height;
-    return {
-        x: (evt.clientX - rect.left) * scaleX,
-        y: (evt.clientY - rect.top)  * scaleY,
-    };
+    return view.worldPoint(evt);
 }
 
 canvas.addEventListener("click", (evt) => {
@@ -238,7 +257,7 @@ function findItemAtPosition(mx, my) {
 }
 
 canvas.addEventListener("mousedown", (evt) => {
-    if (placingType) return;
+    if (placingType || view.isPanning || evt.button !== 0) return;
 
     const mouse = getCanvasMousePos(evt);
     const item  = findItemAtPosition(mouse.x, mouse.y);
@@ -259,7 +278,7 @@ canvas.addEventListener("mousedown", (evt) => {
 });
 
 canvas.addEventListener("mousemove", (evt) => {
-    if (!draggedItem) return;
+    if (!draggedItem || view.isPanning) return;
 
     const mouse = getCanvasMousePos(evt);
     const newX  = mouse.x - dragOffset.x;
@@ -315,6 +334,7 @@ const panelHeader = document.getElementById("panel-header");
 let panelDrag = null; // {offsetX, offsetY}
 
 panelHeader.addEventListener("mousedown", (evt) => {
+    if (evt.target.closest('button')) return;
     const rect = sidePanel.getBoundingClientRect();
     panelDrag = {
         offsetX: evt.clientX - rect.left,
@@ -336,6 +356,11 @@ document.addEventListener("mousemove", (evt) => {
 document.addEventListener("mouseup", () => {
     panelDrag = null;
 });
+document.getElementById('panel-close').onclick = () => {
+    selectedItem = null;
+    openSidePanel(null);
+    drawFrame();
+};
 
 // --------------------------------------------------------
 // Build <option> list for a location dropdown, filtered by action
@@ -347,18 +372,18 @@ function buildLocationOptions(action, selectedLoc) {
         for (const sid in scenario.stations) {
             const s = scenario.stations[sid];
             const sel = String(selectedLoc) === String(sid) ? "selected" : "";
-            options += `<option value="${sid}" ${sel}>S${sid} — ${s.name}</option>`;
+            options += `<option value="${sid}" ${sel}>S${sid} — ${escapeHtml(s.name)}</option>`;
         }
     } else {
         for (const sid in scenario.stations) {
             const s = scenario.stations[sid];
             const sel = String(selectedLoc) === String(sid) ? "selected" : "";
-            options += `<option value="${sid}" ${sel}>S${sid} — ${s.name}</option>`;
+            options += `<option value="${sid}" ${sel}>S${sid} — ${escapeHtml(s.name)}</option>`;
         }
         for (const bid in scenario.boxes) {
             const b = scenario.boxes[bid];
             const sel = String(selectedLoc) === String(bid) ? "selected" : "";
-            options += `<option value="${bid}" ${sel}>${b.name} (${b.type.toUpperCase()})</option>`;
+            options += `<option value="${bid}" ${sel}>${escapeHtml(b.name)} (${b.type.toUpperCase()})</option>`;
         }
     }
 
@@ -366,6 +391,36 @@ function buildLocationOptions(action, selectedLoc) {
 }
 
 // --------------------------------------------------------
+// Upgrade old scenarios and preserve stable per-station process IDs.
+function migrateProcesses() {
+    Object.values(scenario.stations).forEach(s => {
+        if (!s.processes) s.processes = stationProcesses(s).map(p => ({...p}));
+        updateStationTotal(s);
+    });
+    Object.values(scenario.operators).forEach(op => (op.sequence || []).forEach(step => {
+        if (step.loc != null) step.loc = String(step.loc);
+        if (step.action === 'work' && step.process === undefined) {
+            const processes = scenario.stations[step.loc]?.processes || [];
+            if (processes.length === 1) step.process = processes[0].id;
+        }
+    }));
+}
+function updateStationTotal(station) {
+    const total = stationTotals(station);
+    station.cycle_time = total.manual + total.auto;
+}
+function processOptions(step) {
+    const processes = scenario.stations[step.loc]?.processes || [];
+    return '<option value="">-- select process --</option>' + processes.map(p =>
+        `<option value="${escapeHtml(p.id)}" ${p.id === step.process ? 'selected' : ''}>${escapeHtml(p.name)} (M ${p.manual_time} / A ${p.auto_time} min)</option>`).join('');
+}
+function selectDefaultProcess(step) {
+    if (step.action === 'work') {
+        const processes = scenario.stations[step.loc]?.processes || [];
+        step.process = processes.length === 1 ? processes[0].id : '';
+    } else delete step.process;
+}
+
 // Render the ordered list of sequence steps for an operator
 // --------------------------------------------------------
 function renderSequenceList(op) {
@@ -380,7 +435,8 @@ function renderSequenceList(op) {
     let html = "";
     op.sequence.forEach((step, i) => {
         html += `
-            <div style="display:flex; gap:4px; align-items:center; margin-bottom:6px; background:#fff; padding:4px; border:1px solid #ccc; border-radius:4px;">
+            <div class="sequence-step" style="margin-bottom:8px; background:#fff; padding:6px; border:1px solid #ccc; border-radius:4px;">
+              <div style="display:flex; gap:4px; align-items:center;">
                 <span style="font-size:11px; color:#888; width:16px;">${i + 1}.</span>
                 <select class="step-action" data-idx="${i}" style="flex:0 0 70px; font-size:11px;">
                     <option value="pick" ${step.action === "pick" ? "selected" : ""}>Pick</option>
@@ -393,6 +449,10 @@ function renderSequenceList(op) {
                 <button class="step-up"     data-idx="${i}" style="padding:2px 6px;" ${i === 0 ? "disabled" : ""}>↑</button>
                 <button class="step-down"   data-idx="${i}" style="padding:2px 6px;" ${i === op.sequence.length - 1 ? "disabled" : ""}>↓</button>
                 <button class="step-remove" data-idx="${i}" style="padding:2px 6px; background:#fde8e8;">✕</button>
+              </div>
+              ${step.action === 'work' ? `<label style="font-size:11px;">Process
+                  <select class="step-process" data-idx="${i}" style="width:100%; font-size:12px;">${processOptions(step)}</select>
+                </label>` : ''}
             </div>
         `;
     });
@@ -403,6 +463,7 @@ function renderSequenceList(op) {
             const idx = parseInt(e.target.getAttribute("data-idx"));
             op.sequence[idx].action = e.target.value;
             op.sequence[idx].loc = "";
+            selectDefaultProcess(op.sequence[idx]);
             renderSequenceList(op);
         });
     });
@@ -411,7 +472,12 @@ function renderSequenceList(op) {
         sel.addEventListener("change", (e) => {
             const idx = parseInt(e.target.getAttribute("data-idx"));
             op.sequence[idx].loc = e.target.value;
+            selectDefaultProcess(op.sequence[idx]);
+            renderSequenceList(op);
         });
+    });
+    container.querySelectorAll('.step-process').forEach(select => {
+        select.onchange = e => { op.sequence[Number(e.target.dataset.idx)].process = e.target.value; };
     });
 
     container.querySelectorAll(".step-up").forEach(btn => {
@@ -444,6 +510,90 @@ function renderSequenceList(op) {
 }
 
 // --------------------------------------------------------
+// Change IDs and remap all operator references simultaneously (including swaps).
+function changeStationId(oldId, newId) {
+    oldId = String(oldId);
+    newId = String(newId).trim();
+    if (!/^[1-9][0-9]*$/.test(newId) || !Number.isSafeInteger(Number(newId))) {
+        statusText.textContent = 'Station ID must be a positive whole number.';
+        return false;
+    }
+    if (oldId === newId) return true;
+    const original = scenario.stations[oldId];
+    if (!original) return false;
+    const displaced = scenario.stations[newId];
+    scenario.stations[newId] = original;
+    if (displaced) scenario.stations[oldId] = displaced;
+    else delete scenario.stations[oldId];
+    Object.values(scenario.operators).forEach(op => {
+        (op.sequence || []).forEach(step => {
+            const loc = String(step.loc);
+            if (loc === oldId) step.loc = newId;
+            else if (displaced && loc === newId) step.loc = oldId;
+        });
+    });
+    nextStationId = Math.max(nextStationId, Number(newId) + 1);
+    if (selectedItem?.type === 'station') {
+        if (String(selectedItem.id) === oldId) selectedItem.id = newId;
+        else if (displaced && String(selectedItem.id) === newId) selectedItem.id = oldId;
+    }
+    if (draggedItem?.type === 'station') draggedItem = null;
+    statusText.textContent = displaced ? `Swapped S${oldId} and S${newId}. Operator sequences updated.` : `Renumbered S${oldId} to S${newId}. Operator sequences updated.`;
+    openSidePanel(selectedItem);
+    drawFrame();
+    return true;
+}
+
+function renderStationProcesses(station, stationId) {
+    const container = document.getElementById('process-list');
+    if (!container) return;
+    container.innerHTML = station.processes.map((p, i) => `
+        <div class="process-editor">
+            <label>Process ${i + 1}</label>
+            <input class="process-name" data-idx="${i}" value="${escapeHtml(p.name)}" aria-label="Process ${i + 1} name">
+            <div class="process-time-row">
+                <label>Manual (min)<input class="process-manual" data-idx="${i}" type="number" min="0" step="any" value="${p.manual_time}"></label>
+                <label>Auto (min)<input class="process-auto" data-idx="${i}" type="number" min="0" step="any" value="${p.auto_time}"></label>
+            </div>
+            <div class="process-buttons">
+                <button class="process-up" data-idx="${i}" ${i === 0 ? 'disabled' : ''} title="Move process earlier">↑</button>
+                <button class="process-down" data-idx="${i}" ${i === station.processes.length - 1 ? 'disabled' : ''} title="Move process later">↓</button>
+                <button class="process-remove" data-idx="${i}" ${station.processes.length === 1 ? 'disabled' : ''}>Remove</button>
+            </div>
+        </div>`).join('');
+    function refreshTotal() {
+        updateStationTotal(station);
+        const totals = stationTotals(station);
+        document.getElementById('station-total').textContent = `Totals: manual ${Number(totals.manual.toFixed(3))}, auto ${Number(totals.auto.toFixed(3))} min`;
+        drawFrame();
+    }
+    container.querySelectorAll('.process-name').forEach(input => input.oninput = e => {
+        station.processes[Number(e.target.dataset.idx)].name = e.target.value;
+    });
+    for (const [selector, key] of [['.process-manual', 'manual_time'], ['.process-auto', 'auto_time']]) {
+        container.querySelectorAll(selector).forEach(input => input.oninput = e => {
+            const value = Number(e.target.value);
+            station.processes[Number(e.target.dataset.idx)][key] = e.target.value !== '' && Number.isFinite(value) ? value : null;
+            refreshTotal();
+        });
+    }
+    function move(index, direction) {
+        [station.processes[index], station.processes[index + direction]] = [station.processes[index + direction], station.processes[index]];
+        renderStationProcesses(station, stationId);
+    }
+    container.querySelectorAll('.process-up').forEach(button => button.onclick = () => move(Number(button.dataset.idx), -1));
+    container.querySelectorAll('.process-down').forEach(button => button.onclick = () => move(Number(button.dataset.idx), 1));
+    container.querySelectorAll('.process-remove').forEach(button => button.onclick = () => {
+        const index = Number(button.dataset.idx), process = station.processes[index];
+        const references = Object.values(scenario.operators).flatMap(op => op.sequence || []).filter(step => String(step.loc) === String(stationId) && step.action === 'work' && step.process === process.id);
+        if (references.length && !confirm(`Remove "${process.name}"? ${references.length} Work step(s) will need another process selected.`)) return;
+        references.forEach(step => { step.process = ''; });
+        station.processes.splice(index, 1);
+        renderStationProcesses(station, stationId);
+    });
+    refreshTotal();
+}
+
 // Open the side panel for a selected item
 // --------------------------------------------------------
 function openSidePanel(item) {
@@ -456,25 +606,48 @@ function openSidePanel(item) {
     if (item.type === "station") {
         const s = scenario.stations[item.id];
         panelTitle.textContent = `Station S${item.id}`;
+        const stationIds = Object.keys(scenario.stations).sort((a, b) => Number(a) - Number(b));
+        const index = stationIds.indexOf(String(item.id));
         panelFields.innerHTML = `
+            <label for="field-station-id">Station ID</label>
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <input type="number" min="1" step="1" id="field-station-id" value="${item.id}" style="width:70px;">
+                <button type="button" id="station-id-apply">Apply</button>
+                <button type="button" id="station-earlier" ${index === 0 ? 'disabled' : ''} title="Swap with previous station ID">↑</button>
+                <button type="button" id="station-later" ${index === stationIds.length - 1 ? 'disabled' : ''} title="Swap with next station ID">↓</button>
+            </div>
+            <p style="font-size:11px; margin-bottom:10px;">An existing ID swaps stations. Operator sequences follow each station.</p>
             <label>Name</label>
-            <input type="text" id="field-name" value="${s.name}" style="width:100%; margin-bottom:8px;">
-            <label>Cycle Time (min)</label>
-            <input type="text" id="field-cycle" value="${s.cycle_time}" style="width:100%; margin-bottom:8px;">
+            <input type="text" id="field-name" value="${escapeHtml(s.name)}" style="width:100%; margin-bottom:8px;">
+            <h4 style="margin:8px 0;">Processes</h4>
+            <p style="font-size:11px; margin-bottom:8px;">Manual time requires the operator. Auto time runs after manual time; the operator can leave. Choose each process in a Work step.</p>
+            <div id="process-list"></div>
+            <button id="add-process-btn" style="padding:6px; width:100%;">+ Add Process</button>
+            <p id="station-total" style="font-size:12px; margin:8px 0;"></p>
             <label style="display:flex; align-items:center; gap:6px;">
                 <input type="checkbox" id="field-haspart" ${s.has_part ? "checked" : ""}>
                 Starts with a part
             </label>
         `;
+        document.getElementById('station-id-apply').onclick = () => changeStationId(item.id, document.getElementById('field-station-id').value);
+        document.getElementById('field-station-id').onkeydown = e => {
+            if (e.key === 'Enter') { e.preventDefault(); document.getElementById('station-id-apply').click(); }
+        };
+        document.getElementById('station-earlier').onclick = () => changeStationId(item.id, stationIds[index - 1]);
+        document.getElementById('station-later').onclick = () => changeStationId(item.id, stationIds[index + 1]);
         document.getElementById("field-name").addEventListener("input", (e) => {
             s.name = e.target.value;
             drawFrame();
         });
-        document.getElementById("field-cycle").addEventListener("input", (e) => {
-            e.target.value = e.target.value.replace(/[^0-9]/g, "");
-            s.cycle_time = parseInt(e.target.value) || 1;
-            drawFrame();
-        });
+        if (!s.processes) s.processes = stationProcesses(s);
+        renderStationProcesses(s, item.id);
+        document.getElementById('add-process-btn').onclick = () => {
+            const currentMax = s.processes.reduce((max, p) => Math.max(max, Number(p.id.replace(/^p/, '')) || 0), 0);
+            const next = Math.max(currentMax + 1, s.next_process_id || 1);
+            s.next_process_id = next + 1;
+            s.processes.push({id: 'p' + next, name: 'Process ' + next, manual_time: 1, auto_time: 0});
+            renderStationProcesses(s, item.id);
+        };
         document.getElementById("field-haspart").addEventListener("change", (e) => {
             s.has_part = e.target.checked;
             drawFrame();
@@ -485,7 +658,7 @@ function openSidePanel(item) {
         panelTitle.textContent = `Operator ${op.name}`;
         panelFields.innerHTML = `
             <label>Name</label>
-            <input type="text" id="field-name" value="${op.name}" style="width:100%; margin-bottom:8px;">
+            <input type="text" id="field-name" value="${escapeHtml(op.name)}" style="width:100%; margin-bottom:8px;">
             <label>Color</label>
             <input type="color" id="field-color" value="${rgbToHex(op.color)}" style="width:100%; margin-bottom:12px;">
             <hr>
@@ -536,7 +709,7 @@ function openSidePanel(item) {
 
         panelFields.innerHTML = `
             <label>Name</label>
-            <input type="text" id="field-name" value="${b.name}" style="width:100%; margin-bottom:8px;">
+            <input type="text" id="field-name" value="${escapeHtml(b.name)}" style="width:100%; margin-bottom:8px;">
             ${extraFieldsHtml}
         `;
 
@@ -592,7 +765,10 @@ const BOX_COLORS = {
 };
 
 function drawFrame() {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    view.apply(ctx);
 
     // ---- draw boxes ----
     for (const id in scenario.boxes) {
@@ -660,9 +836,7 @@ function drawFrame() {
         ctx.font = "11px Arial";
         ctx.textAlign = "left";
         ctx.textBaseline = "top";
-        ctx.fillText(`S${id}`, s.x + 4, s.y + 4);
-        ctx.fillText(s.name, s.x + 4, s.y + 22);
-        ctx.fillText(`CT: ${s.cycle_time}m`, s.x + 4, s.y + 40);
+        drawStationText(ctx, id, s);
 
         if (s.has_part) {
             ctx.fillStyle = "#1e3c78";
@@ -712,6 +886,7 @@ function drawFrame() {
             ctx.setLineDash([]);
         }
     }
+    ctx.restore();
 }
 
 // ============================================================
@@ -719,7 +894,8 @@ function drawFrame() {
 // ============================================================
 function serializeScenario() {
     return {
-        takt_time: parseInt(taktTimeInput.value) || 30,
+        schema_version: 2,
+        takt_time: Number(taktTimeInput.value),
         stations:  scenario.stations,
         operators: scenario.operators,
         boxes:     scenario.boxes,
@@ -735,8 +911,12 @@ function applyLoadedScenario(data) {
     Object.assign(scenario.operators, data.operators || {});
     Object.assign(scenario.boxes,     data.boxes     || {});
 
+    migrateProcesses();
     taktTimeInput.value = data.takt_time || 30;
 
+    nextStationId = nextOperatorId = nextBoxId = 1;
+    draggedItem = null;
+    exitPlacementMode();
     Object.keys(scenario.stations).forEach(sid => {
         const n = parseInt(sid, 10);
         if (!isNaN(n) && n >= nextStationId) nextStationId = n + 1;
@@ -753,31 +933,71 @@ function applyLoadedScenario(data) {
 
     selectedItem = null;
     openSidePanel(null);
+    view.reset();
     drawFrame();
 }
 
-document.getElementById("save-scenario-btn").addEventListener("click", () => {
-    const name = prompt("Enter a name for this scenario:", "My Scenario");
-    if (!name) return;
-
-    fetch("/save-scenario", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ name: name, scenario: serializeScenario() }),
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.status === "saved") {
-            statusText.textContent = `Saved as "${name}"`;
-            setTimeout(() => { statusText.textContent = ""; }, 2000);
-            refreshScenarioList();
+function rememberDraft() {
+    try {
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ scenario: serializeScenario(), loadedFilename, loadedRevision, lastSavedSnapshot }));
+    } catch (err) { console.warn('Could not keep the builder draft:', err); }
+}
+function chooseSaveMode(filename) {
+    return new Promise(resolve => {
+        const dialog = document.getElementById('save-dialog');
+        document.getElementById('save-dialog-message').textContent = `Save changes to "${filename}" or keep it and create a numbered version?`;
+        const finish = mode => { dialog.close(); resolve(mode); };
+        document.getElementById('save-overwrite-btn').onclick = () => finish('overwrite');
+        document.getElementById('save-duplicate-btn').onclick = () => finish('duplicate');
+        document.getElementById('save-cancel-btn').onclick = () => finish(null);
+        dialog.oncancel = e => { e.preventDefault(); finish(null); };
+        dialog.showModal();
+    });
+}
+document.getElementById('save-scenario-btn').addEventListener('click', async () => {
+    const button = document.getElementById('save-scenario-btn');
+    button.disabled = true;
+    try {
+        let filename = loadedFilename;
+        let name = null;
+        let mode = 'create';
+        if (filename) {
+            mode = await chooseSaveMode(filename);
+            if (!mode) return;
+        } else {
+            name = prompt('Enter a name for this scenario:', 'My Scenario');
+            if (!name?.trim()) return;
         }
-    })
-    .catch(err => console.error("Error saving scenario:", err));
+        const snapshot = JSON.parse(JSON.stringify(serializeScenario()));
+        async function submit() {
+            const res = await fetch('/save-scenario', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, filename, mode, scenario: snapshot,
+                    expected_revision: filename === loadedFilename ? loadedRevision : null }),
+            });
+            return res.json();
+        }
+        let data = await submit();
+        if (data.status === 'exists') {
+            filename = data.filename;
+            mode = await chooseSaveMode(filename);
+            if (!mode) return;
+            data = await submit();
+        }
+        if (data.status !== 'saved') throw new Error(data.error || 'Could not save scenario.');
+        loadedFilename = data.filename;
+        loadedRevision = data.revision;
+        lastSavedSnapshot = JSON.stringify(snapshot);
+        rememberDraft();
+        statusText.textContent = `Saved "${loadedFilename}"`;
+        await refreshScenarioList();
+    } catch (err) {
+        statusText.textContent = err.message || 'Could not reach the server to save.';
+    } finally { button.disabled = false; }
 });
 
 function refreshScenarioList() {
-    fetch("/list-scenarios")
+    return fetch("/list-scenarios")
         .then(res => res.json())
         .then(data => {
             const select = document.getElementById("scenario-select");
@@ -789,6 +1009,7 @@ function refreshScenarioList() {
                 opt.textContent = label;
                 select.appendChild(opt);
             });
+            if (loadedFilename) select.value = loadedFilename;
         })
         .catch(err => console.error("Error listing scenarios:", err));
 }
@@ -801,11 +1022,18 @@ document.getElementById("load-scenario-btn").addEventListener("click", () => {
         return;
     }
 
+    const current = JSON.stringify(serializeScenario());
+    const hasItems = Object.values(scenario).some(items => Object.keys(items).length > 0) || taktTimeInput.value !== '30';
+    if (hasItems && current !== lastSavedSnapshot && !confirm('Replace your unsaved builder changes with the selected scenario?')) return;
     fetch("/load-scenario/" + encodeURIComponent(filename))
         .then(res => res.json())
         .then(data => {
             if (data.found) {
                 applyLoadedScenario(data.scenario);
+                loadedFilename = data.filename || filename;
+                loadedRevision = data.revision || null;
+                lastSavedSnapshot = JSON.stringify(serializeScenario());
+                rememberDraft();
                 statusText.textContent = `Loaded "${filename.replace(".json", "")}"`;
                 setTimeout(() => { statusText.textContent = ""; }, 2000);
             } else {
@@ -845,6 +1073,7 @@ runScenarioBtn.addEventListener("click", () => {
             return;
         }
 
+        rememberDraft();
         window.location.href = "/simulate";
     })
     .catch(err => {
@@ -857,6 +1086,16 @@ runScenarioBtn.addEventListener("click", () => {
 // ============================================================
 // PART 8 — Initialize
 // ============================================================
+try {
+    const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null');
+    if (draft?.scenario) {
+        applyLoadedScenario(draft.scenario);
+        loadedFilename = draft.loadedFilename || null;
+        loadedRevision = draft.loadedRevision || null;
+        lastSavedSnapshot = draft.lastSavedSnapshot || null;
+    }
+} catch (err) { console.warn('Could not restore the builder draft:', err); }
+window.addEventListener('pagehide', rememberDraft);
 refreshScenarioList();
 drawFrame();
 </script>

@@ -52,16 +52,8 @@ function drawStation(ctx, sid, pos, stationInfo, isActive, activeColor) {
     ctx.font         = "11px Arial";
     ctx.textAlign    = "left";
     ctx.textBaseline = "top";
-    ctx.fillText(`S${sid}`, x + 4, y + 4);
 
-    const words = stationInfo.name.split(" ");
-    const mid   = Math.ceil(words.length / 2);
-    const line1 = words.slice(0, mid).join(" ");
-    const line2 = words.slice(mid).join(" ");
-    ctx.fillText(line1, x + 4, y + 22);
-    ctx.fillText(line2, x + 4, y + 38);
-
-    ctx.fillText(`CT: ${stationInfo.cycle_time}m`, x + 4, y + 56);
+    drawStationText(ctx, sid, stationInfo, pos);
 }
 
 // --------------------------------------------------------
@@ -259,15 +251,3 @@ function drawLegend(ctx, operatorNames, operators, partImage, height) {
     ctx.fillText("= Part", legendX + 14, legendY);
 }
 
-function drawAndon(ctx, x, y, w, status) {
-    const color = status === "red" ? "#e60000" : "#22aa22";
-    const cx = x + w / 2;
-    const cy = y - 12;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 6, 0, Math.PI * 2);
-    ctx.fillStyle = color;
-    ctx.fill();
-    ctx.strokeStyle = "#333333";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-}
