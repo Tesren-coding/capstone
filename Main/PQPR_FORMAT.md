@@ -15,7 +15,8 @@ and automatic timings and editable semantic colors.
    or Sometimes (X). Uncheck processes that do not apply.
 5. Save the project locally on the server or export a portable JSON copy.
 
-Process and framesize order can be changed using the editor's up/down buttons.
+Process and framesize order can be changed by dragging the editor’s ⠿ handles.
+Focused handles also support Alt+ArrowUp/Down.
 Stable IDs preserve checks through reordering. Removing a process confirms
 removal of its applicability references. Editor counters avoid reusing its ID.
 

@@ -5,6 +5,9 @@ browser playback. Runtime validation and migrations live in `scenario_schema.py`
 
 PQPR projects use a separate version-1 contract documented in `PQPR_FORMAT.md`.
 They are stored in `pqpr_projects/`, not in the scenario directory.
+Balance plans also have a separate version-2 contract in `BALANCING_FORMAT.md`
+and are stored in `balancing_plans/`. Creating a plan does not create or change
+a line-builder scenario.
 
 ## Version policy
 

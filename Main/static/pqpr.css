@@ -6,6 +6,7 @@
 .pqpr-heading > div > p:last-child { color:#5a677d; font-size:14px; line-height:1.65; }
 .pqpr-draft-state { padding:7px 11px; border-radius:5px; background:#e7edf7; color:#395a83; font-size:12px; max-width:340px; overflow-wrap:anywhere; }
 .pqpr-filebar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.pqpr-filebar a.pqpr-button { text-decoration:none; }
 .pqpr-button, .pqpr-row-actions button { border:1px solid #cbd6e5; background:white; color:#264b7b; border-radius:5px; padding:9px 12px; cursor:pointer; font-size:13px; }
 .pqpr-button:hover, .pqpr-row-actions button:hover { background:#eaf0fa; }
 .pqpr-button--primary { background:#1e3c78; color:white; border-color:#1e3c78; }

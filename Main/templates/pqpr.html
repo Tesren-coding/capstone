@@ -15,6 +15,7 @@
         <button id="pqpr-import" data-file-action class="pqpr-button">Import JSON / Excel</button>
         <input id="pqpr-file" type="file" accept=".json,.xlsx,application/json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
         <button id="pqpr-export" data-file-action class="pqpr-button">Export JSON</button>
+        <a class="pqpr-button" href="{{ url_for('balancing.editor', source='pqpr-draft') }}">Balance this PQPR</a>
     </div>
     <p id="pqpr-status" class="pqpr-status" role="status" aria-live="polite">Start a new project or import a PQPR file.</p>
     <fieldset id="pqpr-workspace">
@@ -41,12 +42,12 @@
         </section>
         <details id="pqpr-frames-panel" class="pqpr-panel pqpr-editor-panel">
             <summary>Edit framesizes <span id="pqpr-frame-summary">0 products</span></summary>
-            <p class="pqpr-editor-help">Stage and component are optional labels, useful when a framesize appears in more than one route.</p>
+            <p class="pqpr-editor-help">Drag ⠿ handles to reorder. Stage and component are optional labels, useful when a framesize appears in more than one route.</p>
             <div class="pqpr-catalog-wrap"><table class="pqpr-catalog"><thead><tr><th>Framesize / product</th><th>Stage</th><th>Component</th><th>Actions</th></tr></thead><tbody id="pqpr-frames"></tbody></table></div>
         </details>
         <details id="pqpr-processes-panel" class="pqpr-panel pqpr-editor-panel">
             <summary>Edit shared processes <span id="pqpr-process-summary">0 processes</span></summary>
-            <p class="pqpr-editor-help">Set each process's color and manual/auto time here. Reordering changes the matrix column order and preserves applicability.</p>
+            <p class="pqpr-editor-help">Set each process's color and manual/auto time here. Drag ⠿ handles to reorder; this changes the matrix column order and preserves applicability.</p>
             <div class="pqpr-catalog-wrap"><table class="pqpr-catalog"><thead><tr><th>Order</th><th>Process name</th><th>Color / category</th><th>Manual (min)</th><th>Auto (min)</th><th>Actions</th></tr></thead><tbody id="pqpr-processes"></tbody></table></div>
         </details>
     </fieldset>

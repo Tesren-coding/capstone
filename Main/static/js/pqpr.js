@@ -1,4 +1,5 @@
 import {escapeHtml as esc} from './canvas-tools.js';
+import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from './drag-sort.js';
 import {postJson, requestJson} from './api.js';
 import {blankProject, nextId, frameTotals, displayTime, categories} from './pqpr-model.js';
 
@@ -59,8 +60,8 @@ function renderMatrix() {
 }
 
 function renderEditors() {
-    frameRows.innerHTML = project.framesizes.map((f,i) => `<tr data-frame-row="${f.id}"><td><input data-frame="${f.id}" data-field="name" value="${esc(f.name)}" aria-label="Framesize ${i+1} name"></td><td><input data-frame="${f.id}" data-field="stage" value="${esc(f.stage)}" aria-label="Framesize ${i+1} stage"></td><td><input data-frame="${f.id}" data-field="component" value="${esc(f.component)}" aria-label="Framesize ${i+1} component"></td><td class="pqpr-row-actions"><button data-frame-action="up" data-id="${f.id}" ${i===0?'disabled':''} aria-label="Move framesize ${i+1} earlier">↑</button><button data-frame-action="down" data-id="${f.id}" ${i===project.framesizes.length-1?'disabled':''} aria-label="Move framesize ${i+1} later">↓</button><button data-frame-action="remove" data-id="${f.id}">Remove</button></td></tr>`).join('');
-    processRows.innerHTML = project.processes.map((p,i) => `<tr data-process-row="${p.id}" class="cat-${p.category}"><td class="pqpr-process-number">${i+1}</td><td><input data-process="${p.id}" data-field="name" value="${esc(p.name)}" aria-label="Process ${i+1} name"></td><td><select data-process="${p.id}" data-field="category" aria-label="Process ${i+1} color">${Object.entries(categories).map(([key,option]) => `<option value="${key}" ${p.category===key?'selected':''}>${option.label}</option>`).join('')}</select></td><td><input data-process="${p.id}" data-field="manual_time" type="number" min="0" step="any" value="${p.manual_time ?? ''}" placeholder="Unknown" aria-label="Process ${i+1} manual minutes"></td><td><input data-process="${p.id}" data-field="auto_time" type="number" min="0" step="any" value="${p.auto_time ?? ''}" placeholder="Unknown" aria-label="Process ${i+1} auto minutes"></td><td class="pqpr-row-actions"><button data-process-action="up" data-id="${p.id}" ${i===0?'disabled':''} aria-label="Move process ${i+1} earlier">↑</button><button data-process-action="down" data-id="${p.id}" ${i===project.processes.length-1?'disabled':''} aria-label="Move process ${i+1} later">↓</button><button data-process-action="remove" data-id="${p.id}">Remove</button></td></tr>`).join('');
+    frameRows.innerHTML = project.framesizes.map((f,i) => `<tr data-frame-row="${f.id}"><td><input data-frame="${f.id}" data-field="name" value="${esc(f.name)}" aria-label="Framesize ${i+1} name"></td><td><input data-frame="${f.id}" data-field="stage" value="${esc(f.stage)}" aria-label="Framesize ${i+1} stage"></td><td><input data-frame="${f.id}" data-field="component" value="${esc(f.component)}" aria-label="Framesize ${i+1} component"></td><td class="pqpr-row-actions">${dragHandle('pqpr-framesizes',f.id,f.name)}<button data-frame-action="remove" data-id="${f.id}">Remove</button></td></tr>`).join('');
+    processRows.innerHTML = project.processes.map((p,i) => `<tr data-process-row="${p.id}" class="cat-${p.category}"><td class="pqpr-process-number">${i+1}</td><td><input data-process="${p.id}" data-field="name" value="${esc(p.name)}" aria-label="Process ${i+1} name"></td><td><select data-process="${p.id}" data-field="category" aria-label="Process ${i+1} color">${Object.entries(categories).map(([key,option]) => `<option value="${key}" ${p.category===key?'selected':''}>${option.label}</option>`).join('')}</select></td><td><input data-process="${p.id}" data-field="manual_time" type="number" min="0" step="any" value="${p.manual_time ?? ''}" placeholder="Unknown" aria-label="Process ${i+1} manual minutes"></td><td><input data-process="${p.id}" data-field="auto_time" type="number" min="0" step="any" value="${p.auto_time ?? ''}" placeholder="Unknown" aria-label="Process ${i+1} auto minutes"></td><td class="pqpr-row-actions">${dragHandle('pqpr-processes',p.id,p.name)}<button data-process-action="remove" data-id="${p.id}">Remove</button></td></tr>`).join('');
 }
 function render() { projectName.value = project.project_name; renderEditors(); renderMatrix(); }
 function applyProject(data) {
@@ -110,13 +111,15 @@ function rowAction(kind, id, action) {
         if (!confirm(`Remove "${list[index].name}"?${references ? ' Its checks in '+references+' framesize(s) will also be removed.' : ''}`)) return;
         list.splice(index,1);
         if (kind === 'processes') project.framesizes.forEach(f => delete f.applicability[id]);
-    } else {
-        const target = index + (action==='up' ? -1 : 1);
-        if (target < 0 || target >= list.length) return;
-        [list[index],list[target]] = [list[target],list[index]];
     }
     renderEditors(); renderMatrix(); touch();
 }
+installDrag(app,{
+    source(node){if(busy)return null;const kind=node.dataset.dragType.replace('pqpr-','');if(!['processes','framesizes'].includes(kind))return null;return {kind,id:node.dataset.dragId,label:project[kind].find(i=>i.id===node.dataset.dragId).name};},
+    target(hit,event,data){const row=hit.closest(data.kind==='processes'?'[data-process-row]':'[data-frame-row]');if(!row)return null;return {...rowDrop(row,event.clientY),id:row.dataset.processRow||row.dataset.frameRow};},
+    drop(data,where){moveBefore(project[data.kind],data.id,beforeFromDrop(project[data.kind],where.id,where.after));renderEditors();renderMatrix();touch();say('Order updated; applicability retained.');},
+    keyboard(data,key){const list=project[data.kind],index=list.findIndex(i=>i.id===data.id),other=index+(['ArrowUp','ArrowLeft'].includes(key)?-1:1);if(other<0||other>=list.length)return;[list[index],list[other]]=[list[other],list[index]];renderEditors();renderMatrix();touch();app.querySelector(`[data-drag-id="${data.id}"]`)?.focus();}
+});
 processRows.addEventListener('click', event => { const b=event.target.closest('[data-process-action]'); if(b) rowAction('processes',b.dataset.id,b.dataset.processAction); });
 frameRows.addEventListener('click', event => { const b=event.target.closest('[data-frame-action]'); if(b) rowAction('framesizes',b.dataset.id,b.dataset.frameAction); });
 document.getElementById('pqpr-add-process').addEventListener('click', () => {

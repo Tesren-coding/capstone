@@ -3,7 +3,7 @@
 ## Install this update
 
 Copy these files into the matching folders in your project. Keep your existing
-`scenarios` and `pqpr_projects` folders. Restart the Python app and refresh the browser (Ctrl+F5 if
+`scenarios`, `pqpr_projects` and `balancing_plans` folders. Restart the Python app and refresh the browser (Ctrl+F5 if
 an old interface is still cached).
 
 Open PowerShell in the project folder:
@@ -15,12 +15,13 @@ python app.py
 
 Open http://localhost:5000 in your browser to see the dashboard. Select
 **Open Line Builder** to edit or simulate a line, or **Open PQPR** to plan
-product/process applicability. Existing `/builder` links
+product/process applicability. Select **Open Line Balancing & Yamazumi** to
+create an independent process list and assign its steps to operators. Existing `/builder` links
 still open the builder directly.
 
 For full Windows, macOS and Linux setup instructions, see `requirements.md`.
 
-## Dashboard and PQPR: stages 1–2
+## Dashboard and planning apps: stages 1–3
 
 The main page is a hub for three apps:
 
@@ -28,14 +29,14 @@ The main page is a hub for three apps:
 | --- | --- |
 | Line Builder | Available: the existing editor, scenario files and simulation. |
 | PQPR | Available: projects, framesizes, shared processes, applicability, manual/auto timings and colors. |
-| Line Balancing & Yamazumi | Planned: operator/process assignments and workload charts. |
+| Line Balancing & Yamazumi | Available: independent process steps, optional PQPR import, assignments, manual-workload charts and plan files. |
 
 Use the header navigation to move between apps. Returning to Line Builder in
 this tab restores its draft. Save or export scenarios to retain them beyond
 this session. `main.py` now opens the dashboard automatically.
 
 `/` and `/dashboard` are dashboard URLs. `/pqpr` opens the PQPR editor;
-`/line-balancing` remains a planned-module page. See `DEVELOPMENT_PLAN.md` for the staged feature and acceptance
+`/line-balancing` opens the balancing editor. See `DEVELOPMENT_PLAN.md` for the staged feature and acceptance
 plan. Scenario schema version 2 and event version 1 remain unchanged.
 
 ## PQPR projects
@@ -60,6 +61,39 @@ Install updated requirements before running this release: Excel import adds
 `openpyxl`. Scenario format 2 and event format 1 remain unchanged; PQPR uses its
 own document type and format version 1.
 
+## Line balancing and Yamazumi
+
+Open Line Balancing and click **+ Process step** to add your own steps. Edit
+names, categories, applicability and manual/auto minutes directly. Add named
+operators and assign processes from the table or by dragging handles onto
+operator lists or Yamazumi bars. Set takt time in minutes. PQPR import remains
+optional under **Optional: start from PQPR**; its copied steps can be edited,
+added to or removed independently.
+
+Yamazumi bars stack manual work per operator in sequence order, with a dashed
+takt line. Automatic process time is reported separately. Missing manual times
+show incomplete workloads; unassigned steps and above-takt operators are
+counted. Orange out-of-line steps are excluded by default, and Sometimes steps
+can be toggled for the case being assessed. There is no hit-rate percentage
+weighting yet.
+
+Choose chart colors from PQPR categories or editable value-add tags. Hover or
+focus a segment for details, drag it between operators or vertically to reorder work, click to find its
+assignment row, or download
+the chart as SVG. Balance efficiency and the manual-time minimum-operator
+estimate are available when their required timings and assignments are complete.
+The estimate does not include walking, waiting, precedence or machine capacity.
+
+Save/load plans in `balancing_plans/`, with overwrite, numbered copies and
+revision protection. Import/export self-contained plan JSON. Plans created from PQPR retain an optional
+source copy: edits in the plan do not edit PQPR, and later PQPR changes do not
+silently alter the plan. **Create plan** explicitly replaces the current plan
+and prompts for unsaved changes. See `BALANCING_FORMAT.md` for calculations,
+file fields and the workload assumptions.
+
+PQPR is now connected to line balancing. Mapping the plan to physical stations
+and generating a Line Builder scenario remains Stage 4.
+
 ## Code organization
 
 HTML templates contain markup and one module entry point per page. JavaScript
@@ -68,19 +102,23 @@ browser module system rather than globals or manually ordered script tags.
 
 | File | Responsibility |
 | --- | --- |
-| `templates/` | Shared layout, builder markup and playback markup. |
+| `templates/` | Shared layout, dashboard and each app's markup. |
 | `static/js/builder.js` | Builder state, placement, editor panels, import/export, save/load and launch. |
 | `static/js/playback.js` | Playback clock, seeking, controls, tooltips and frame composition. |
 | `static/js/api.js` | Shared JSON request handling. |
+| `static/js/drag-sort.js` | Mouse/touch sorting, drag feedback and keyboard handle operations across apps. |
 | `static/js/state.js` | Replay events into simulation display state. |
 | `static/js/draw.js` | Draw canvas objects, banner and legend. |
 | `static/js/positions.js` | Derive coordinates from the scenario. |
 | `static/js/canvas-tools.js` | Shared zoom/pan, station text and helpers. |
 | `app.py` | Line-builder web requests and application setup. |
 | `planning_pages.py` | Dashboard, module registry and staged app entry pages. |
-| `scenario_store.py` | JSON file revisions/save modes, with scenario or PQPR validation. |
+| `scenario_store.py` | JSON file revisions/save modes, with per-app validation. |
 | `pqpr_routes.py`, `pqpr_store.py`, `pqpr_schema.py`, `pqpr_excel.py` | PQPR HTTP, persistence, validation and Excel import. |
 | `static/js/pqpr.js`, `pqpr-model.js` | PQPR editing and display calculations. |
+| `balancing_routes.py`, `balancing_store.py`, `balancing_schema.py` | Balance-plan HTTP, persistence, validation and workload calculations. |
+| `static/js/balancing.js`, `balancing-model.js`, `yamazumi.js` | Balance editor, assignment operations, calculations and SVG chart. |
+| `BALANCING_FORMAT.md` | Balance-plan contract and workload assumptions. |
 | `scenario_schema.py` | Format versions, migrations and draft/run validation. |
 | `simulation.py` | SimPy processing and material-flow rules. |
 | `DATA_FORMAT.md` | Scenario/event contracts and future migration policy. |
@@ -184,7 +222,7 @@ operator references.
 
 ## Previous controls retained
 
-- Station IDs: apply a positive ID or use the up/down buttons to swap IDs.
+- Station IDs: apply a positive ID or drag the station-order list in the editor.
   Operator location and process references follow each station.
 - Saving: overwrite, save a numbered version, or cancel. Loaded-file revision
   checks protect against overwriting a file changed since it was loaded.
@@ -210,8 +248,21 @@ Browser checks cover module loading, import/export and rejection without data
 loss, metadata preservation, editing/reordering and ID references, save/load,
 duplicate versions, draft restoration, zoom, simulation launch, machine
 concurrency, tooltips, timeline restoration, pause/resume, restart, completion
-and busy-transfer errors. Dashboard checks cover app navigation, planned
+and busy-transfer errors. Dashboard checks cover app navigation, available
 module labels, responsive layouts and builder draft restoration. PQPR checks
 cover applicable steps, P/X, time totals and missing values, category changes,
 reordering/deletion, save/load/version copies, JSON round trips, metadata,
 failed-import preservation, Excel selection/cancel and the reference worksheets.
+
+Balancing checks cover source-copy ownership, framesize filtering, assignments
+and sequence order, optional/out-of-line scope, decimal and unknown timings,
+manual/auto separation, takt comparisons, efficiency, value colors, chart SVG,
+save/load/copy/overwrite, metadata, rejected imports, draft navigation,
+responsive layout and browser/backend calculation agreement.
+
+Sorting arrows are replaced by ⠿ drag handles throughout PQPR, Line Builder
+and Line Balancing. Drag PQPR process/framesize rows, station-ID order, station
+processes, builder work steps, balance process rows, operators and assigned
+work. IDs/references follow their records. Handles support Alt+Arrow keys.
+Balance format 1 migrates to format 2 in memory; existing files are preserved
+until explicitly overwritten. Pointer cancellation/outside drops make no edit.

@@ -187,11 +187,9 @@ class StorageAndRouteTests(unittest.TestCase):
         self.assertIn('aria-current="page"', builder)
         pqpr_page = self.client.get('/pqpr').get_data(as_text=True)
         self.assertIn('id="pqpr-app"', pqpr_page)
-        for path in ('/line-balancing',):
-            page = self.client.get(path).get_data(as_text=True)
-            self.assertIn('This app is coming in a later stage', page)
-            self.assertIn('Planned capabilities', page)
-            self.assertNotIn('id="builder-canvas"', page)
+        balancing_page = self.client.get('/line-balancing').get_data(as_text=True)
+        self.assertIn('id="balance-app"', balancing_page)
+        self.assertNotIn('id="builder-canvas"', balancing_page)
 
 
 if __name__ == '__main__':

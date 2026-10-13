@@ -1,4 +1,5 @@
 import {CanvasViewport, drawStationText, stationProcesses, stationTotals, escapeHtml} from "./canvas-tools.js";
+import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-sort.js";
 import {requestJson, postJson} from "./api.js";
 
 // builder.js — Scenario builder behavior.
@@ -353,7 +354,7 @@ function renderSequenceList(op) {
     let html = "";
     op.sequence.forEach((step, i) => {
         html += `
-            <div class="sequence-step" style="margin-bottom:8px; background:#fff; padding:6px; border:1px solid #ccc; border-radius:4px;">
+            <div class="sequence-step" data-builder-sequence="${i}" style="margin-bottom:8px; background:#fff; padding:6px; border:1px solid #ccc; border-radius:4px;">
               <div style="display:flex; gap:4px; align-items:center;">
                 <span style="font-size:11px; color:#888; width:16px;">${i + 1}.</span>
                 <select class="step-action" data-idx="${i}" style="flex:0 0 70px; font-size:11px;">
@@ -364,8 +365,7 @@ function renderSequenceList(op) {
                 <select class="step-loc" data-idx="${i}" style="flex:1; font-size:11px; min-width:0;">
                     ${buildLocationOptions(step.action, step.loc)}
                 </select>
-                <button class="step-up"     data-idx="${i}" style="padding:2px 6px;" ${i === 0 ? "disabled" : ""}>↑</button>
-                <button class="step-down"   data-idx="${i}" style="padding:2px 6px;" ${i === op.sequence.length - 1 ? "disabled" : ""}>↓</button>
+                ${dragHandle('builder-sequence',String(i),'work step '+(i+1))}
                 <button class="step-remove" data-idx="${i}" style="padding:2px 6px; background:#fde8e8;">✕</button>
               </div>
               ${step.action === 'work' ? `<label style="font-size:11px;">Process
@@ -396,26 +396,6 @@ function renderSequenceList(op) {
     });
     container.querySelectorAll('.step-process').forEach(select => {
         select.onchange = e => { op.sequence[Number(e.target.dataset.idx)].process = e.target.value; };
-    });
-
-    container.querySelectorAll(".step-up").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            const idx = parseInt(e.target.getAttribute("data-idx"));
-            if (idx > 0) {
-                [op.sequence[idx - 1], op.sequence[idx]] = [op.sequence[idx], op.sequence[idx - 1]];
-                renderSequenceList(op);
-            }
-        });
-    });
-
-    container.querySelectorAll(".step-down").forEach(btn => {
-        btn.addEventListener("click", (e) => {
-            const idx = parseInt(e.target.getAttribute("data-idx"));
-            if (idx < op.sequence.length - 1) {
-                [op.sequence[idx + 1], op.sequence[idx]] = [op.sequence[idx], op.sequence[idx + 1]];
-                renderSequenceList(op);
-            }
-        });
     });
 
     container.querySelectorAll(".step-remove").forEach(btn => {
@@ -466,7 +446,7 @@ function renderStationProcesses(station, stationId) {
     const container = document.getElementById('process-list');
     if (!container) return;
     container.innerHTML = station.processes.map((p, i) => `
-        <div class="process-editor">
+        <div class="process-editor" data-builder-process="${p.id}">
             <label>Process ${i + 1}</label>
             <input class="process-name" data-idx="${i}" value="${escapeHtml(p.name)}" aria-label="Process ${i + 1} name">
             <div class="process-time-row">
@@ -474,8 +454,7 @@ function renderStationProcesses(station, stationId) {
                 <label>Auto (min)<input class="process-auto" data-idx="${i}" type="number" min="0" step="any" value="${p.auto_time}"></label>
             </div>
             <div class="process-buttons">
-                <button class="process-up" data-idx="${i}" ${i === 0 ? 'disabled' : ''} title="Move process earlier">↑</button>
-                <button class="process-down" data-idx="${i}" ${i === station.processes.length - 1 ? 'disabled' : ''} title="Move process later">↓</button>
+                ${dragHandle('builder-process',p.id,p.name)}
                 <button class="process-remove" data-idx="${i}" ${station.processes.length === 1 ? 'disabled' : ''}>Remove</button>
             </div>
         </div>`).join('');
@@ -495,12 +474,6 @@ function renderStationProcesses(station, stationId) {
             refreshTotal();
         });
     }
-    function move(index, direction) {
-        [station.processes[index], station.processes[index + direction]] = [station.processes[index + direction], station.processes[index]];
-        renderStationProcesses(station, stationId);
-    }
-    container.querySelectorAll('.process-up').forEach(button => button.onclick = () => move(Number(button.dataset.idx), -1));
-    container.querySelectorAll('.process-down').forEach(button => button.onclick = () => move(Number(button.dataset.idx), 1));
     container.querySelectorAll('.process-remove').forEach(button => button.onclick = () => {
         const index = Number(button.dataset.idx), process = station.processes[index];
         const references = Object.values(scenario.operators).flatMap(op => op.sequence || []).filter(step => String(step.loc) === String(stationId) && step.action === 'work' && step.process === process.id);
@@ -511,6 +484,46 @@ function renderStationProcesses(station, stationId) {
     });
     refreshTotal();
 }
+
+// Reorder stations over the existing ID slots and remap every reference once.
+function reorderStations(id,beforeId) {
+    const slots=Object.keys(scenario.stations).sort((a,b)=>Number(a)-Number(b));
+    const ordered=[...slots];moveBefore(ordered,id,beforeId,item=>item);
+    const original={...scenario.stations},mapping=Object.fromEntries(ordered.map((old,index)=>[old,slots[index]]));
+    ordered.forEach((old,index)=>{scenario.stations[slots[index]]=original[old];});
+    Object.values(scenario.operators).forEach(op=>op.sequence.forEach(step=>{if(Object.hasOwn(mapping,String(step.loc)))step.loc=mapping[String(step.loc)];}));
+    if(selectedItem?.type==='station')selectedItem.id=mapping[String(selectedItem.id)];
+    draggedItem=null;openSidePanel(selectedItem);drawFrame();statusText.textContent='Station order updated. Operator references follow each station.';return mapping[id];
+}
+installDrag(panelFields,{
+    source(node){
+        const type=node.dataset.dragType,id=node.dataset.dragId;
+        if(type==='builder-station')return {type,id,label:'Station S'+id};
+        if(type==='builder-process'&&selectedItem?.type==='station')return {type,id,label:scenario.stations[selectedItem.id].processes.find(p=>p.id===id).name};
+        if(type==='builder-sequence'&&selectedItem?.type==='operator')return {type,id,label:'Work step '+(Number(id)+1)};
+        return null;
+    },
+    target(hit,event,data){
+        const selector={'builder-station':'[data-builder-station]','builder-process':'[data-builder-process]','builder-sequence':'[data-builder-sequence]'}[data.type];
+        const row=hit.closest(selector);if(!row)return null;
+        return {...rowDrop(row,event.clientY),id:row.dataset.builderStation||row.dataset.builderProcess||row.dataset.builderSequence};
+    },
+    drop(data,where){
+        if(data.type==='builder-station'){const list=Object.keys(scenario.stations).sort((a,b)=>Number(a)-Number(b));reorderStations(data.id,beforeFromDrop(list,where.id,where.after,id=>id));}
+        else if(data.type==='builder-process'){const station=scenario.stations[selectedItem.id];moveBefore(station.processes,data.id,beforeFromDrop(station.processes,where.id,where.after));renderStationProcesses(station,selectedItem.id);}
+        else{const op=scenario.operators[selectedItem.id];const list=op.sequence.map((_,index)=>({id:String(index)}));const before=beforeFromDrop(list,where.id,where.after);if(before===data.id)return;const [step]=op.sequence.splice(Number(data.id),1);let index=before===null?op.sequence.length:Number(before);if(before!==null&&Number(data.id)<index)index--;op.sequence.splice(index,0,step);renderSequenceList(op);}
+    },
+    keyboard(data,key){
+        const direction=['ArrowUp','ArrowLeft'].includes(key)?-1:1;
+        const list=data.type==='builder-station'?Object.keys(scenario.stations).sort((a,b)=>Number(a)-Number(b)):data.type==='builder-process'?scenario.stations[selectedItem.id].processes:scenario.operators[selectedItem.id].sequence;
+        const index=data.type==='builder-station'?list.indexOf(data.id):data.type==='builder-process'?list.findIndex(p=>p.id===data.id):Number(data.id),other=index+direction;
+        if(other<0||other>=list.length)return;
+        let focusId=data.id;
+        if(data.type==='builder-station'){focusId=reorderStations(data.id,direction<0?list[other]:list[other+1]||null);}
+        else{[list[index],list[other]]=[list[other],list[index]];if(data.type==='builder-process')renderStationProcesses(scenario.stations[selectedItem.id],selectedItem.id);else renderSequenceList(scenario.operators[selectedItem.id]);}
+        panelFields.querySelector(`[data-drag-type="${data.type}"][data-drag-id="${data.type==='builder-sequence'?other:focusId}"]`)?.focus();
+    }
+});
 
 // Open the side panel for a selected item
 // --------------------------------------------------------
@@ -524,6 +537,7 @@ function openSidePanel(item) {
     if (item.type === "station") {
         const s = scenario.stations[item.id];
         panelTitle.textContent = `Station S${item.id}`;
+        const orderOpen=document.getElementById('station-order-details')?.open||false;
         const stationIds = Object.keys(scenario.stations).sort((a, b) => Number(a) - Number(b));
         const index = stationIds.indexOf(String(item.id));
         panelFields.innerHTML = `
@@ -531,10 +545,9 @@ function openSidePanel(item) {
             <div style="display:flex; gap:6px; margin-bottom:8px;">
                 <input type="number" min="1" step="1" id="field-station-id" value="${item.id}" style="width:70px;">
                 <button type="button" id="station-id-apply">Apply</button>
-                <button type="button" id="station-earlier" ${index === 0 ? 'disabled' : ''} title="Swap with previous station ID">↑</button>
-                <button type="button" id="station-later" ${index === stationIds.length - 1 ? 'disabled' : ''} title="Swap with next station ID">↓</button>
-            </div>
+                            </div>
             <p style="font-size:11px; margin-bottom:10px;">An existing ID swaps stations. Operator sequences follow each station.</p>
+            <details id="station-order-details" ${orderOpen?'open':''}><summary style="font-size:12px; cursor:pointer;">Drag to reorder station IDs</summary><ol class="station-order-list">${stationIds.map(id=>`<li data-builder-station="${id}">${dragHandle('builder-station',id,'station '+id)}<span>S${id} · ${escapeHtml(scenario.stations[id].name)}</span></li>`).join('')}</ol></details>
             <label>Name</label>
             <input type="text" id="field-name" value="${escapeHtml(s.name)}" style="width:100%; margin-bottom:8px;">
             <h4 style="margin:8px 0;">Processes</h4>
@@ -551,8 +564,6 @@ function openSidePanel(item) {
         document.getElementById('field-station-id').onkeydown = e => {
             if (e.key === 'Enter') { e.preventDefault(); document.getElementById('station-id-apply').click(); }
         };
-        document.getElementById('station-earlier').onclick = () => changeStationId(item.id, stationIds[index - 1]);
-        document.getElementById('station-later').onclick = () => changeStationId(item.id, stationIds[index + 1]);
         document.getElementById("field-name").addEventListener("input", (e) => {
             s.name = e.target.value;
             drawFrame();

@@ -2,7 +2,7 @@
 
 This guide explains how to run the Capstone Line Building Simulator on your own PC.
 The toolkit uses Python, Flask and SimPy, with a browser dashboard.
-Line Builder and PQPR are its currently available apps.
+Line Builder, PQPR and Line Balancing & Yamazumi are available.
 
 ## 1. Requirements
 
@@ -35,16 +35,17 @@ Extract the project ZIP before running it. Keep these files and folders together
 
 | Location | Contents |
 | --- | --- |
-| Project root | `app.py`, `simulation.py`, `scenario_schema.py`, `scenario_store.py`, `planning_pages.py`, `pqpr_routes.py`, `pqpr_schema.py`, `pqpr_store.py`, `pqpr_excel.py`, `requirements.txt`; `main.py` is an optional launcher. |
-| `templates/` | `base.html`, `dashboard.html`, `module_planned.html`, `builder.html`, `simulate.html`, `pqpr.html`. |
-| `static/` | `style.css`, `pqpr.css`. |
-| `static/js/` | `builder.js`, `playback.js`, `api.js`, `pqpr.js`, `pqpr-model.js`, `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
+| Project root | `app.py`, `simulation.py`, `scenario_schema.py`, `scenario_store.py`, `planning_pages.py`, `pqpr_routes.py`, `pqpr_schema.py`, `pqpr_store.py`, `pqpr_excel.py`, `balancing_routes.py`, `balancing_schema.py`, `balancing_store.py`, `requirements.txt`; `main.py` is an optional launcher. |
+| `templates/` | `base.html`, `dashboard.html`, `module_planned.html`, `builder.html`, `simulate.html`, `pqpr.html`, `balancing.html`. |
+| `static/` | `style.css`, `pqpr.css`, `balancing.css`. |
+| `static/js/` | `builder.js`, `playback.js`, `api.js`, `pqpr.js`, `pqpr-model.js`, `balancing.js`, `balancing-model.js`, `yamazumi.js`, `drag-sort.js`, `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
 | `static/images/` | `Part.png`, `SWIP.png`; keep the exact filenames and capitalisation. |
 | `scenarios/` | Saved line-builder scenario JSON files; created when needed. |
 | `pqpr_projects/` | Saved PQPR project JSON files; created when needed. |
+| `balancing_plans/` | Saved balancing plan JSON files; created when needed. |
 
-When transferring the project to another PC, copy your `scenarios/` and `pqpr_projects/` folders if
-you want to keep your saved layouts and PQPR projects. Create a fresh virtual environment on each PC.
+When transferring the project to another PC, copy your `scenarios/`, `pqpr_projects/` and `balancing_plans/`
+folders to keep your saved layouts, PQPR projects and balance plans. Create a fresh virtual environment on each PC.
 
 ## 3. First-time setup on Windows
 
@@ -52,7 +53,7 @@ Install Python, then open **PowerShell** in the folder containing `app.py`.
 For example, replace the path below with your actual project folder:
 
 ```powershell
-cd "C:\path\to\capstone-qol-update"
+cd "C:\path\to\capstone-balancing-stage3"
 python --version
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -70,8 +71,8 @@ commands use its Python directly, so you do not need to activate it first.
 
 Once the server starts, open **http://localhost:5000** in your browser.
 You should see the dashboard. Select **Open Line Builder** to use the existing
-editor and simulation, or **Open PQPR** for project/process planning. Line
-Balancing & Yamazumi remains Planned for the next stage. Keep the terminal open while
+editor and simulation, **Open PQPR** for project/process planning, or
+**Open Line Balancing & Yamazumi** for operator assignments and workload charts. Keep the terminal open while
 using the app.
 
 Create or load a scenario, configure its stations and operators, then select
@@ -79,6 +80,10 @@ Create or load a scenario, configure its stations and operators, then select
 to open a scenario file from your PC and **Export JSON** to download a portable
 copy. Older supported formats are converted without changing the original file.
 See `DATA_FORMAT.md` for compatibility rules.
+
+For balancing, add process steps directly, add operators and assign work.
+PQPR import is optional. Drag handles or chart segments to reorder/assign steps. Set takt time and review the manual-workload chart. Save plans
+with **Save plan** or export portable plan JSON. See `BALANCING_FORMAT.md`.
 
 Press **Ctrl+C** in the terminal to stop the server.
 
@@ -128,7 +133,7 @@ Python packages through your distribution's package manager.
 | Browser cannot connect | Check the terminal for errors and confirm the server is still running. Use `localhost:5000`, not a file opened directly in the browser. |
 | Missing styles, images or templates | Check that the complete `static/` and `templates/` folders were copied and filenames match. |
 | Old interface after updating files | Restart the app and refresh the browser with Ctrl+F5 on Windows. |
-| Scenario cannot be saved | Check that the project folder and `scenarios/` folder are writable. |
+| Scenario/project/plan cannot be saved | Check that the project folder and the corresponding data folder are writable. |
 
 ## References
 

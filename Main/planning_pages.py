@@ -15,8 +15,8 @@ MODULES = [
      'features': ['Product framesizes', 'Ordered process routes', 'Process counts']},
     {'id': 'line-balancing', 'title': 'Line Balancing & Yamazumi', 'icon': 'YZ',
      'description': 'Assign processes to operators and compare their workloads against takt time.',
-     'status': 'planned', 'endpoint': 'planning.line_balancing',
-     'features': ['Operator assignments', 'Workload comparison', 'Yamazumi charts']},
+     'status': 'available', 'endpoint': 'balancing.editor',
+     'features': ['Independent process steps', 'Operator assignments', 'Draggable Yamazumi charts']},
 ]
 
 
@@ -33,6 +33,3 @@ def planned_module(module_id):
                            active_module=module_id, module=module)
 
 
-@planning.route('/line-balancing')
-def line_balancing():
-    return planned_module('line-balancing')

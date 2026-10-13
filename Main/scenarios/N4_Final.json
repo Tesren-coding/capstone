@@ -7,442 +7,442 @@
       "h": 70,
       "has_part": false,
       "name": "Hardware removal",
-      "w": 120,
-      "x": 2167.9359348622224,
-      "y": 290.702545760476,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 180,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 2167.9359348622224,
+      "y": 290.702545760476
     },
     "2": {
       "cycle_time": 100,
       "h": 70,
       "has_part": false,
       "name": "Pre-chem strip insp and blending",
-      "w": 120,
-      "x": 2041.8360666657863,
-      "y": 292.20318554949023,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 100,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 2041.8360666657863,
+      "y": 292.20318554949023
     },
     "3": {
       "cycle_time": 180,
       "h": 70,
       "has_part": false,
       "name": "TBC removal grit blast",
-      "w": 120,
-      "x": 1920.8015244576045,
-      "y": 289.391502659882,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 180,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1920.8015244576045,
+      "y": 289.391502659882
     },
     "4": {
       "cycle_time": 30,
       "h": 70,
       "has_part": false,
       "name": "T/U mask",
-      "w": 120,
-      "x": 1795.6596040526044,
-      "y": 286.18380924062865,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 30,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1795.6596040526044,
+      "y": 286.18380924062865
     },
     "5": {
       "cycle_time": 60,
       "h": 70,
       "has_part": false,
       "name": "post chem-strip insp and blend",
-      "w": 120,
-      "x": 1673.6326000665672,
-      "y": 284.2568099929785,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 60,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1673.6326000665672,
+      "y": 284.2568099929785
     },
     "6": {
       "cycle_time": 5,
       "h": 70,
       "has_part": true,
       "name": "apply developer",
-      "w": 120,
-      "x": 1542.0039252821828,
-      "y": 288.34517129666,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 5,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1542.0039252821828,
+      "y": 288.34517129666
     },
     "7": {
       "cycle_time": 10,
       "h": 70,
       "has_part": true,
       "name": "etching ",
-      "w": 120,
-      "x": 1424.4607100363194,
-      "y": 288.541837975639,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 10,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1424.4607100363194,
+      "y": 288.541837975639
     },
     "8": {
       "cycle_time": 10,
       "h": 70,
       "has_part": false,
       "name": "FPI",
-      "w": 120,
-      "x": 1300.396192389988,
-      "y": 289.81918568263376,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 10,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1300.396192389988,
+      "y": 289.81918568263376
     },
     "9": {
       "cycle_time": 80,
       "h": 70,
       "has_part": false,
       "name": "Incoming insp",
-      "w": 120,
-      "x": 1175.928787945467,
-      "y": 290.015852361613,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 80,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1175.928787945467,
+      "y": 290.015852361613
     },
     "10": {
       "cycle_time": 50,
       "h": 70,
       "has_part": true,
       "name": "Weld blend repair",
-      "w": 120,
-      "x": 1056.8937316176896,
-      "y": 292.8288738370648,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 50,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1056.8937316176896,
+      "y": 292.8288738370648
     },
     "11": {
       "cycle_time": 60,
       "h": 70,
       "has_part": false,
       "name": "Mech braze prep",
-      "w": 120,
-      "x": 927.3969627187058,
-      "y": 290.0191988262211,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 60,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 927.3969627187058,
+      "y": 290.0191988262211
     },
     "12": {
       "cycle_time": 20,
       "h": 70,
       "has_part": false,
       "name": "Nickel blast",
-      "w": 120,
-      "x": 800.3508814870878,
-      "y": 294.29992689305254,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 20,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 800.3508814870878,
+      "y": 294.29992689305254
     },
     "13": {
       "cycle_time": 40,
       "h": 70,
       "has_part": false,
       "name": "braze material application",
-      "w": 120,
-      "x": 674.0947025277969,
-      "y": 287.99418382815344,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 40,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 674.0947025277969,
+      "y": 287.99418382815344
     },
     "14": {
       "cycle_time": 90,
       "h": 70,
       "has_part": false,
       "name": "Post braze blending",
-      "w": 120,
-      "x": 549.1598249168981,
-      "y": 286.60714761720595,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 90,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 549.1598249168981,
+      "y": 286.60714761720595
     },
     "15": {
       "cycle_time": 175,
       "h": 70,
       "has_part": false,
       "name": "TE cooling Hole EDM",
-      "w": 120,
-      "x": 423.12901812742797,
-      "y": 288.6843079182033,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 175,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 423.12901812742797,
+      "y": 288.6843079182033
     },
     "16": {
       "cycle_time": 60,
       "h": 70,
       "has_part": false,
       "name": "Dymax 750",
-      "w": 120,
-      "x": 301.3916289065234,
-      "y": 292.232521275188,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 60,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 301.3916289065234,
+      "y": 292.232521275188
     },
     "17": {
       "cycle_time": 90,
       "h": 70,
       "has_part": true,
       "name": "Clear Overspray",
-      "w": 120,
-      "x": 1011.2530441363995,
-      "y": 689.0694557404976,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 90,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1011.2530441363995,
+      "y": 689.0694557404976
     },
     "18": {
       "cycle_time": 15,
       "h": 70,
       "has_part": true,
       "name": "Robotic polish",
-      "w": 120,
-      "x": 1135.9950342526588,
-      "y": 690.899427979353,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 15,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1135.9950342526588,
+      "y": 690.899427979353
     },
     "19": {
       "cycle_time": 120,
       "h": 70,
       "has_part": false,
       "name": "Manual polish",
-      "w": 120,
-      "x": 1263.8292842115266,
-      "y": 684.3927171440215,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 120,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1263.8292842115266,
+      "y": 684.3927171440215
     },
     "20": {
       "cycle_time": 150,
       "h": 70,
       "has_part": false,
       "name": "clear cooling hole + install cover plate",
-      "w": 120,
-      "x": 1386.914747504278,
-      "y": 683.8555305273112,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 150,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1386.914747504278,
+      "y": 683.8555305273112
     },
     "21": {
       "cycle_time": 10,
       "h": 70,
       "has_part": true,
       "name": "Final Bluelight",
-      "w": 120,
-      "x": 1516.5783391332038,
-      "y": 680.8956944631208,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 10,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1516.5783391332038,
+      "y": 680.8956944631208
     },
     "22": {
       "cycle_time": 145,
       "h": 70,
       "has_part": false,
       "name": "airflow",
-      "w": 120,
-      "x": 1643.8258879799405,
-      "y": 677.150814427157,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 145,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1643.8258879799405,
+      "y": 677.150814427157
     },
     "23": {
       "cycle_time": 60,
       "h": 70,
       "has_part": true,
       "name": "pre-assembly insp + part mark",
-      "w": 120,
-      "x": 1772.9505114056049,
-      "y": 676.4156225456239,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 60,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1772.9505114056049,
+      "y": 676.4156225456239
     },
     "24": {
       "cycle_time": 120,
       "h": 70,
       "has_part": false,
       "name": "hardware installation",
-      "w": 120,
-      "x": 1900.200130398836,
-      "y": 672.5232586279999,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 120,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 1900.200130398836,
+      "y": 672.5232586279999
     },
     "25": {
       "cycle_time": 60,
       "h": 70,
       "has_part": false,
       "name": "TBC patch repair",
-      "w": 120,
-      "x": 2024.8233881281478,
-      "y": 671.5914000674877,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 60,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 2024.8233881281478,
+      "y": 671.5914000674877
     },
     "26": {
       "cycle_time": 60,
       "h": 70,
       "has_part": false,
       "name": "Final insp",
-      "w": 120,
-      "x": 2149.705036272377,
-      "y": 671.0535441578556,
       "processes": [
         {
+          "auto_time": 0,
           "id": "p1",
-          "name": "Process 1",
           "manual_time": 60,
-          "auto_time": 0
+          "name": "Process 1"
         }
-      ]
+      ],
+      "w": 120,
+      "x": 2149.705036272377,
+      "y": 671.0535441578556
     }
   },
   "operators": {
@@ -971,7 +971,7 @@
         },
         {
           "action": "drop",
-          "loc": "14"
+          "loc": "OUT_19"
         },
         {
           "action": "pick",
@@ -1231,7 +1231,7 @@
     },
     "SWIP_28": {
       "h": 60,
-      "has_part": true,
+      "has_part": false,
       "name": "SWIP_28",
       "type": "swip",
       "w": 90,

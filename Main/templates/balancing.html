@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='balancing.css') }}">{% endblock %}
+{% block content %}
+<div id="balance-app" data-schema-version="{{ balancing_schema_version }}">
+    <section class="balance-heading"><div><p class="eyebrow">Operator work planning</p><h2>Line Balancing &amp; Yamazumi</h2><p>Build your own process list, assign it to operators and compare manual workload with takt time.</p></div><span id="balance-draft-state" class="balance-badge">New plan</span></section>
+    <div class="balance-filebar" aria-label="Balancing plan files">
+        <button id="balance-new" data-file-action>New plan</button><button id="balance-save" data-file-action class="balance-primary">Save plan</button>
+        <select id="balance-plan-select" data-file-action aria-label="Saved balancing plans"><option value="">Select saved plan</option></select><button id="balance-load" data-file-action>Load</button>
+        <button id="balance-import" data-file-action>Import plan JSON</button><input id="balance-plan-file" type="file" accept=".json,application/json" hidden><button id="balance-export" data-file-action>Export plan JSON</button>
+    </div>
+    <p id="balance-status" class="balance-message" role="status" aria-live="polite">Add processes and operators to start. PQPR import is optional.</p>
+    <fieldset id="balance-workspace"><legend class="balance-sr-only">Line balancing editor</legend>
+        <details id="balance-source-panel" class="balance-panel balance-source"><summary>Optional: start from PQPR</summary>
+            <div class="balance-source-actions"><select id="balance-source-select" aria-label="Saved PQPR projects"><option value="">Select a saved PQPR project</option></select><button id="balance-use-saved">Use saved PQPR</button><button id="balance-use-draft">Use PQPR draft</button><button id="balance-import-pqpr">Import PQPR JSON</button><input id="balance-pqpr-file" type="file" accept=".json,application/json" hidden></div>
+            <div class="balance-source-actions"><label for="balance-frame-select">Framesize</label><select id="balance-frame-select" disabled><option value="">Load a PQPR project first</option></select><button id="balance-create" class="balance-primary" disabled>Create plan from framesize</button><a href="{{ url_for('pqpr.editor') }}">Open PQPR</a></div>
+            <p id="balance-source-preview" class="balance-help">PQPR edits are copied into a plan. Changes in a plan do not change the PQPR project.</p>
+        </details>
+        <div class="balance-plan-fields"><label>Plan / line name<input id="balance-plan-name" value="New balance plan"></label><label>Takt time (min)<input id="balance-takt" type="number" min="0.001" step="any" value="30" placeholder="Unknown"></label><label class="balance-scope"><input id="balance-out-of-line" type="checkbox"> Include orange out-of-line processes</label></div>
+        <p id="balance-active-source" class="balance-help">Independent plan. Add and edit processes below.</p>
+        <div class="balance-stats"><div><strong id="balance-active-count">0</strong><span>Steps in scope</span></div><div><strong id="balance-unassigned-count">0</strong><span>Unassigned steps</span></div><div><strong id="balance-over-count">0</strong><span>Operators above takt</span></div><div><strong id="balance-efficiency">—</strong><span>Balance efficiency</span></div><div><strong id="balance-min-operators">—</strong><span>Manual-time minimum operators</span></div></div>
+        <p id="balance-analysis-note" class="balance-analysis-note" role="status"></p>
+        <section class="balance-panel" aria-labelledby="balance-chart-title">
+            <div class="balance-panel-heading"><div><h3 id="balance-chart-title">Yamazumi — manual workload</h3><p>Drag work segments between bars or vertically to reorder. First step is at the bottom. Drop into an empty bar to assign work.</p></div><div class="balance-chart-controls"><label>Color by<select id="balance-color-mode"><option value="process">PQPR process category</option><option value="value">Value-add classification</option></select></label><button id="balance-export-chart">Export chart SVG</button></div></div>
+            <div id="balance-chart-legend" class="balance-legend"></div><div id="balance-chart" class="balance-chart-wrap"></div><p id="balance-chart-info" class="balance-chart-info">Drag a segment to move or reorder work. Hover for details; click to find its row.</p>
+            <p class="balance-help">Automatic machine time is listed separately. Walking, waiting, shared-machine capacity and hit-rate percentages are not calculated in this manual-workload chart.</p>
+        </section>
+        <section class="balance-panel" aria-labelledby="balance-operators-title"><div class="balance-panel-heading"><div><h3 id="balance-operators-title">Operators and work sequence</h3><p>Add operators, then assign steps in the table below. Drag handles to reorder operators or work steps. Drag a step to another operator.</p></div><button id="balance-add-operator" class="balance-primary">+ Operator</button></div><div id="balance-operators" class="balance-operators"></div></section>
+        <section class="balance-panel" aria-labelledby="balance-steps-title"><div class="balance-panel-heading"><div><h3 id="balance-steps-title">Processes and assignments</h3><p>Add, edit or remove your own steps. Drag the row handle to reorder the process list or assign work to an operator.</p></div><div class="balance-chart-controls"><button id="balance-add-step" class="balance-primary">+ Process step</button><button id="balance-clear-assignments">Clear assignments</button></div></div><div id="balance-unassigned-drop" class="balance-unassigned-drop">Drop a work step here to unassign it.</div><div class="balance-table-wrap"><table class="balance-step-table"><thead><tr><th>Order</th><th>Process / category</th><th>Case</th><th>Manual (min)</th><th>Auto (min)</th><th>Operator</th><th>Value add</th><th>Actions</th></tr></thead><tbody id="balance-steps"></tbody></table></div></section>
+    </fieldset>
+    <dialog id="balance-save-dialog" class="save-dialog"><h3>Save balancing plan</h3><p id="balance-save-message"></p><div class="dialog-actions"><button data-save-mode="overwrite">Overwrite and save</button><button data-save-mode="duplicate">Save new version</button><button data-save-mode="cancel">Cancel</button></div></dialog>
+</div>
+{% endblock %}
+{% block scripts %}<script type="module" src="{{ url_for('static', filename='js/balancing.js') }}"></script>{% endblock %}
