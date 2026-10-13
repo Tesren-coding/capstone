@@ -1,0 +1,51 @@
+#setup-app { max-width:1500px; margin:auto; color:#294b76; }
+.setup-heading { margin-bottom:22px; }
+.setup-heading h2 { font-size:28px; margin:8px 0; }
+.setup-heading p:last-child { color:#607189; font-size:14px; line-height:1.6; }
+#setup-app button { font:inherit; font-size:12px; border:1px solid #c7d5e7; border-radius:5px; padding:9px 12px; background:white; color:#294b76; cursor:pointer; }
+#setup-app button:hover { background:#edf3fb; }
+#setup-app button.setup-primary { background:#1e3c78; color:white; border-color:#1e3c78; }
+#setup-app button:disabled { opacity:.5; cursor:default; }
+#setup-app input,#setup-app select { font:inherit; font-size:13px; border:1px solid #c7d5e7; padding:8px; border-radius:4px; background:white; min-width:0; max-width:100%; }
+#setup-app input:focus,#setup-app select:focus { outline:2px solid #638fc5; outline-offset:1px; }
+#setup-app a { color:#315585; font-size:13px; }
+.setup-filebar,.setup-source-controls,.setup-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.setup-filebar select,.setup-source-controls select { max-width:360px; }
+.setup-message { padding:12px 15px; background:#eaf0f8; color:#35547d; border-radius:5px; font-size:13px; line-height:1.6; margin:14px 0 20px; white-space:pre-line; }
+.setup-message--error { background:#fcebec; color:#922c35; }
+.setup-panel { background:white; border:1px solid #dce2eb; border-radius:8px; padding:22px; margin-bottom:20px; min-width:0; }
+.setup-panel h3 { font-size:17px; margin-bottom:14px; }
+.setup-panel-heading { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.setup-panel-heading h3 { margin:0; }
+.setup-help { color:#607189; font-size:12px; line-height:1.7; margin:12px 0; }
+#setup-workspace { border:0; min-width:0; }
+.setup-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+.setup-name-label { display:flex; flex-direction:column; gap:8px; font-weight:600; font-size:13px; margin:18px 0; }
+#setup-name { font-size:16px!important; padding:11px!important; }
+.setup-summary { padding:14px 18px; background:#e8eff9; font-size:13px; border-radius:6px; margin:0 0 20px; line-height:1.7; }
+.setup-grid { display:grid; grid-template-columns:minmax(260px,1fr) minmax(0,2fr); gap:20px; }
+.setup-station { display:flex; align-items:center; gap:8px; padding:10px 0; border-bottom:1px solid #e3e8ef; }
+.setup-station input { flex:1; width:80px; }
+.setup-station span { font-size:12px; min-width:26px; }
+.setup-table-wrap { overflow:auto; }
+.setup-table { width:100%; border-collapse:collapse; font-size:12px; min-width:560px; }
+.setup-table th,.setup-table td { padding:10px 8px; border-bottom:1px solid #e3e8ef; text-align:left; }
+.setup-table td:first-child { min-width:150px; overflow-wrap:anywhere; }
+.setup-table small { display:block; color:#708197; font-size:10px; margin-top:4px; }
+.setup-table select { max-width:240px!important; }
+.setup-mode-label { display:flex; flex-direction:column; gap:8px; font-size:13px; }
+.setup-mode-label select { width:max-content; }
+.setup-stock-fields { display:flex; flex-wrap:wrap; gap:18px; margin:16px 0; }
+.setup-stock-fields label { display:flex; flex-direction:column; gap:7px; font-size:12px; }
+.setup-stock-fields input { width:150px; }
+#setup-preview-notes { color:#6f5b32; background:#fbf6e9; padding:15px 20px 15px 35px; font-size:12px; line-height:1.8; margin-bottom:20px; border-radius:6px; }
+.setup-preview-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.setup-preview-card { border:1px solid #dce2eb; border-radius:6px; padding:15px; font-size:12px; overflow-wrap:anywhere; }
+.setup-preview-card h4 { margin:0 0 8px; }
+.setup-preview-card ol { padding-left:20px; line-height:1.8; }
+.builder-review { max-width:1500px; margin:14px auto; background:#fff8e8; border:1px solid #e2c67e; color:#705420; padding:15px 18px; border-radius:6px; font-size:13px; line-height:1.7; }
+.builder-review p { margin:8px 0; }
+.builder-review button { padding:8px 12px; border:1px solid #c5ad6e; background:white; border-radius:4px; color:#705420; cursor:pointer; margin-right:8px; }
+.builder-review--complete { background:#edf6ee; border-color:#a5c7ad; color:#315c3a; }
+@media(max-width:900px) { .setup-grid,.setup-preview-grid { grid-template-columns:minmax(0,1fr); } }
+@media(max-width:600px) { .setup-panel { padding:16px; } .setup-heading h2 { font-size:24px; } .setup-station { flex-wrap:wrap; } }

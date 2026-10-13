@@ -1,4 +1,5 @@
 {
+  "schema_version": 2,
   "takt_time": 108,
   "stations": {
     "1": {
@@ -6,6 +7,14 @@
       "h": 70,
       "has_part": false,
       "name": "Hardware installation",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 93,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 2107.2631438106146,
       "y": 196.41156789085943
@@ -13,8 +22,16 @@
     "2": {
       "cycle_time": 60,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "Post-chem insp + blend",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 60,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1983.5057776598687,
       "y": 196.41156789085943
@@ -24,6 +41,14 @@
       "h": 70,
       "has_part": false,
       "name": "Cavity flush (post chem)",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 14,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1859.7484115091233,
       "y": 196.41156789085943
@@ -33,6 +58,14 @@
       "h": 70,
       "has_part": true,
       "name": "Inc insp",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 87,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1735.9910453583777,
       "y": 196.41156789085943
@@ -42,6 +75,14 @@
       "h": 70,
       "has_part": false,
       "name": "Sidewall mask (weld blend)",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 15,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1609.2152068624926,
       "y": 196.41156789085943
@@ -51,6 +92,14 @@
       "h": 70,
       "has_part": true,
       "name": "Weld blend repair",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 60,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1482.439368366607,
       "y": 193.5998850012511
@@ -60,6 +109,14 @@
       "h": 70,
       "has_part": true,
       "name": "Mech braze prep",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 60,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1355.6635298707215,
       "y": 196.4115678908594
@@ -69,6 +126,14 @@
       "h": 70,
       "has_part": true,
       "name": "Braze application",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 60,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1228.8876913748359,
       "y": 196.41156789085943
@@ -76,8 +141,16 @@
     "9": {
       "cycle_time": 15,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "Sidewall core mask (post braze)",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 15,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1071.927129427549,
       "y": 196.41156789085943
@@ -87,6 +160,14 @@
       "h": 70,
       "has_part": false,
       "name": "Post-braze insp blend",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 60,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 939.1143462413834,
       "y": 196.41156789085943
@@ -96,6 +177,14 @@
       "h": 70,
       "has_part": false,
       "name": "Sidewall core mask removal",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 5,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 794.227673674657,
       "y": 196.4115678908594
@@ -105,6 +194,14 @@
       "h": 70,
       "has_part": false,
       "name": "Install sleeve",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 40,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 664.4333628336316,
       "y": 196.41156789085946
@@ -114,6 +211,14 @@
       "h": 70,
       "has_part": true,
       "name": "Cavity flush before dymax",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 14,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 272.0319579654145,
       "y": 196.41156789085943
@@ -123,6 +228,14 @@
       "h": 70,
       "has_part": false,
       "name": "Dymax ",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 40,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 145.25611946952895,
       "y": 193.40187973642873
@@ -130,8 +243,16 @@
     "17": {
       "cycle_time": 60,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "Clear overspray",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 60,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 148.07302733545987,
       "y": 506.6074530620565
@@ -141,6 +262,14 @@
       "h": 70,
       "has_part": false,
       "name": "Manual Polish",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 75,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 269.0134856202743,
       "y": 509.41913595166494
@@ -150,6 +279,14 @@
       "h": 70,
       "has_part": false,
       "name": "Clear cooling hole",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 75,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 392.77085177101964,
       "y": 512.4288241060957
@@ -159,24 +296,61 @@
       "h": 70,
       "has_part": true,
       "name": "Developer",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 5,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 519.5466902669052,
       "y": 512.4288241060957
     },
     "21": {
-      "cycle_time": 5,
+      "cycle_time": 135,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "Bluelight",
+      "processes": [
+        {
+          "auto_time": 40,
+          "id": "p1",
+          "manual_time": 5,
+          "name": "Inc bluelight"
+        },
+        {
+          "id": "p2",
+          "name": "Laser bluelight",
+          "manual_time": 5,
+          "auto_time": 40
+        },
+        {
+          "id": "p3",
+          "name": "Final bluelight",
+          "manual_time": 5,
+          "auto_time": 40
+        }
+      ],
       "w": 120,
       "x": 643.3040564176506,
-      "y": 515.4385122605265
+      "y": 515.4385122605265,
+      "next_process_id": 4
     },
     "22": {
       "cycle_time": 40,
       "h": 70,
       "has_part": false,
       "name": "airflow",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 40,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 773.0983672586763,
       "y": 518.4482004149573
@@ -186,6 +360,14 @@
       "h": 70,
       "has_part": false,
       "name": "Pre-assm + part mark",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 39,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 905.911150444842,
       "y": 521.4578885693882
@@ -195,6 +377,14 @@
       "h": 70,
       "has_part": true,
       "name": "Hardware Inst (ISW)",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 63,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1035.7054612858678,
       "y": 518.4482004149573
@@ -202,8 +392,16 @@
     "25": {
       "cycle_time": 84,
       "h": 70,
-      "has_part": true,
+      "has_part": false,
       "name": "Hardware Inst (OSW)",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 84,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1153.4258827463325,
       "y": 518.4482004149573
@@ -213,6 +411,14 @@
       "h": 70,
       "has_part": true,
       "name": "TBC patch repair",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 60,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1280.806414679846,
       "y": 518.4482004149572
@@ -222,6 +428,14 @@
       "h": 70,
       "has_part": false,
       "name": "Final Insp",
+      "processes": [
+        {
+          "auto_time": 0,
+          "id": "p1",
+          "manual_time": 35,
+          "name": "Process 1"
+        }
+      ],
       "w": 120,
       "x": 1418.849884639455,
       "y": 518.4482004149573
@@ -246,7 +460,8 @@
         },
         {
           "action": "work",
-          "loc": "1"
+          "loc": "1",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -270,7 +485,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "26"
+          "loc": "26",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -290,7 +506,8 @@
         },
         {
           "action": "work",
-          "loc": "23"
+          "loc": "23",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -322,7 +539,8 @@
         },
         {
           "action": "work",
-          "loc": "17"
+          "loc": "17",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -334,7 +552,8 @@
         },
         {
           "action": "work",
-          "loc": "16"
+          "loc": "16",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -358,7 +577,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "20"
+          "loc": "20",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -370,7 +590,8 @@
         },
         {
           "action": "work",
-          "loc": "21"
+          "loc": "21",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -382,7 +603,8 @@
         },
         {
           "action": "work",
-          "loc": "19"
+          "loc": "19",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -394,7 +616,8 @@
         },
         {
           "action": "work",
-          "loc": "21"
+          "loc": "21",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -406,7 +629,8 @@
         },
         {
           "action": "work",
-          "loc": "21"
+          "loc": "21",
+          "process": "p1"
         }
       ],
       "x": 569.4529088333261,
@@ -422,7 +646,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "15"
+          "loc": "15",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -442,7 +667,8 @@
         },
         {
           "action": "work",
-          "loc": "18"
+          "loc": "18",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -466,7 +692,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "4"
+          "loc": "4",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -498,7 +725,8 @@
         },
         {
           "action": "work",
-          "loc": "9"
+          "loc": "9",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -510,7 +738,8 @@
         },
         {
           "action": "work",
-          "loc": "10"
+          "loc": "10",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -522,7 +751,8 @@
         },
         {
           "action": "work",
-          "loc": "11"
+          "loc": "11",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -554,7 +784,8 @@
         },
         {
           "action": "work",
-          "loc": "25"
+          "loc": "25",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -578,7 +809,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "24"
+          "loc": "24",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -610,7 +842,8 @@
         },
         {
           "action": "work",
-          "loc": "2"
+          "loc": "2",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -630,7 +863,8 @@
         },
         {
           "action": "work",
-          "loc": "21"
+          "loc": "21",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -642,7 +876,8 @@
         },
         {
           "action": "work",
-          "loc": "20"
+          "loc": "20",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -654,7 +889,8 @@
         },
         {
           "action": "work",
-          "loc": "3"
+          "loc": "3",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -678,7 +914,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "6"
+          "loc": "6",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -698,7 +935,8 @@
         },
         {
           "action": "work",
-          "loc": "12"
+          "loc": "12",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -722,7 +960,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "7"
+          "loc": "7",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -742,7 +981,8 @@
         },
         {
           "action": "work",
-          "loc": "22"
+          "loc": "22",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -766,7 +1006,8 @@
       "sequence": [
         {
           "action": "work",
-          "loc": "8"
+          "loc": "8",
+          "process": "p1"
         },
         {
           "action": "pick",
@@ -778,7 +1019,8 @@
         },
         {
           "action": "work",
-          "loc": "27"
+          "loc": "27",
+          "process": "p1"
         },
         {
           "action": "pick",

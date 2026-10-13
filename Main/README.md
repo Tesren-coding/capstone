@@ -3,7 +3,7 @@
 ## Install this update
 
 Copy these files into the matching folders in your project. Keep your existing
-`scenarios`, `pqpr_projects` and `balancing_plans` folders. Restart the Python app and refresh the browser (Ctrl+F5 if
+`scenarios`, `pqpr_projects`, `balancing_plans` and `builder_setups` folders. Restart the Python app and refresh the browser (Ctrl+F5 if
 an old interface is still cached).
 
 Open PowerShell in the project folder:
@@ -21,7 +21,7 @@ still open the builder directly.
 
 For full Windows, macOS and Linux setup instructions, see `requirements.md`.
 
-## Dashboard and planning apps: stages 1–3
+## Dashboard and planning apps: stages 1–4
 
 The main page is a hub for three apps:
 
@@ -91,8 +91,43 @@ silently alter the plan. **Create plan** explicitly replaces the current plan
 and prompts for unsaved changes. See `BALANCING_FORMAT.md` for calculations,
 file fields and the workload assumptions.
 
-PQPR is now connected to line balancing. Mapping the plan to physical stations
-and generating a Line Builder scenario remains Stage 4.
+Stage 4 connects balance plans to physical stations and generates a new Line
+Builder draft. In Line Balancing, select **Build line from this plan**; in Line
+Builder, use **Build a line from a balance plan**. The mapping editor also opens
+directly at `/builder-setup`.
+
+## Build a line from a balance plan
+
+Choose a balance draft, saved plan or plan JSON. Map in-scope steps to physical
+stations; several processes may share a station. Rename/add/remove stations
+and drag their handles to change station order. Stations always generate in a
+C-shaped path: Incoming at the top right, upper stations running left, then
+lower stations running right to Outgoing. Save/load/export setups
+in `builder_setups/` so the mapping can be reused.
+
+In Line Balancing, hover station gaps in **C-shaped line and row break** to
+preview the turn; click a gap or drag the Row break marker to save it. Adjust
+the copied break in the setup page after grouping processes into physical
+stations. Old plans without a marker use a balanced split.
+
+Generate **Work steps only** for any operator count and complete material
+movement in Line Builder. For exactly one active operator, you can choose a
+proposed **IN → stations → OUT** sequence with input/output quantities. The
+Incoming and Outgoing boxes are included in both modes. The transport
+proposal follows that operator's work order and keeps consecutive processes
+at one station together. Multi-operator handoffs are configured manually.
+
+Generation rejects unknown timings, zero-total simulated processes, unassigned
+steps and unmapped steps. Preview the station groups and operator sequences,
+then export scenario JSON or open a new Line Builder draft. Opening prompts
+before replacing dirty builder work and never saves over an existing scenario.
+
+In Line Builder, review positions, Pick/Drop steps, buffers and starting parts,
+then use **Check setup and mark reviewed** before running. Work-only drafts
+without deliveries or starting parts cannot pass the review. Core edits make
+the review stale. The simulation still checks actual machine/material flow.
+Source plan/setup snapshots and IDs remain as provenance; later edits do not
+silently change a generated scenario. See `BUILDER_SETUP_FORMAT.md`.
 
 ## Code organization
 
@@ -111,7 +146,10 @@ browser module system rather than globals or manually ordered script tags.
 | `static/js/draw.js` | Draw canvas objects, banner and legend. |
 | `static/js/positions.js` | Derive coordinates from the scenario. |
 | `static/js/canvas-tools.js` | Shared zoom/pan, station text and helpers. |
-| `app.py` | Line-builder web requests and application setup. |
+| `app.py` | Line-builder web requests and application/blueprint setup. |
+| `line_layout.py`, `static/js/line-layout.js` | Matching C-layout geometry and hover/click/drag break preview. |
+| `builder_setup.py`, `builder_setup_routes.py` | Station mapping, plan-to-scenario conversion, setup storage and review HTTP endpoints. |
+| `static/js/builder-setup.js` | Mapping editor, preview, setup files and new-draft handoff. |
 | `planning_pages.py` | Dashboard, module registry and staged app entry pages. |
 | `scenario_store.py` | JSON file revisions/save modes, with per-app validation. |
 | `pqpr_routes.py`, `pqpr_store.py`, `pqpr_schema.py`, `pqpr_excel.py` | PQPR HTTP, persistence, validation and Excel import. |
@@ -266,3 +304,52 @@ processes, builder work steps, balance process rows, operators and assigned
 work. IDs/references follow their records. Handles support Alt+Arrow keys.
 Balance format 1 migrates to format 2 in memory; existing files are preserved
 until explicitly overwritten. Pointer cancellation/outside drops make no edit.
+
+Stage 4 checks cover shared physical stations, timing/work-order preservation,
+scope exclusions, invalid/incomplete generation, mapping revisions/round trips,
+new-draft ownership, canceled handoffs, review status/invalidation, source-file
+preservation and a generated single-operator simulation through playback.
+
+### Line Builder station alignment and operator snap points
+
+New stations created manually or generated from Line Balancing / Builder Setup are
+**150 × 96 canvas units**. The C-shaped layout and its preview share these
+station dimensions; Incoming remains above-right and the row break is still
+selected in the planning tools. Previously saved scenario station widths,
+heights and positions are **not** automatically resized or realigned on import.
+
+In Line Builder, press **+ Station** and move the pointer near an existing
+station to see a snapping preview. New and dragged stations snap their edges,
+centers or adjacent positions with a small gap, using a screen-relative
+threshold that works at different zoom levels. Dragging empty space remains
+possible away from nearby alignment points. When inserting on an occupied
+station position, the builder proposes the nearest unoccupied adjacent slot.
+
+Press **+ Operator**, or select an existing station/operator, to see dotted
+operator-sized circles along the top, right, bottom and left sides of each
+station. Click or drag an operator close to an unoccupied circle to attach it.
+The circle center sits **26 canvas units** outside the station edge: a 16-unit
+operator radius plus a 10-unit clear gap. Operators attached to a station
+follow it when moved; dragging an operator away detaches it, while moving it
+near another free circle attaches it there. Only one operator can occupy a
+particular side anchor; freely placed operators may still overlap other items.
+
+The optional operator field `attached_to` is stored as:
+
+```json
+"attached_to": {"station_id": "2", "side": "left"}
+```
+
+Attachments survive save/import/export, station ID swaps/reorders and older
+v1/v2 scenario migrations. Deleting a station detaches its operators without
+moving their final position. The scenario format remains **v2** because this
+field is optional and does not alter the simulation data model.
+
+**Tests:** `node tests/test_builder_snapping.mjs` tests canvas geometry and
+zoom-aware snapping; `python -m unittest discover -s tests -p
+"test_operator_attachments.py"` tests optional metadata and legacy geometry;
+`python -m unittest discover -s tests -p "test_layout_geometry_standalone.py"`
+tests generated C layouts. `python tests/browser_builder_smoke.py` tests the
+real Line Builder canvas using Playwright and Chromium with a mocked HTTP API.
+The complete app suite still runs via `python -m unittest discover -s tests -v`
+when dependencies in `requirements.txt` are installed.

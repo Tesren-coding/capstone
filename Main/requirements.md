@@ -35,17 +35,18 @@ Extract the project ZIP before running it. Keep these files and folders together
 
 | Location | Contents |
 | --- | --- |
-| Project root | `app.py`, `simulation.py`, `scenario_schema.py`, `scenario_store.py`, `planning_pages.py`, `pqpr_routes.py`, `pqpr_schema.py`, `pqpr_store.py`, `pqpr_excel.py`, `balancing_routes.py`, `balancing_schema.py`, `balancing_store.py`, `requirements.txt`; `main.py` is an optional launcher. |
-| `templates/` | `base.html`, `dashboard.html`, `module_planned.html`, `builder.html`, `simulate.html`, `pqpr.html`, `balancing.html`. |
-| `static/` | `style.css`, `pqpr.css`, `balancing.css`. |
-| `static/js/` | `builder.js`, `playback.js`, `api.js`, `pqpr.js`, `pqpr-model.js`, `balancing.js`, `balancing-model.js`, `yamazumi.js`, `drag-sort.js`, `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
+| Project root | `app.py`, `simulation.py`, `scenario_schema.py`, `scenario_store.py`, `planning_pages.py`, `pqpr_routes.py`, `pqpr_schema.py`, `pqpr_store.py`, `pqpr_excel.py`, `balancing_routes.py`, `balancing_schema.py`, `balancing_store.py`, `builder_setup.py`, `builder_setup_routes.py`, `line_layout.py`, `requirements.txt`; `main.py` is an optional launcher. |
+| `templates/` | `base.html`, `dashboard.html`, `module_planned.html`, `builder.html`, `simulate.html`, `pqpr.html`, `balancing.html`, `builder_setup.html`. |
+| `static/` | `style.css`, `pqpr.css`, `balancing.css`, `builder_setup.css`, `line_layout.css`. |
+| `static/js/` | `builder.js`, `playback.js`, `api.js`, `pqpr.js`, `pqpr-model.js`, `balancing.js`, `balancing-model.js`, `yamazumi.js`, `builder-setup.js`, `line-layout.js`, `drag-sort.js`, `canvas-tools.js`, `draw.js`, `positions.js`, `state.js`. |
 | `static/images/` | `Part.png`, `SWIP.png`; keep the exact filenames and capitalisation. |
 | `scenarios/` | Saved line-builder scenario JSON files; created when needed. |
 | `pqpr_projects/` | Saved PQPR project JSON files; created when needed. |
 | `balancing_plans/` | Saved balancing plan JSON files; created when needed. |
+| `builder_setups/` | Saved station mapping/setup JSON files; created when needed. |
 
-When transferring the project to another PC, copy your `scenarios/`, `pqpr_projects/` and `balancing_plans/`
-folders to keep your saved layouts, PQPR projects and balance plans. Create a fresh virtual environment on each PC.
+When transferring the project to another PC, copy your `scenarios/`, `pqpr_projects/`, `balancing_plans/` and `builder_setups/`
+folders to keep your saved layouts, PQPR projects, balance plans and station mappings. Create a fresh virtual environment on each PC.
 
 ## 3. First-time setup on Windows
 
@@ -53,7 +54,7 @@ Install Python, then open **PowerShell** in the folder containing `app.py`.
 For example, replace the path below with your actual project folder:
 
 ```powershell
-cd "C:\path\to\capstone-balancing-stage3"
+cd "C:\path\to\capstone-c-layout"
 python --version
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
@@ -84,6 +85,10 @@ See `DATA_FORMAT.md` for compatibility rules.
 For balancing, add process steps directly, add operators and assign work.
 PQPR import is optional. Drag handles or chart segments to reorder/assign steps. Set takt time and review the manual-workload chart. Save plans
 with **Save plan** or export portable plan JSON. See `BALANCING_FORMAT.md`.
+
+Select **Build line from this plan** to map processes to stations and generate
+a new scenario draft. Review material movement in Line Builder before running.
+Save mappings with **Save setup**. See `BUILDER_SETUP_FORMAT.md`.
 
 Press **Ctrl+C** in the terminal to stop the server.
 

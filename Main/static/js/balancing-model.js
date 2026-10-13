@@ -23,6 +23,7 @@ export function addStep(plan) {
     plan.steps.push(step);return step;
 }
 export function removeStep(plan,id) {
+    if(plan.line_layout?.break_after_step_id===id)plan.line_layout.break_after_step_id=null;
     plan.operators.forEach(op=>{op.sequence=op.sequence.filter(sid=>sid!==id);});
     plan.steps=plan.steps.filter(s=>s.id!==id);
 }

@@ -1,9 +1,13 @@
 {% extends "base.html" %}
 
+{% block styles %}<link rel="stylesheet" href="{{ url_for('static', filename='builder_setup.css') }}">{% endblock %}
 {% block content %}
+<div id="planning-handoff-notice" class="builder-review" hidden><strong>A generated line draft is ready.</strong><p>Your current builder work has been kept.</p><button id="apply-planning-handoff">Open generated draft</button><button id="dismiss-planning-handoff">Discard generated draft</button></div>
+<div id="planning-review-panel" class="builder-review" hidden><strong id="planning-review-heading">Generated line · material-flow review required</strong><p>Review Pick/Drop routes, buffers and starting parts, operator work order, station positions and process timings. The checks verify references and sequence rules; simulation still tests actual flow.</p><p id="planning-review-state" role="status"></p><button id="planning-review-button">Check setup and mark reviewed</button><a href="{{ url_for('bridge.editor') }}">Return to station mapping</a></div>
+
 
 <section class="card">
-    <h2>Scenario Builder</h2>
+    <h2>Scenario Builder</h2><a href="{{ url_for('bridge.editor') }}" style="font-size:13px;">Build a line from a balance plan</a>
     <p id="status-text">Click a button below, then click the canvas to place an item.</p>
 </section>
 

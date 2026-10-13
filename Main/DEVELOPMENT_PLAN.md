@@ -18,7 +18,7 @@ changing existing scenario files.
 - Builder drafts remain in the current tab when navigating through the dashboard.
 
 PQPR is available through Stage 2; Line Balancing & Yamazumi is available
-through Stage 3. Stage 4 connects planning records to physical simulation layouts.
+through Stage 3. Stage 4 now connects planning records to physical simulation layouts.
 
 ## Stage 2 — PQPR: product/process routing (completed)
 
@@ -78,25 +78,43 @@ Station reorder remaps references simultaneously.
 Hit-rate percentages were explicitly deferred. Always/Sometimes remains the
 PQPR input, without probability-weighted workloads.
 
-## Stage 4 — Connect planning data to the line builder
+## Stage 4 — Connect planning data to the line builder (completed)
 
-Goal: turn a selected route and balancing plan into a reviewable starting
-scenario for layout and simulation.
+`/builder-setup` copies a selected balance plan, defines physical stations and
+maps its active steps. Multiple processes can share a station; operator names,
+source IDs, manual/auto times and in-scope work order are retained. Station
+handles control station order. C-layout previews in both planning pages let
+users hover/click/drag a row break. New scenarios always include Incoming at
+top right, upper stations running left and lower stations running right to Outgoing. Setups save/load/import/export in their
+own format-1 contract and `builder_setups/` directory with revisions/copies.
 
-Map processes to physical stations, assign operators and generate Work steps.
-Review material movement separately: a process route alone does not specify
-pick/drop steps, input/output locations, buffers or starting parts. Preserve
-source planning IDs as metadata so users can trace a generated scenario back
-to its plan. Save a generated scenario as a new version/copy.
+Generate a Work-only draft for any operator count. For exactly one operator
+with active work, an optional serial IN → stations → OUT transport proposal
+keeps consecutive same-station processes together and handles revisits.
+Incoming/Outgoing boxes are included in both modes. Multi-operator Pick/Drop
+handoffs, buffers and starting station inventory remain an
+explicit material setup in Line Builder. Unknown/zero-total simulated times,
+unassigned active steps and unmapped steps are identified before generation.
 
-Acceptance: generation preserves selected processes and timings; references
-are valid; incomplete movement setup is identified before running; changing
-a plan does not overwrite a manually edited scenario without an explicit action.
+Preview/export does not write scenario files. Opening creates a new builder
+draft, clears loaded-file association and prompts before replacing dirty work.
+Source snapshots and per-record IDs retain provenance. Existing edited/saved
+scenarios are unchanged unless explicitly replaced/saved through normal modes.
+
+Generated scenarios require structural/material review before running. Core
+edits invalidate review; Work-only drafts without deliveries or starting parts
+cannot pass it. The simulation still detects actual flow failures. Existing
+scenario formats and their previous run behavior remain compatible.
+
+Acceptance verified: source/time/order preservation, shared stations, scope
+omissions, references, setup revisions/round trips, canceled/applied handoff,
+original-file preservation, review invalidation and a generated single-operator
+scenario through simulation/playback. See `BUILDER_SETUP_FORMAT.md`.
 
 ## Architecture direction
 
 `planning_pages.py` owns the dashboard, module registry and staged entry pages.
-`app.py` retains existing line-builder HTTP endpoints and registers the PQPR and balancing
+`app.py` retains existing line-builder HTTP endpoints and registers the PQPR, balancing and builder-setup
 blueprints. PQPR uses separate templates, modules, schema and Excel-reader code;
 its storage reuses the existing JSON/revision engine with per-app validation. Balancing has its own route, schema, storage adapter,
 controller, pure model, chart renderer and stylesheet. Future app features can

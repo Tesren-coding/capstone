@@ -1,6 +1,7 @@
 import {escapeHtml as esc} from './canvas-tools.js';
 import {requestJson,postJson} from './api.js';
 import {blankPlan,activeStep,assignmentMap,assignStep,addOperator,addStep,removeStep,placeStep,analysePlan,timeText,valueClasses,processColors,valueColors} from './balancing-model.js';
+import {installLineLayout} from './line-layout.js';
 import {yamazumiSvg,chartDrop} from './yamazumi.js';
 import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from './drag-sort.js';
 
@@ -22,6 +23,12 @@ function remember(){try{sessionStorage.setItem(draftKey,JSON.stringify({plan,loa
 function confirmReplace(){return !dirty()||confirm('Replace your unsaved balancing plan?');}
 function notifyChanged(){update();remember();}
 function operatorOptions(selected){return '<option value="">Unassigned</option>'+plan.operators.map(op=>`<option value="${op.id}" ${selected===op.id?'selected':''}>${esc(op.name)} (${op.id})</option>`).join('');}
+
+const lineLayout=installLineLayout(document.getElementById('balance-line-layout'),{
+    items:()=>plan.steps.filter(s=>activeStep(plan,s)).map((s,index)=>({id:s.id,name:s.name,label:'S'+(index+1)})),
+    selection:()=>plan.line_layout?.break_after_step_id||null,
+    change:id=>{plan.line_layout={shape:'c',break_after_step_id:id};notifyChanged();say('C-shaped row break saved in this plan. Build Line setup will use it.');}
+});
 
 function renderSteps(){
     const assigned=assignmentMap(plan);
@@ -61,7 +68,7 @@ function update({keepOperators=false}={}){
     if(analysis.active_steps)notes.push('Minimum operators is a manual-time lower bound. Walking, waiting, precedence and machines may require more.');
     document.getElementById('balance-analysis-note').textContent=notes.join(' ');
     if(!keepOperators)renderOperators(analysis);
-    renderChart(analysis);
+    renderChart(analysis);lineLayout.render();
     if(plan.source){const frame=plan.source.project.framesizes.find(f=>f.id===plan.framesize_id);document.getElementById('balance-active-source').textContent=`Active plan: ${plan.source.project.project_name} / ${frame.name}${frame.stage?' / Stage '+frame.stage:''}. PQPR origin retained for reference; this process list is independently editable.`;}
     else document.getElementById('balance-active-source').textContent='Independent plan. Add and edit processes below.';
     document.getElementById('balance-clear-assignments').disabled=!plan.operators.some(op=>op.sequence.length);

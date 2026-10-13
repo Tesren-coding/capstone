@@ -5,6 +5,7 @@ Migrations work on a deep copy; callers retain their original data.
 """
 from copy import deepcopy
 import json
+import hashlib
 import math
 
 CURRENT_SCHEMA_VERSION = 2
@@ -90,7 +91,7 @@ def migrate_v1_to_v2(data):
 
 MIGRATIONS = {1: migrate_v1_to_v2}
 
-def validate_scenario(scenario, require_runnable=True):
+def validate_scenario(scenario, require_runnable=True, skip_planning_review=False):
     data = normalize_scenario(scenario)
     errors = []
     try:
@@ -165,6 +166,7 @@ def validate_scenario(scenario, require_runnable=True):
             value = box.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
                 errors.append(f'Box {bid}: {field} must be an integer ≥ {minimum}.')
+    occupied_operator_slots = set()
     for op, operator in operators.items():
         if not isinstance(operator, dict):
             errors.append(f'Operator {op} must be an object.')
@@ -176,6 +178,21 @@ def validate_scenario(scenario, require_runnable=True):
             errors.append(f'Operator {op}: color must contain three integer RGB values from 0 to 255.')
         if any(not is_number(operator.get(k), minimum=-float('inf')) for k in ('x', 'y')):
             errors.append(f'Operator {op} needs finite X and Y coordinates.')
+        # Optional v2 layout metadata; old files keep their original positions.
+        # A station ID is a string because JSON object keys are strings.
+        if 'attached_to' in operator:
+            anchor = operator['attached_to']
+            if (not isinstance(anchor, dict) or
+                set(anchor) != {'station_id', 'side'} or
+                not isinstance(anchor.get('station_id'), str) or
+                anchor['station_id'] not in stations or
+                anchor.get('side') not in ('top', 'right', 'bottom', 'left')):
+                errors.append(f'Operator {op}: attached_to must identify an existing station and one of its four sides.')
+            else:
+                slot = (anchor['station_id'], anchor['side'])
+                if slot in occupied_operator_slots:
+                    errors.append(f'Operator {op}: station side S{slot[0]} {slot[1]} is already occupied.')
+                occupied_operator_slots.add(slot)
         sequence = operator.get('sequence')
         if not isinstance(sequence, list) or (require_runnable and not sequence):
             errors.append(f'Operator {op} needs a sequence list; running requires at least one step.')
@@ -218,8 +235,35 @@ def validate_scenario(scenario, require_runnable=True):
                 carrying = False
         if require_runnable and carrying:
             errors.append(f'Operator {op}: sequence must drop its last carried part before repeating.')
+    if require_runnable and not skip_planning_review and planning_review_required(data) and not planning_reviewed(data):
+        errors.append('Generated line needs material-flow review. In Line Builder, complete Pick/Drop steps and parts, then use Check setup and mark reviewed. Changes after review require another check.')
     if errors:
         raise ScenarioValidationError(errors)
     return data
 
 
+
+def planning_review_required(data):
+    origin = data.get('planning_origin')
+    return isinstance(origin, dict) and origin.get('material_review_required') is True
+
+
+def scenario_review_fingerprint(data):
+    # Core state only: provenance is a historical snapshot, not live configuration.
+    core = {key: data.get(key) for key in ('schema_version', 'takt_time', 'stations', 'operators', 'boxes')}
+    return hashlib.sha256(json.dumps(core, sort_keys=True, separators=(',', ':'), ensure_ascii=False, allow_nan=False).encode('utf-8')).hexdigest()
+
+
+def planning_reviewed(data):
+    return planning_review_required(data) and data['planning_origin'].get('review_fingerprint') == scenario_review_fingerprint(data)
+
+
+def review_planning_scenario(original):
+    data = validate_scenario(original, skip_planning_review=True)
+    if not planning_review_required(data):
+        raise ScenarioValidationError(['This scenario was not generated from a planning setup.'])
+    actions = [s['action'] for op in data['operators'].values() for s in op['sequence']]
+    if 'work' in actions and 'drop' not in actions and not any(station.get('has_part') for station in data['stations'].values()):
+        raise ScenarioValidationError(['This Work-only draft has no starting parts or deliveries. Add input parts and Pick/Drop steps in the operator sequences before marking it reviewed.'])
+    data['planning_origin']['review_fingerprint'] = scenario_review_fingerprint(data)
+    return data

@@ -1,6 +1,10 @@
 import {CanvasViewport, drawStationText, stationProcesses, stationTotals, escapeHtml} from "./canvas-tools.js";
 import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-sort.js";
 import {requestJson, postJson} from "./api.js";
+import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
+import {OPERATOR_RADIUS, operatorPoint, operatorSlots, nearestOperatorSlot,
+    stationInsertPosition, snapStation, updateAttachedOperators, detachStationOperators,
+    remapOperatorAttachments} from "./builder-snapping.js";
 
 // builder.js — Scenario builder behavior.
 // ============================================================
@@ -24,13 +28,15 @@ let loadedFilename = null;
 let loadedRevision = null;
 let lastSavedSnapshot = null;
 const DRAFT_KEY = 'capstone-builder-draft';
+const HANDOFF_KEY = 'capstone-builder-handoff';
+let reviewSnapshot=null,reviewRequest=0;
 
 let nextStationId  = 1;
 let nextOperatorId = 1;
 let nextBoxId       = 1;
 
 const SIZES = {
-    station: { w: 150, h: 96 },
+    station: { w: STATION_WIDTH, h: STATION_HEIGHT },
     swip:    { w: 90,  h: 60 },
     in:      { w: 90,  h: 60 },
     out:     { w: 90,  h: 60 },
@@ -46,6 +52,29 @@ let draggedItem  = null;
 let dragOffset   = { x: 0, y: 0 };
 let selectedItem = null;
 let placingType  = null;
+let placementPreview = null;
+let dragStart = null;
+
+function snapOperatorToSlot(op, x, y, ignoreId = null) {
+    const slot = nearestOperatorSlot(scenario.stations, scenario.operators, x, y, view.scale, ignoreId);
+    if (slot) {
+        op.x = slot.x; op.y = slot.y;
+        op.attached_to = {station_id: slot.station_id, side: slot.side};
+    } else {
+        op.x = x; op.y = y;
+        delete op.attached_to;
+    }
+    return slot;
+}
+
+function moveStation(id, x, y) {
+    const station = scenario.stations[id];
+    const position = snapStation(scenario.stations, id, x, y, station.w, station.h, view.scale);
+    station.x = position.x;
+    station.y = position.y;
+    updateAttachedOperators(scenario.stations, scenario.operators, id);
+    return position;
+}
 
 // ============================================================
 // PART 2 — Placement mode
@@ -57,7 +86,12 @@ document.querySelectorAll(".add-btn").forEach(btn => {
         placingType = btn.getAttribute("data-type");
         canvas.style.cursor = "crosshair";
         cancelPlaceBtn.style.display = "inline-block";
-        statusText.textContent = `Click on the canvas to place a new ${placingType}.`;
+        placementPreview = null;
+        statusText.textContent = placingType === 'operator'
+            ? 'Place near a dotted circle to attach the operator to a station side.'
+            : placingType === 'station' ? 'New stations align and snap next to existing stations.'
+            : `Click on the canvas to place a new ${placingType}.`;
+        drawFrame();
     });
 });
 
@@ -68,6 +102,7 @@ cancelPlaceBtn.addEventListener("click", () => {
 
 function exitPlacementMode() {
     placingType = null;
+    placementPreview = null;
     canvas.style.cursor = "default";
     cancelPlaceBtn.style.display = "none";
 }
@@ -77,9 +112,11 @@ function exitPlacementMode() {
 // ============================================================
 function createStation(x, y) {
     const id = nextStationId++;
+    const position = stationInsertPosition(scenario.stations, x, y,
+        SIZES.station.w, SIZES.station.h, view.scale);
     scenario.stations[id] = {
-        x: x - SIZES.station.w / 2,
-        y: y - SIZES.station.h / 2,
+        x: position.x,
+        y: position.y,
         w: SIZES.station.w,
         h: SIZES.station.h,
         name: "New Station",
@@ -95,12 +132,9 @@ function createOperator(x, y) {
     const color = DEFAULT_COLORS[colorIndex % DEFAULT_COLORS.length];
     colorIndex++;
     scenario.operators[id] = {
-        x: x,
-        y: y,
-        name: id,
-        color: color,
-        sequence: [],
+        x, y, name: id, color, sequence: [],
     };
+    snapOperatorToSlot(scenario.operators[id], x, y, id);
     return id;
 }
 
@@ -146,7 +180,7 @@ function getCanvasMousePos(evt) {
 }
 
 canvas.addEventListener("click", (evt) => {
-    if (!placingType) return;
+    if (!placingType || view.isPanning || evt.shiftKey) return;
 
     const pos = getCanvasMousePos(evt);
 
@@ -167,6 +201,14 @@ canvas.addEventListener("click", (evt) => {
 // PART 5 — Drag + selection logic
 // ============================================================
 function findItemAtPosition(mx, my) {
+    // Operator circles take precedence if an old, freely positioned operator
+    // overlaps a station rectangle.
+    for (const id in scenario.operators) {
+        const op = scenario.operators[id];
+        if (Math.hypot(mx - op.x, my - op.y) <= OPERATOR_RADIUS + 4 / view.scale) {
+            return {type: 'operator', id, pos: op};
+        }
+    }
     for (const id in scenario.stations) {
         const p = scenario.stations[id];
         if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
@@ -177,13 +219,6 @@ function findItemAtPosition(mx, my) {
         const p = scenario.boxes[id];
         if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
             return { type: "box", id, pos: p };
-        }
-    }
-    for (const id in scenario.operators) {
-        const p = scenario.operators[id];
-        const dist = Math.hypot(mx - p.x, my - p.y);
-        if (dist <= 20) {
-            return { type: "operator", id, pos: p };
         }
     }
     return null;
@@ -200,6 +235,7 @@ canvas.addEventListener("mousedown", (evt) => {
         selectedItem = item;
         dragOffset.x = mouse.x - item.pos.x;
         dragOffset.y = mouse.y - item.pos.y;
+        dragStart = {x: item.pos.x, y: item.pos.y};
         canvas.style.cursor = "grabbing";
         openSidePanel(item);
     } else {
@@ -211,26 +247,40 @@ canvas.addEventListener("mousedown", (evt) => {
 });
 
 canvas.addEventListener("mousemove", (evt) => {
-    if (!draggedItem || view.isPanning) return;
-
+    if (view.isPanning) return;
     const mouse = getCanvasMousePos(evt);
-    const newX  = mouse.x - dragOffset.x;
-    const newY  = mouse.y - dragOffset.y;
-
-    if (draggedItem.type === "operator") {
-        scenario.operators[draggedItem.id].x = newX;
-        scenario.operators[draggedItem.id].y = newY;
+    if (!draggedItem) {
+        if (placingType === 'station') {
+            placementPreview = stationInsertPosition(scenario.stations, mouse.x, mouse.y,
+                STATION_WIDTH, STATION_HEIGHT, view.scale);
+        } else if (placingType === 'operator') {
+            placementPreview = nearestOperatorSlot(scenario.stations, scenario.operators,
+                mouse.x, mouse.y, view.scale) || {x: mouse.x, y: mouse.y};
+        } else return;
+        drawFrame();
+        return;
+    }
+    const newX = mouse.x - dragOffset.x;
+    const newY = mouse.y - dragOffset.y;
+    if (draggedItem.type === 'operator') {
+        const op = scenario.operators[draggedItem.id];
+        // Small pointer movements keep an already attached operator in place;
+        // moving away detaches it. Releasing near ANY vacant slot reattaches.
+        if (dragStart && Math.hypot(newX - dragStart.x, newY - dragStart.y) * view.scale < 5) return;
+        snapOperatorToSlot(op, newX, newY, draggedItem.id);
+    } else if (draggedItem.type === 'station') {
+        moveStation(draggedItem.id, newX, newY);
     } else {
         draggedItem.pos.x = newX;
         draggedItem.pos.y = newY;
     }
-
     drawFrame();
 });
 
 canvas.addEventListener("mouseup", () => {
     if (draggedItem) {
         draggedItem = null;
+        dragStart = null;
         canvas.style.cursor = placingType ? "crosshair" : "default";
     }
 });
@@ -238,8 +288,10 @@ canvas.addEventListener("mouseup", () => {
 canvas.addEventListener("mouseleave", () => {
     if (draggedItem) {
         draggedItem = null;
+        dragStart = null;
         canvas.style.cursor = placingType ? "crosshair" : "default";
     }
+    if (placementPreview) { placementPreview = null; drawFrame(); }
 });
 
 // ============================================================
@@ -430,6 +482,8 @@ function changeStationId(oldId, newId) {
             else if (displaced && loc === newId) step.loc = oldId;
         });
     });
+    remapOperatorAttachments(scenario.operators,
+        displaced ? {[oldId]: newId, [newId]: oldId} : {[oldId]: newId});
     nextStationId = Math.max(nextStationId, Number(newId) + 1);
     if (selectedItem?.type === 'station') {
         if (String(selectedItem.id) === oldId) selectedItem.id = newId;
@@ -491,7 +545,8 @@ function reorderStations(id,beforeId) {
     const ordered=[...slots];moveBefore(ordered,id,beforeId,item=>item);
     const original={...scenario.stations},mapping=Object.fromEntries(ordered.map((old,index)=>[old,slots[index]]));
     ordered.forEach((old,index)=>{scenario.stations[slots[index]]=original[old];});
-    Object.values(scenario.operators).forEach(op=>op.sequence.forEach(step=>{if(Object.hasOwn(mapping,String(step.loc)))step.loc=mapping[String(step.loc)];}));
+    Object.values(scenario.operators).forEach(op=>(op.sequence||[]).forEach(step=>{if(Object.hasOwn(mapping,String(step.loc)))step.loc=mapping[String(step.loc)];}));
+    remapOperatorAttachments(scenario.operators, mapping);
     if(selectedItem?.type==='station')selectedItem.id=mapping[String(selectedItem.id)];
     draggedItem=null;openSidePanel(selectedItem);drawFrame();statusText.textContent='Station order updated. Operator references follow each station.';return mapping[id];
 }
@@ -672,6 +727,7 @@ deleteItemBtn.addEventListener("click", () => {
     if (!selectedItem) return;
 
     if (selectedItem.type === "station") {
+        detachStationOperators(scenario.operators, selectedItem.id);
         delete scenario.stations[selectedItem.id];
     } else if (selectedItem.type === "operator") {
         delete scenario.operators[selectedItem.id];
@@ -694,6 +750,7 @@ const BOX_COLORS = {
 };
 
 function drawFrame() {
+    updatePlanningReview();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
@@ -783,6 +840,40 @@ function drawFrame() {
         }
     }
 
+    // Dotted rings are the available attachment points. Show them while
+    // placing/moving an operator, or while inspecting a station/operator.
+    if (placingType === 'operator' || draggedItem?.type === 'operator' ||
+        selectedItem?.type === 'operator' || selectedItem?.type === 'station') {
+        const slots = operatorSlots(scenario.stations, scenario.operators,
+            draggedItem?.type === 'operator' ? draggedItem.id : null);
+        ctx.save();
+        ctx.lineWidth = 1.6 / view.scale;
+        ctx.strokeStyle = '#52799b';
+        ctx.setLineDash([3 / view.scale, 4 / view.scale]);
+        for (const slot of slots) {
+            ctx.beginPath();
+            ctx.arc(slot.x, slot.y, OPERATOR_RADIUS, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // Preview new station/attached operator without creating saved items.
+    if (placementPreview && placingType) {
+        ctx.save();
+        ctx.strokeStyle = '#1686c1'; ctx.lineWidth = 2 / view.scale;
+        ctx.setLineDash([5 / view.scale, 4 / view.scale]);
+        if (placingType === 'station') {
+            ctx.fillStyle = 'rgba(22,134,193,0.10)';
+            ctx.fillRect(placementPreview.x, placementPreview.y, STATION_WIDTH, STATION_HEIGHT);
+            ctx.strokeRect(placementPreview.x, placementPreview.y, STATION_WIDTH, STATION_HEIGHT);
+        } else if (placingType === 'operator') {
+            ctx.beginPath(); ctx.arc(placementPreview.x, placementPreview.y, OPERATOR_RADIUS, 0, Math.PI*2);
+            ctx.stroke();
+        }
+        ctx.restore();
+    }
+
     // ---- draw operators ----
     for (const id in scenario.operators) {
         const op = scenario.operators[id];
@@ -790,7 +881,7 @@ function drawFrame() {
 
         ctx.fillStyle = `rgb(${r}, ${g}, ${b2})`;
         ctx.beginPath();
-        ctx.arc(op.x, op.y, 16, 0, Math.PI * 2);
+        ctx.arc(op.x, op.y, OPERATOR_RADIUS, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.strokeStyle = "#ffffff";
@@ -843,12 +934,17 @@ function applyLoadedScenario(data) {
     Object.assign(scenario.stations,  data.stations  || {});
     Object.assign(scenario.operators, data.operators || {});
     Object.assign(scenario.boxes,     data.boxes     || {});
+    // Older scenarios without attached_to remain free-floating, with original
+    // coordinates/sizes untouched. Attached operators use their side anchor.
+    Object.keys(scenario.stations).forEach(id =>
+        updateAttachedOperators(scenario.stations, scenario.operators, id));
 
     Object.values(scenario.stations).forEach(updateStationTotal);
     taktTimeInput.value = data.takt_time || 30;
 
     nextStationId = nextOperatorId = nextBoxId = 1;
     draggedItem = null;
+    dragStart = null;
     exitPlacementMode();
     Object.keys(scenario.stations).forEach(sid => {
         const n = parseInt(sid, 10);
@@ -868,6 +964,7 @@ function applyLoadedScenario(data) {
     openSidePanel(null);
     view.reset();
     drawFrame();
+    restorePlanningReview();
 }
 
 function rememberDraft() {
@@ -875,6 +972,52 @@ function rememberDraft() {
         sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ scenario: serializeScenario(), loadedFilename, loadedRevision, lastSavedSnapshot, suggestedFilename }));
     } catch (err) { console.warn('Could not keep the builder draft:', err); }
 }
+function reviewCore() {
+    const data=serializeScenario();
+    return JSON.stringify(Object.fromEntries(['schema_version','takt_time','stations','operators','boxes'].map(key=>[key,data[key]])));
+}
+function updatePlanningReview() {
+    const required=scenarioExtras.planning_origin?.material_review_required===true;
+    const panel=document.getElementById('planning-review-panel');panel.hidden=!required;
+    if(!required)return;
+    const reviewed=reviewSnapshot!==null&&reviewSnapshot===reviewCore();
+    panel.classList.toggle('builder-review--complete',reviewed);
+    document.getElementById('planning-review-heading').textContent=reviewed?'Generated line · setup reviewed':'Generated line · material-flow review required';
+    document.getElementById('planning-review-state').textContent=reviewed?'Current setup checked. Changes to the layout, timings, inventory or work sequence require another review.':'Complete the material setup, then check it before running. Work-only drafts need deliveries or starting parts.';
+}
+async function restorePlanningReview() {
+    reviewSnapshot=null;updatePlanningReview();const token=++reviewRequest;
+    if(scenarioExtras.planning_origin?.material_review_required!==true)return;
+    const snapshot=reviewCore();
+    try{const data=await postJson('/builder-setup/api/review-status',{scenario:serializeScenario()});if(token===reviewRequest&&snapshot===reviewCore()&&data.reviewed){reviewSnapshot=snapshot;updatePlanningReview();}}
+    catch{ /* The review button reports validation errors for incomplete drafts. */ }
+}
+document.getElementById('planning-review-button').onclick=async()=>{
+    const button=document.getElementById('planning-review-button');button.disabled=true;
+    const snapshot=reviewCore();
+    try{const data=await postJson('/builder-setup/api/review',{scenario:serializeScenario()});
+        if(snapshot!==reviewCore())throw new Error('The setup changed during the check. Review the current version again.');
+        scenarioExtras.planning_origin=data.scenario.planning_origin;reviewSnapshot=reviewCore();updatePlanningReview();rememberDraft();statusText.textContent='Setup reviewed. Run Simulation to check actual machine and material flow.';
+    }catch(error){reviewSnapshot=null;updatePlanningReview();statusText.textContent='Review incomplete: '+error.message;}
+    finally{button.disabled=false;}
+};
+for(const event of ['input','change','click'])document.addEventListener(event,()=>queueMicrotask(updatePlanningReview));
+async function applyPlanningHandoff() {
+    const pending=JSON.parse(sessionStorage.getItem(HANDOFF_KEY)||'null');
+    if(!pending?.scenario)return;
+    document.getElementById('planning-handoff-notice').hidden=false;
+    const result=await postJson('/import-scenario',{scenario:pending.scenario});
+    const hasItems=Object.values(scenario).some(items=>Object.keys(items).length>0)||taktTimeInput.value!=='30';
+    if(hasItems&&JSON.stringify(serializeScenario())!==lastSavedSnapshot&&!confirm('Open the generated line as a new draft and replace your unsaved builder changes? Save or export your current work first if you want to keep it.')){
+        statusText.textContent='Generated draft not opened. Your current builder changes are kept.';return;
+    }
+    applyLoadedScenario(result.scenario);loadedFilename=loadedRevision=lastSavedSnapshot=null;
+    suggestedFilename=pending.suggestedFilename||'generated_line.json';rememberDraft();sessionStorage.removeItem(HANDOFF_KEY);
+    document.getElementById('planning-handoff-notice').hidden=true;statusText.textContent='Opened a new generated line draft. Review material movement before simulation; Save Scenario creates a new file or version.';
+}
+document.getElementById('apply-planning-handoff').onclick=async()=>{try{await applyPlanningHandoff();}catch(error){statusText.textContent='Generated draft could not open: '+error.message;}};
+document.getElementById('dismiss-planning-handoff').onclick=()=>{sessionStorage.removeItem(HANDOFF_KEY);document.getElementById('planning-handoff-notice').hidden=true;};
+
 function chooseSaveMode(filename) {
     return new Promise(resolve => {
         const dialog = document.getElementById('save-dialog');
@@ -1034,6 +1177,8 @@ async function initBuilder() {
             lastSavedSnapshot = draft.lastSavedSnapshot || null;
             suggestedFilename = draft.suggestedFilename || loadedFilename || 'scenario.json';
         }
+        if(new URLSearchParams(location.search).get('source')==='planning')await applyPlanningHandoff();
+        else document.getElementById('planning-handoff-notice').hidden=!sessionStorage.getItem(HANDOFF_KEY);
     } catch (err) {
         statusText.textContent = 'Could not restore the previous draft: ' + err.message;
         const previous = sessionStorage.getItem(DRAFT_KEY);

@@ -9,11 +9,13 @@ from simulation import run_scenario_simulation, ScenarioRuntimeError
 from planning_pages import planning, MODULES
 from pqpr_routes import pqpr
 from balancing_routes import balancing
+from builder_setup_routes import bridge
 
 app = Flask(__name__)
 app.register_blueprint(planning)
 app.register_blueprint(pqpr)
 app.register_blueprint(balancing)
+app.register_blueprint(bridge)
 scenario_store = ScenarioStore(Path(__file__).resolve().parent / 'scenarios')
 
 # One latest run per server process; per-user run storage is a separate enhancement.

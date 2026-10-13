@@ -38,6 +38,24 @@ steps, change categories/applicability and edit times/names; PQPR stays unchange
 Later PQPR changes do not update the plan. Creating another plan from PQPR
 replaces the current steps and assignments and prompts for unsaved changes.
 
+## C-shaped layout preference
+
+The **C-shaped line and row break** panel previews one station per active
+process. Incoming begins at top right; stations run left, turn down at the
+chosen boundary, then continue right on the lower row to Outgoing.
+
+Hover a gap between station tokens to preview the turn without changing data.
+Click the gap, or drag the Row break marker to it, to commit the choice. Escape
+cancels; the focused marker supports Alt+Arrow keys. The saved optional
+`line_layout` record has shape `c` and `break_after_step_id` (a stable step ID or
+null for the balanced default). Reordering follows that ID; removing its step
+clears it. Fewer than two active steps have no selectable interior gap.
+
+Build Line setup copies the preference. Its own C preview lets you adjust the
+break between physical stations after grouping processes. Generation always
+includes Incoming and Outgoing endpoint boxes, while the sequence mode still
+controls whether Pick/Drop movement is proposed. See `BUILDER_SETUP_FORMAT.md`.
+
 ## Timing and calculations
 
 All timing fields use minutes and may be decimal. Manual/auto times must be
@@ -113,6 +131,7 @@ Top-level fields:
 | `next_step_id` | Monotonic positive counter for new independent step IDs (`s1`, `s2`, …). |
 | `include_out_of_line` | Whether orange processes are in workload scope; defaults false. |
 | `chart_color_mode` | `process` or `value`. |
+| `line_layout` | Optional `{shape: "c", break_after_step_id: <step ID or null>}`. |
 
 Each step has `id`, `process_id`, `name`, `category`, `applicability`, `included`,
 `manual_time`, `auto_time`, and `value_class`. `id` owns assignments; `process_id` is an optional source provenance ID (null
@@ -158,5 +177,6 @@ page behavior. `templates/balancing.html` contains markup only.
 `tests/test_balancing.py` checks independent plans, format-1 migrations, source copies, timing/scope
 rules, incomplete results, duplicate assignments, revisions and round trips. Browser verification
 also compares the browser's calculations with the backend on exported plans.
-Stage 4 will map this plan to physical stations and review material movement
-before generating a line-builder scenario.
+Stage 4 is available through **Build line from this plan**. It maps a copied
+plan to physical stations, previews a new scenario, and requires material-flow
+review in Line Builder. See `BUILDER_SETUP_FORMAT.md`.

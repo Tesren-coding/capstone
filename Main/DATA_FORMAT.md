@@ -7,7 +7,9 @@ PQPR projects use a separate version-1 contract documented in `PQPR_FORMAT.md`.
 They are stored in `pqpr_projects/`, not in the scenario directory.
 Balance plans also have a separate version-2 contract in `BALANCING_FORMAT.md`
 and are stored in `balancing_plans/`. Creating a plan does not create or change
-a line-builder scenario.
+a line-builder scenario. Stage 4 setups use a separate format 1 in
+`BUILDER_SETUP_FORMAT.md`. Their explicit conversion creates a new scenario
+with source IDs/snapshots and a material-flow review requirement.
 
 ## Version policy
 
@@ -175,3 +177,37 @@ Tests cover migrations, input preservation, repeat normalization, unchanged
 legacy simulation results, future-format rejection, ordered migrations,
 draft/run validation, storage revisions, original-file preservation and
 import/export round trips.
+
+## Generated planning scenarios
+
+Stage 4 adds optional `planning_origin` provenance to scenario format 2.
+`setup_snapshot` retains a copied balance plan and station mapping; per-process
+`source_step_id` and per-operator `source_operator_id` link generated records
+to that snapshot. It is historical metadata, not a live synchronization.
+
+Generated scenarios set `material_review_required: true` and begin without a
+`review_fingerprint`. Run validation rejects unreviewed/stale generated cores;
+the setup-review endpoint checks structural runnable rules and records a hash
+of normalized schema version, takt, stations, operators and boxes. Core edits
+require another review. Draft save/import/export remains supported. The
+review does not establish actual flow feasibility; simulation checks remain
+authoritative for runtime material/machine behavior. Existing scenarios without
+this metadata keep their previous behavior. See `BUILDER_SETUP_FORMAT.md`.
+
+Generated C-layout scenarios also retain `planning_origin.layout`, including
+shape `c`, original physical station order and effective break station ID.
+Balance plans and setups accept optional layout preferences; older files
+without them default to a balanced C split during new generation. Already
+saved scenarios keep their coordinates. Both generation modes include the
+Incoming/Outgoing endpoint boxes. See `BUILDER_SETUP_FORMAT.md`.
+
+#### Optional operator-to-station layout attachment (scenario v2)
+
+A Line Builder operator can optionally include
+`"attached_to": {"station_id": "1", "side": "top"}`. The station ID must refer
+to an existing station and the side must be `top`, `right`, `bottom` or `left`.
+No two operators can occupy the same attachment side. The operator's `x`/`y`
+remain absolute center coordinates; attached positions use the station side
+midpoint offset outward by an operator radius (16) and a clear gap (10).
+Free-floating operators and previously saved station sizes remain unchanged.
+The field is ignored for simulation movement; it is only for layout editing.

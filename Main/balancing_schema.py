@@ -150,6 +150,12 @@ def validate_plan(original):
                 errors.append(f'Step {identifier} is assigned more than once. Each step can have one operator.')
             else:
                 assigned.add(identifier)
+    layout = plan.get('line_layout')
+    if layout is not None:
+        if not isinstance(layout, dict) or layout.get('shape') != 'c':
+            errors.append('line_layout must use shape c.')
+        elif layout.get('break_after_step_id') is not None and (not isinstance(layout['break_after_step_id'], str) or layout['break_after_step_id'] not in step_ids):
+            errors.append('The C-shape break must refer to a process step in this plan.')
     if not legacy:
         step_counter = plan.get('next_step_id')
         if not isinstance(step_counter, int) or isinstance(step_counter, bool) or step_counter < 1:
