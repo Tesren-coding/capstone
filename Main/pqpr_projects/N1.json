@@ -1,0 +1,102 @@
+{
+  "document_type": "pqpr",
+  "framesizes": [
+    {
+      "applicability": {},
+      "component": "Nozzle",
+      "id": "f1",
+      "name": "7FA.04",
+      "stage": "1"
+    },
+    {
+      "applicability": {},
+      "component": "Nozzle",
+      "id": "f2",
+      "name": "7HA.01",
+      "stage": "1"
+    },
+    {
+      "applicability": {},
+      "component": "Nozzle",
+      "id": "f3",
+      "name": "9HA.01",
+      "stage": "1"
+    },
+    {
+      "applicability": {},
+      "component": "Nozzle",
+      "id": "f4",
+      "name": "9HA.02",
+      "stage": "1"
+    }
+  ],
+  "next_framesize_id": 5,
+  "next_process_id": 10,
+  "processes": [
+    {
+      "auto_time": null,
+      "category": "out_of_line",
+      "id": "p1",
+      "manual_time": null,
+      "name": "Unbox, Receive & Identification"
+    },
+    {
+      "auto_time": null,
+      "category": "out_of_line",
+      "id": "p2",
+      "manual_time": null,
+      "name": "Seal Removal"
+    },
+    {
+      "auto_time": null,
+      "category": "out_of_line",
+      "id": "p3",
+      "manual_time": null,
+      "name": "Disassembly"
+    },
+    {
+      "auto_time": null,
+      "category": "in_line",
+      "id": "p4",
+      "manual_time": null,
+      "name": "Sidewall Core Masking"
+    },
+    {
+      "auto_time": null,
+      "category": "in_line",
+      "id": "p5",
+      "manual_time": null,
+      "name": "Hardware Removal"
+    },
+    {
+      "auto_time": null,
+      "category": "in_line",
+      "id": "p6",
+      "manual_time": null,
+      "name": "Sidewall Core Masking Removal"
+    },
+    {
+      "auto_time": null,
+      "category": "in_line",
+      "id": "p7",
+      "manual_time": null,
+      "name": "Post-Chemical  Strip Inspection & Blending"
+    },
+    {
+      "auto_time": null,
+      "category": "in_line",
+      "id": "p8",
+      "manual_time": null,
+      "name": "Incoming Bluelight Inspection"
+    },
+    {
+      "auto_time": null,
+      "category": "in_line",
+      "id": "p9",
+      "manual_time": null,
+      "name": "Cooling Cavity Inspection"
+    }
+  ],
+  "project_name": "N1",
+  "schema_version": 1
+}

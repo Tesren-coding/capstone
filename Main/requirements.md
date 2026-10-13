@@ -82,11 +82,13 @@ to open a scenario file from your PC and **Export JSON** to download a portable
 copy. Older supported formats are converted without changing the original file.
 See `DATA_FORMAT.md` for compatibility rules.
 
-For balancing, add process steps directly, add operators and assign work.
-PQPR import is optional. Drag handles or chart segments to reorder/assign steps. Set takt time and review the manual-workload chart. Save plans
+For PQPR, add processes directly in the matrix, enter manual/auto time per
+framesize and set parts per set. For balancing, add/import parent processes,
+break them into working elements, add operators and assign those elements.
+PQPR import is optional. Drag handles or chart segments to reorder/assign elements. Set takt time and review the manual-workload chart. Save plans
 with **Save plan** or export portable plan JSON. See `BALANCING_FORMAT.md`.
 
-Select **Build line from this plan** to map processes to stations and generate
+Select **Build line from this plan** to map working elements to stations and generate
 a new scenario draft. Review material movement in Line Builder before running.
 Save mappings with **Save setup**. See `BUILDER_SETUP_FORMAT.md`.
 

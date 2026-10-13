@@ -28,6 +28,10 @@ def pqpr_project():
 
 def complete_plan():
     plan = plan_from_pqpr(pqpr_project(), 'f1')
+    # Explicitly choose to represent each process as one working element.
+    plan['steps'] = [dict(id=p['id'], balance_process_id=p['id'], process_id=p['pqpr_process_id'],
+                         **{key:p[key] for key in ('name','category','applicability','included','manual_time','auto_time')},
+                         value_class='unclassified') for p in plan['processes']]
     plan['takt_time'] = 5
     plan['steps'][3]['included'] = False
     plan['operators'] = [{'id': 'o1', 'name': 'Operator 1', 'sequence': ['p1']},
@@ -41,9 +45,10 @@ class BalancingTests(unittest.TestCase):
         original = pqpr_project()
         before = deepcopy(original)
         plan = plan_from_pqpr(original, 'f2', 'N2.json', 'revision')
-        self.assertEqual([s['id'] for s in plan['steps']], ['p1'])
+        self.assertEqual([s['id'] for s in plan['processes']], ['p1'])
+        self.assertEqual(plan['steps'], [])
         self.assertEqual(plan['source']['filename'], 'N2.json')
-        plan['steps'][0]['manual_time'] = 8
+        plan['processes'][0]['manual_time'] = 8
         self.assertEqual(original, before)
         self.assertEqual(plan['source']['project']['processes'][0]['manual_time'], 4)
         self.assertEqual(validate_plan(plan), plan)
@@ -78,13 +83,14 @@ class BalancingTests(unittest.TestCase):
         self.assertIsNone(result['manual_total'])
         self.assertIsNone(result['balance_efficiency'])
 
-    def test_unknown_auto_does_not_block_known_manual_analysis(self):
+    def test_blank_auto_counts_zero_without_blocking_manual_analysis(self):
         plan = complete_plan()
         plan['steps'][0]['auto_time'] = None
         result = analyse_plan(plan)
         self.assertEqual(result['balance_efficiency'], 87.5)
         self.assertEqual(result['operators'][0]['status'], 'within_takt')
-        self.assertIsNone(result['operators'][0]['auto_time'])
+        self.assertEqual(result['operators'][0]['auto_time'], 0)
+        self.assertEqual(result['unknown_auto'], [])
 
     def test_over_takt_empty_operators_and_unassigned(self):
         plan = complete_plan()
@@ -127,7 +133,7 @@ class BalancingTests(unittest.TestCase):
 
     def test_invalid_versions_references_and_duplicate_assignments(self):
         invalid = []
-        for version in (3, 100, True, None, '1'):
+        for version in (4, 100, True, None, '1'):
             plan = complete_plan(); plan['schema_version'] = version; invalid.append(plan)
         plan = complete_plan(); plan['operators'][1]['sequence'].append('p1'); invalid.append(plan)
         plan = complete_plan(); plan['operators'][1]['sequence'].append('missing'); invalid.append(plan)
@@ -144,6 +150,7 @@ class BalancingTests(unittest.TestCase):
 
     def test_standalone_processes_need_no_pqpr(self):
         plan = blank_plan()
+        plan['processes'] = [deepcopy(complete_plan()['processes'][0])]
         step = deepcopy(complete_plan()['steps'][0])
         step.update(id='s1', process_id=None, name='Independent process')
         plan['steps'] = [step]
@@ -160,7 +167,7 @@ class BalancingTests(unittest.TestCase):
         before = deepcopy(original)
         migrated = validate_plan(original)
         self.assertEqual(original, before)
-        self.assertEqual(migrated['schema_version'], 2)
+        self.assertEqual(migrated['schema_version'], 3)
         self.assertEqual(migrated['operators'], before['operators'])
         self.assertEqual(migrated['source'], before['source'])
         self.assertEqual(migrated['notes'], before['notes'])
@@ -213,16 +220,17 @@ class BalancingRoutesTests(unittest.TestCase):
         target.write_text(json.dumps(original))
         before = target.read_bytes()
         loaded = self.store.load('old.json')
-        self.assertEqual(loaded['plan']['schema_version'], 2)
+        self.assertEqual(loaded['plan']['schema_version'], 3)
         self.assertEqual(target.read_bytes(), before)
         self.store.save('old', loaded['plan'], 'duplicate')
         self.assertEqual(target.read_bytes(), before)
-        self.assertEqual(self.store.load('old_v2.json')['plan']['schema_version'], 2)
+        self.assertEqual(self.store.load('old_v2.json')['plan']['schema_version'], 3)
 
     def test_source_import_export_and_analysis_do_not_save(self):
         result = self.client.post('/line-balancing/api/from-pqpr', json={'project': pqpr_project(), 'framesize_id': 'f1'})
         self.assertEqual(result.status_code, 200)
-        self.assertEqual(len(result.get_json()['plan']['steps']), 4)
+        self.assertEqual(len(result.get_json()['plan']['processes']), 4)
+        self.assertEqual(result.get_json()['plan']['steps'], [])
         plan = complete_plan()
         imported = self.client.post('/line-balancing/api/import', json={'plan': plan}).get_json()
         exported = self.client.post('/line-balancing/api/export', json={'plan': imported['plan']})

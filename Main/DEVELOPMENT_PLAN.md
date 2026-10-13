@@ -25,17 +25,18 @@ through Stage 3. Stage 4 now connects planning records to physical simulation la
 The project/line editor includes framesizes, optional stage/component labels,
 shared process columns, Always/Sometimes applicability, manual/auto times,
 and green/orange/blue categories. Counts and nominal timing totals derive
-from checked processes. Blank times remain unknown.
+from used matrix cells. Manual/auto times are independent per framesize;
+parts per set is a positive product quantity. Blank used manual times remain unknown; automatic blanks default to 0.
 
-Saved PQPR data uses its own version-1 contract and `pqpr_projects/` directory.
+Saved PQPR data uses its own version-2 contract and `pqpr_projects/` directory.
 JSON save/load/import/export supports numbered copies and revisions. A
 reference-style Excel importer offers a worksheet selector and preserves P/X
-and recognized process colors; timings start blank.
+and recognized process colors; manual timings start blank, automatic times 0.
 
 Current definitions: each process column is one route step; repeated names
 can have separate stable IDs. Each framesize filters the shared column order.
-Timings and categories are shared per process; per-framesize timing overrides
-and independently ordered route variants are future extensions. Row totals
+Categories are shared per process; timings belong to framesize/process cells.
+Independently ordered route variants remain a future extension. Row totals
 include Sometimes steps once and are not probability-weighted workload.
 
 Acceptance verified: multiple framesizes with different applicability,
@@ -45,23 +46,24 @@ See `PQPR_FORMAT.md` for field definitions and importer limitations.
 
 ## Stage 3 — Line balancing and Yamazumi (completed)
 
-Create independent process steps with their own names, categories, manual/auto
-times and applicability. Optionally import a PQPR framesize from saved data,
-JSON or the current tab's draft, then add/remove/edit steps without route
-constraints. Add named operators and assign work. Each step belongs to at most
+Create independent parent processes, or import a PQPR framesize with its cell
+times and parts per set. Break processes into working elements with their own
+manual/auto times. Importing PQPR does not automatically create working elements;
+an explicit whole-process-as-one-element option is available. Add named operators and assign work. Each step belongs to at most
 one operator. Drag handles and Yamazumi segments control assignments and work
 order; deleting an operator makes its steps unassigned.
 
 Yamazumi bars represent operators' manual workload only. Automatic process
 time is listed separately; it is not treated as operator attendance. Timings
-are editable copies. Unknown values stay unknown. Orange out-of-line processes
+are editable copies. Unknown manual values stay unknown; automatic blanks
+normalize to 0. Orange out-of-line processes
 are excluded by default; optional Sometimes steps can be toggled per case.
 A dashed takt line, above-takt counts, unassigned steps, balance efficiency and
 a manual-time minimum-operator estimate support comparison. Walking, waiting,
 precedence and machine capacity are outside this first workload calculation.
 
 Colors can follow PQPR categories or manually assigned value-add classifications.
-Charts export as SVG. Plans save/load/import/export in their own version-2
+Charts export as SVG. Plans save/load/import/export in their own version-3
 contract and `balancing_plans/` folder, with revisions and numbered copies.
 An optional source PQPR copy retains provenance; changes in either app do not silently
 modify the other. Browser navigation retains the current tab's balance draft.
@@ -71,17 +73,19 @@ work/stack sequence, manual and automatic totals, unknown timings, takt
 comparison, optional/out-of-line scopes, chart colors/export, save/load/copy,
 round trips and browser/backend calculation agreement. See `BALANCING_FORMAT.md`.
 
-Format-1 plans migrate without changing source files or assignments. Shared
+Format-1 and format-2 plans migrate by adding parents while preserving existing
+working-element IDs, times, assignments and original files. Shared
 pointer drag/keyboard sorting replaces sorting arrows in all three apps.
 Station reorder remaps references simultaneously.
 
-Hit-rate percentages were explicitly deferred. Always/Sometimes remains the
-PQPR input, without probability-weighted workloads.
+Hit-rate percentages remain deferred. Used PQPR cells retain Always/Sometimes;
+time inputs replace inclusion checks, without probability-weighted workloads.
 
 ## Stage 4 — Connect planning data to the line builder (completed)
 
 `/builder-setup` copies a selected balance plan, defines physical stations and
-maps its active steps. Multiple processes can share a station; operator names,
+maps its active working elements. Each parent process initially uses one station;
+elements can be remapped to split or combine stations; operator names,
 source IDs, manual/auto times and in-scope work order are retained. Station
 handles control station order. C-layout previews in both planning pages let
 users hover/click/drag a row break. New scenarios always include Incoming at
@@ -121,3 +125,13 @@ controller, pure model, chart renderer and stylesheet. Future app features can
 use separate Flask blueprints, templates, JavaScript modules and storage/schema
 services. Shared services should be introduced when there is real shared data,
 with documented ownership and migration rules.
+
+## Matrix timing and working-element update
+
+Direct matrix process creation, per-framesize times and parts per set are
+implemented. PQPR format 1 migrates to 2. Balance format 3 separates processes
+from assignable working elements and avoids counting process totals twice.
+In-scope processes without elements prevent complete whole-line metrics and
+scenario generation. Parts per set is metadata; times/takt remain per part.
+Acceptance checks cover migration, round trips, independent timings, parent
+scope/deletion, workload calculations, physical grouping and generated simulation.

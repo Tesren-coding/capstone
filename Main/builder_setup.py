@@ -2,7 +2,7 @@
 from copy import deepcopy
 import json
 import re
-from balancing_schema import validate_plan, active_step
+from balancing_schema import validate_plan, active_step, active_process, processes_without_elements
 from line_layout import c_layout
 from scenario_schema import CURRENT_SCHEMA_VERSION, ScenarioValidationError, validate_scenario
 
@@ -14,12 +14,16 @@ COLORS = [[38, 111, 184], [43, 148, 99], [202, 118, 47], [143, 83, 174], [190, 6
 def setup_from_plan(plan, filename=None, revision=None):
     plan = validate_plan(plan)
     active = [s for s in plan['steps'] if active_step(plan, s)]
+    parents = [p for p in plan['processes'] if active_process(plan,p) and any(s['balance_process_id'] == p['id'] for s in active)]
+    station_ids = {p['id']: str(i+1) for i,p in enumerate(parents)}
+    selected_layout = plan.get('line_layout') or {}
+    selected_process = selected_layout.get('break_after_process_id') or next((s['balance_process_id'] for s in active if s['id'] == selected_layout.get('break_after_step_id')), None)
     return validate_setup({'document_type': 'builder_setup', 'schema_version': SETUP_SCHEMA_VERSION,
         'setup_name': plan['plan_name'] + ' — line setup', 'source': {'plan': plan, 'filename': filename, 'revision': revision},
-        'stations': [{'id': str(i+1), 'name': s['name']} for i, s in enumerate(active)],
-        'mapping': {s['id']: str(i+1) for i, s in enumerate(active)}, 'next_station_id': len(active)+1,
+        'stations': [{'id': station_ids[p['id']], 'name': p['name']} for p in parents],
+        'mapping': {s['id']: station_ids[s['balance_process_id']] for s in active}, 'next_station_id': len(parents)+1,
         'mode': 'work_only', 'input_count': 150, 'output_capacity': 200,
-        'layout': {'shape': 'c', 'break_after_station_id': next((str(i+1) for i,s in enumerate(active) if s['id'] == (plan.get('line_layout') or {}).get('break_after_step_id')), None)}})
+        'layout': {'shape': 'c', 'break_after_station_id': station_ids.get(selected_process)}})
 
 
 def validate_setup(original):
@@ -71,13 +75,16 @@ def generate_scenario(original):
     active = [s for s in plan['steps'] if active_step(plan, s)]
     by_id = {s['id']: s for s in active}
     errors = []
+    for pid in processes_without_elements(plan):
+        process = next(p for p in plan['processes'] if p['id'] == pid)
+        errors.append(f'{process["name"]}: add working elements in Line Balancing before generating stations.')
     if not active: errors.append('The selected case has no processes in scope.')
     if plan['takt_time'] is None: errors.append('Set takt time in the balance plan before generating a scenario.')
     assigned = {sid for op in plan['operators'] for sid in op['sequence']}
     for step in active:
         if step['id'] not in assigned: errors.append(f'{step["name"]}: assign an operator in Line Balancing.')
         if not setup['mapping'].get(step['id']): errors.append(f'{step["name"]}: map this process to a physical station.')
-        if step['manual_time'] is None or step['auto_time'] is None: errors.append(f'{step["name"]}: fill both manual and automatic time in Line Balancing (use 0 if known zero).')
+        if step['manual_time'] is None: errors.append(f'{step["name"]}: fill manual time in Line Balancing (use 0 if known zero); blank automatic time defaults to 0.')
         elif step['manual_time'] + step['auto_time'] <= 0: errors.append(f'{step["name"]}: simulated processing needs a total time greater than zero.')
     active_ops = [(op, [sid for sid in op['sequence'] if sid in by_id]) for op in plan['operators']]
     active_ops = [(op, seq) for op, seq in active_ops if seq]
@@ -88,12 +95,12 @@ def generate_scenario(original):
     used = [station for station in setup['stations'] if station['id'] in set(mapping.values())]
     selected_break = (setup.get('layout') or {}).get('break_after_station_id')
     layout = c_layout([s['id'] for s in used], selected_break)
-    scenario = {'schema_version': CURRENT_SCHEMA_VERSION, 'scenario_name': setup['setup_name'],
+    scenario = {'schema_version': CURRENT_SCHEMA_VERSION, 'scenario_name': setup['setup_name'], 'parts_per_set': plan['parts_per_set'],
                 'takt_time': plan['takt_time'], 'stations': {}, 'operators': {}, 'boxes': {}}
     for index, station in enumerate(used):
         sid = station['id']
         processes = [dict(id=s['id'], name=s['name'], manual_time=s['manual_time'], auto_time=s['auto_time'],
-                         source_step_id=s['id'], source_process_id=s.get('process_id'), category=s['category'], value_class=s['value_class'])
+                         source_step_id=s['id'], source_process_id=s.get('process_id'), balance_process_id=s['balance_process_id'], parent_process_name=next(p['name'] for p in plan['processes'] if p['id']==s['balance_process_id']), category=s['category'], value_class=s['value_class'])
                      for s in active if mapping[s['id']] == sid]
         scenario['stations'][sid] = {**layout['positions'][sid], 'name': station['name'], 'has_part': False, 'processes': processes, 'setup_station_id': sid}
     for index, (operator, sequence) in enumerate(active_ops):

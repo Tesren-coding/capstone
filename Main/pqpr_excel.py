@@ -90,7 +90,7 @@ def import_worksheet(raw, sheet_name, filename):
                    'project_name': Path(filename).stem + ' — ' + sheet_name,
                    'processes': [], 'framesizes': [],
                    'source': {'filename': filename, 'worksheet': sheet_name}}
-        warnings = ['Manual and automatic times were not provided by this workbook layout. Enter them in the process list.']
+        warnings = ['Manual times were not provided by this workbook layout. Enter them in the matrix; automatic times default to 0. Parts per set defaults to 1; review each framesize.']
         unknown_colors = []
         for index, col in enumerate(columns):
             cell = sheet.cell(header_row, col)

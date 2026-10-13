@@ -1,4 +1,7 @@
 /* Line-balancing module layout and chart controls. */
+.balance-process-actions { min-width:185px; }
+.balance-process-actions button { display:block; margin:4px 0; width:100%; }
+#balance-element-process { max-width:220px; }
 .balance-sr-only { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 #balance-app { max-width:1500px; margin:auto; }
 .balance-heading { display:flex; justify-content:space-between; gap:20px; margin-bottom:22px; }

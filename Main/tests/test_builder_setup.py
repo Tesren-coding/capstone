@@ -13,7 +13,7 @@ from simulation import run_scenario_simulation
 
 
 def plan_fixture(two_operators=False):
-    plan = blank_plan(); plan['plan_name'] = 'Assembly'; plan['takt_time'] = 30
+    plan = blank_plan(); plan['schema_version'] = 2; plan['plan_name'] = 'Assembly'; plan['takt_time'] = 30
     plan['steps'] = [dict(id='s'+str(i+1),process_id=None,name=name,category='in_line',applicability='required',included=True,manual_time=manual,auto_time=automatic,value_class='va')
                      for i,(name,manual,automatic) in enumerate([('Inspect',1,2),('Blend',2,0),('Pack',1,0)])]
     plan['next_step_id'] = 4
@@ -78,7 +78,7 @@ class SetupTests(unittest.TestCase):
 
     def test_generation_rejects_unknown_zero_unassigned_unmapped_and_multioperator_transport(self):
         bad=[]
-        setup=setup_from_plan(plan_fixture());setup['source']['plan']['steps'][0]['auto_time']=None;bad.append(setup)
+        setup=setup_from_plan(plan_fixture());setup['source']['plan']['steps'][0]['manual_time']=None;bad.append(setup)
         setup=setup_from_plan(plan_fixture());setup['source']['plan']['steps'][0].update(manual_time=0,auto_time=0);bad.append(setup)
         setup=setup_from_plan(plan_fixture());setup['source']['plan']['operators'][0]['sequence'].remove('s1');bad.append(setup)
         setup=setup_from_plan(plan_fixture());setup['mapping']['s1']='';bad.append(setup)

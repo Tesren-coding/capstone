@@ -29,7 +29,7 @@ The main page is a hub for three apps:
 | --- | --- |
 | Line Builder | Available: the existing editor, scenario files and simulation. |
 | PQPR | Available: projects, framesizes, shared processes, applicability, manual/auto timings and colors. |
-| Line Balancing & Yamazumi | Available: independent process steps, optional PQPR import, assignments, manual-workload charts and plan files. |
+| Line Balancing & Yamazumi | Available: process catalogs, working-element breakdowns, optional PQPR import, assignments, manual-workload charts and plan files. |
 
 Use the header navigation to move between apps. Returning to Line Builder in
 this tab restores its draft. Save or export scenarios to retain them beyond
@@ -41,34 +41,43 @@ plan. Scenario schema version 2 and event version 1 remain unchanged.
 
 ## PQPR projects
 
-Name the project/line, add framesizes and shared processes, then check the
-applicable matrix cells. Choose Always (P) or Sometimes (X) for checked steps.
-Open **Edit shared processes** to set decimal manual/auto minutes and colors:
+Name the project/line, add framesizes and process columns directly in the
+matrix, then enter manual and auto minutes per part in each used cell.
+Choose Always (P) or Sometimes (X); blank unused cells mean not used.
+Set each framesize's **parts per set** (a positive whole number).
+Process headers and **Edit shared processes** let you edit names and colors:
 **green = in line**, **orange = out of line**, **blue = low hit rate / unique**.
-Timings and colors are shared across framesizes in this version.
+Colors are shared; cell timings are independent across framesizes.
+Parts per set is copied into balancing as product information and does not
+multiply per-part timings or simulation inventory.
 
 Process counts and nominal row timing totals update as you edit. Blank timing
-fields mean unknown, and affected row totals show Incomplete. Sometimes steps
+manual fields mean unknown, and affected manual totals show Incomplete.
+Blank automatic time defaults to 0; unused matrix cells remain empty.
+Use Not used / clear to remove a framesize's process. Sometimes steps
 are included once in the counts/totals, without probability weighting.
 
 Save/load projects in `pqpr_projects/`, with overwrite or numbered copies.
 Import/export portable PQPR JSON. You can also import the supplied-style Excel
 workbook and choose its CS/FS worksheet. P/X and recognized header colors are
-retained; manual/auto times start blank and unsupported colors need review.
+retained; manual time starts blank, auto time defaults to 0, and unsupported
+colors need review.
 See `PQPR_FORMAT.md` for the full contract, import rules and timing assumptions.
 
 Install updated requirements before running this release: Excel import adds
 `openpyxl`. Scenario format 2 and event format 1 remain unchanged; PQPR uses its
-own document type and format version 1.
+own document type and format version 2. Old PQPR files migrate without being rewritten.
 
 ## Line balancing and Yamazumi
 
-Open Line Balancing and click **+ Process step** to add your own steps. Edit
-names, categories, applicability and manual/auto minutes directly. Add named
-operators and assign processes from the table or by dragging handles onto
-operator lists or Yamazumi bars. Set takt time in minutes. PQPR import remains
-optional under **Optional: start from PQPR**; its copied steps can be edited,
-added to or removed independently.
+Open Line Balancing and click **+ Process**, or optionally import a PQPR
+framesize. PQPR populates the process catalog with that framesize's timings
+and parts per set. Break each process into **working elements** (for example,
+Inspection → Load, Inspect, Unload), or explicitly **Use as one element**.
+Assign working elements to named operators through the table or drag handles
+and Yamazumi bars. Only element times count toward workloads; process reference
+totals are not added again. Takt and timings remain minutes per part.
+Plans use format 3; formats 1 and 2 migrate while retaining assignments and IDs.
 
 Yamazumi bars stack manual work per operator in sequence order, with a dashed
 takt line. Automatic process time is reported separately. Missing manual times
@@ -118,7 +127,9 @@ proposal follows that operator's work order and keeps consecutive processes
 at one station together. Multi-operator handoffs are configured manually.
 
 Generation rejects unknown timings, zero-total simulated processes, unassigned
-steps and unmapped steps. Preview the station groups and operator sequences,
+steps and unmapped steps. Each parent process initially becomes one station
+containing its active working elements; mappings can be adjusted. In-scope
+processes without working elements block generation. Preview the station groups and operator sequences,
 then export scenario JSON or open a new Line Builder draft. Opening prompts
 before replacing dirty builder work and never saves over an existing scenario.
 
@@ -302,8 +313,13 @@ Sorting arrows are replaced by ⠿ drag handles throughout PQPR, Line Builder
 and Line Balancing. Drag PQPR process/framesize rows, station-ID order, station
 processes, builder work steps, balance process rows, operators and assigned
 work. IDs/references follow their records. Handles support Alt+Arrow keys.
-Balance format 1 migrates to format 2 in memory; existing files are preserved
+Balance formats 1 and 2 migrate to format 3 in memory; existing files are preserved
 until explicitly overwritten. Pointer cancellation/outside drops make no edit.
+
+Matrix timing and working-element checks cover per-framesize values, parts
+per set, migrations, process-only PQPR import, parent references/deletion,
+workload totals without double counting and grouping elements into stations.
+Run `node tests/test_planning_models.mjs` for the pure browser-model operations.
 
 Stage 4 checks cover shared physical stations, timing/work-order preservation,
 scope exclusions, invalid/incomplete generation, mapping revisions/round trips,
