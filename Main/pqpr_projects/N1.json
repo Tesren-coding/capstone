@@ -2,101 +2,244 @@
   "document_type": "pqpr",
   "framesizes": [
     {
-      "applicability": {},
+      "applicability": {
+        "p1": "required",
+        "p2": "required",
+        "p3": "required",
+        "p5": "required",
+        "p7": "required",
+        "p8": "required"
+      },
       "component": "Nozzle",
       "id": "f1",
       "name": "7FA.04",
-      "stage": "1"
+      "parts_per_set": 48,
+      "stage": "1",
+      "timings": {
+        "p1": {
+          "auto_time": 0,
+          "manual_time": 10
+        },
+        "p2": {
+          "auto_time": 0,
+          "manual_time": 10
+        },
+        "p3": {
+          "auto_time": 0,
+          "manual_time": 25
+        },
+        "p5": {
+          "auto_time": 0,
+          "manual_time": 150
+        },
+        "p7": {
+          "auto_time": 0,
+          "manual_time": 60
+        },
+        "p8": {
+          "auto_time": 25,
+          "manual_time": 5
+        }
+      }
     },
     {
-      "applicability": {},
+      "applicability": {
+        "p1": "required",
+        "p2": "required",
+        "p4": "required",
+        "p5": "required",
+        "p6": "required",
+        "p7": "required"
+      },
       "component": "Nozzle",
       "id": "f2",
       "name": "7HA.01",
-      "stage": "1"
+      "parts_per_set": 48,
+      "stage": "1",
+      "timings": {
+        "p1": {
+          "auto_time": 0,
+          "manual_time": 22
+        },
+        "p2": {
+          "auto_time": 0,
+          "manual_time": 10
+        },
+        "p4": {
+          "auto_time": 0,
+          "manual_time": 5
+        },
+        "p5": {
+          "auto_time": 0,
+          "manual_time": 83
+        },
+        "p6": {
+          "auto_time": 0,
+          "manual_time": 5
+        },
+        "p7": {
+          "auto_time": 0,
+          "manual_time": 60
+        }
+      }
     },
     {
-      "applicability": {},
+      "applicability": {
+        "p1": "required",
+        "p2": "required",
+        "p4": "required",
+        "p5": "required",
+        "p6": "required",
+        "p7": "required"
+      },
       "component": "Nozzle",
       "id": "f3",
       "name": "9HA.01",
-      "stage": "1"
+      "parts_per_set": 48,
+      "stage": "1",
+      "timings": {
+        "p1": {
+          "auto_time": 0,
+          "manual_time": 22
+        },
+        "p2": {
+          "auto_time": 0,
+          "manual_time": 10
+        },
+        "p4": {
+          "auto_time": 0,
+          "manual_time": 5
+        },
+        "p5": {
+          "auto_time": 0,
+          "manual_time": 83
+        },
+        "p6": {
+          "auto_time": 0,
+          "manual_time": 5
+        },
+        "p7": {
+          "auto_time": 0,
+          "manual_time": 60
+        }
+      }
     },
     {
-      "applicability": {},
+      "applicability": {
+        "p1": "required",
+        "p2": "required",
+        "p4": "required",
+        "p5": "required",
+        "p6": "required",
+        "p7": "required"
+      },
       "component": "Nozzle",
       "id": "f4",
       "name": "9HA.02",
-      "stage": "1"
+      "parts_per_set": 48,
+      "stage": "1",
+      "timings": {
+        "p1": {
+          "auto_time": 0,
+          "manual_time": 22
+        },
+        "p2": {
+          "auto_time": 0,
+          "manual_time": 10
+        },
+        "p4": {
+          "auto_time": 0,
+          "manual_time": 5
+        },
+        "p5": {
+          "auto_time": 0,
+          "manual_time": 83
+        },
+        "p6": {
+          "auto_time": 0,
+          "manual_time": 5
+        },
+        "p7": {
+          "auto_time": 0,
+          "manual_time": 60
+        }
+      }
     }
   ],
   "next_framesize_id": 5,
-  "next_process_id": 10,
+  "next_process_id": 12,
   "processes": [
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "out_of_line",
       "id": "p1",
       "manual_time": null,
       "name": "Unbox, Receive & Identification"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "out_of_line",
       "id": "p2",
       "manual_time": null,
       "name": "Seal Removal"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "out_of_line",
       "id": "p3",
       "manual_time": null,
       "name": "Disassembly"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "in_line",
       "id": "p4",
       "manual_time": null,
       "name": "Sidewall Core Masking"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "in_line",
       "id": "p5",
       "manual_time": null,
       "name": "Hardware Removal"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "in_line",
       "id": "p6",
       "manual_time": null,
       "name": "Sidewall Core Masking Removal"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "in_line",
       "id": "p7",
       "manual_time": null,
       "name": "Post-Chemical  Strip Inspection & Blending"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "in_line",
       "id": "p8",
       "manual_time": null,
       "name": "Incoming Bluelight Inspection"
     },
     {
-      "auto_time": null,
+      "auto_time": 0,
       "category": "in_line",
       "id": "p9",
       "manual_time": null,
       "name": "Cooling Cavity Inspection"
+    },
+    {
+      "auto_time": 0,
+      "category": "in_line",
+      "id": "p10",
+      "manual_time": null,
+      "name": "disassembly"
     }
   ],
   "project_name": "N1",
-  "schema_version": 1
+  "schema_version": 2
 }
