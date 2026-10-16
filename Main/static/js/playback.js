@@ -1,5 +1,5 @@
 import {CanvasViewport, stationProcesses, stationTotals} from "./canvas-tools.js";
-import {drawBox, drawStation, drawPart, drawOperator, drawBanner, drawLegend} from "./draw.js";
+import {drawBox, drawStation, drawPart, drawOperator, drawOperatorTracer, drawBanner, drawLegend} from "./draw.js";
 import {buildPositionsFromScenario} from "./positions.js";
 import {buildOperatorState, updateOperators} from "./state.js";
 import {requestJson} from "./api.js";
@@ -58,6 +58,7 @@ function updateStationTooltip() {
 let scenario     = null;
 let positions    = null;
 let partImage    = null;
+let lineDirectionImage = null;
 let simEvents    = [];
 let taktTime     = 30;
 let opNames      = [];
@@ -183,6 +184,7 @@ function initOperatorState() {
 async function init() {
     try {
         partImage = await loadImage(canvas.dataset.partImageUrl);
+        lineDirectionImage = await loadImage(canvas.dataset.lineDirectionImageUrl);
 
         const data = await requestJson('/events');
         if (data.event_schema_version !== Number(document.body.dataset.eventSchemaVersion)) {
@@ -253,7 +255,7 @@ function drawFrame(timestamp) {
     // ---- draw boxes ----
     for (const bid in positions.boxPositions) {
         drawBox(ctx, bid, positions.boxPositions[bid], scenario.boxes[bid],
-                opState.boxState[bid], partImage, timestamp);
+                opState.boxState[bid], partImage, timestamp, lineDirectionImage);
     }
 
     // ---- draw stations ----
@@ -266,6 +268,8 @@ function drawFrame(timestamp) {
             ctx.fillStyle = '#173963';
             ctx.font = '11px Arial';
             ctx.textBaseline = 'alphabetic';
+            const processText = `Process: ${machine.processName || machine.process || '—'}`;
+            ctx.fillText(processText, pos.x, pos.y - 18);
             ctx.fillText(`${machine.phase === 'automatic' ? 'AUTO' : 'MANUAL'} · ${Math.max(0, machine.until - opState.time).toFixed(1)}m`, pos.x, pos.y - 6);
         }
     }
@@ -277,6 +281,13 @@ function drawFrame(timestamp) {
         const p = opState.droppedParts[key];
         drawPart(ctx, p.x, p.y, partImage);
     }
+
+    // ---- draw operator motion tracers ----
+    opNames.forEach(op => {
+        const baseColor = scenario.operators[op].color;
+        const color = opState.isBlocked[op] ? [120, 120, 120] : baseColor;
+        drawOperatorTracer(ctx, opState.traces[op], color, opState.time);
+    });
 
     // ---- draw operators and the parts they carry ----
     opNames.forEach(op => {

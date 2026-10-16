@@ -160,8 +160,15 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
         if not isinstance(box, dict):
             continue
         kind = box.get('type')
-        if kind not in ('in', 'out', 'swip'):
+        if kind not in ('in', 'out', 'swip', 'direction'):
             errors.append(f'Box {bid} has an invalid type.')
+        if kind == 'direction':
+            if 'rotation' in box and (not isinstance(box['rotation'], (int, float)) or
+                                       isinstance(box['rotation'], bool) or not math.isfinite(box['rotation'])):
+                errors.append(f'Box {bid}: rotation must be a finite number of degrees.')
+            for field in ('flip_horizontal', 'flip_vertical'):
+                if field in box and not isinstance(box[field], bool):
+                    errors.append(f'Box {bid}: {field} must be true or false.')
         for field, minimum in [('start_count', 0)] if kind == 'in' else [('capacity', 1)] if kind == 'out' else []:
             value = box.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
@@ -215,6 +222,8 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
                 continue
             if not isinstance(loc, str) or loc not in locations:
                 errors.append(f'{label}: select a valid location.')
+            elif loc in boxes and isinstance(boxes[loc], dict) and boxes[loc].get('type') == 'direction':
+                errors.append(f'{label}: Line Direction is a visual marker, not a material location.')
             if action == 'work':
                 if loc not in stations:
                     errors.append(f'{label}: Work must target a station.')

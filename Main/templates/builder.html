@@ -26,6 +26,7 @@
         <input type="text" id="takt-time-input" value="30" style="width:60px; margin-left:4px;">
     </label>
 
+    <button type="button" id="new-line-btn" title="Clear the canvas and start with Raw Material, Line Direction and Finished Goods" style="padding:10px 18px; background:#eef3fc; border:2px solid #315f9f; margin-right:8px;">+ New Line</button>
     <button id="save-scenario-btn" style="padding:10px 18px; background:#e8f4ea; border:2px solid #2d7a3a; margin-right:8px;">Save Scenario</button>
     <button id="import-scenario-btn" style="padding:10px 18px; margin-right:8px;">Import JSON</button>
     <input id="import-scenario-file" type="file" accept=".json,application/json" hidden>
@@ -47,6 +48,7 @@
     <span>Scroll to zoom · Shift + drag or middle mouse to pan</span>
 </div>
 <canvas id="builder-canvas" width="2400" height="1042"
+        data-line-direction-image-url="{{ url_for('static', filename='images/line_direction.png') }}"
         style="border:1px solid #ccc; background:#ffffff; display:block;
                margin:20px auto; max-width:100%;">
 </canvas>

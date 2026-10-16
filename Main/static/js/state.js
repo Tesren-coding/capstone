@@ -5,6 +5,7 @@ export function buildOperatorState(events, stationCenters, boxCenters, opNames, 
         opPositions: {}, partPositions: {}, carrying: {}, phase: {}, moves: {},
         isBlocked: {}, blockedReason: {}, blockedLoc: {}, stationState: {},
         boxState: {}, droppedParts: {}, centers: {...stationCenters, ...boxCenters},
+        traces: {},
     };
     for (const sid in scenario.stations) {
         state.stationState[sid] = {hasPart: !!scenario.stations[sid].has_part,
@@ -22,6 +23,7 @@ export function buildOperatorState(events, stationCenters, boxCenters, opNames, 
         state.carrying[op] = false;
         state.phase[op] = 'ready';
         state.isBlocked[op] = false;
+        state.traces[op] = [];
     });
     refreshPartPositions(state);
     return state;
@@ -99,6 +101,25 @@ function refreshPartPositions(state) {
     }
 }
 
+function refreshOperatorTraces(state, targetTime) {
+    const maxAge = 1.25;
+    for (const op in state.opPositions) {
+        const trace = state.traces[op] || (state.traces[op] = []);
+        const point = state.opPositions[op];
+        if (state.moves[op]) {
+            const last = trace[trace.length - 1];
+            if (!last || Math.hypot(last.x - point.x, last.y - point.y) >= 5) {
+                trace.push({x: point.x, y: point.y, time: targetTime});
+            } else {
+                last.x = point.x;
+                last.y = point.y;
+                last.time = targetTime;
+            }
+        }
+        state.traces[op] = trace.filter(sample => targetTime - sample.time <= maxAge);
+    }
+}
+
 export function updateOperators(state, targetTime) {
     if (state.stopReason || state.finished) return;
     while (state.eventIndex < state.events.length && state.events[state.eventIndex].time <= targetTime + 1e-9) {
@@ -114,4 +135,5 @@ export function updateOperators(state, targetTime) {
             y: move.start.y + (move.end.y - move.start.y) * fraction};
     }
     refreshPartPositions(state);
+    refreshOperatorTraces(state, targetTime);
 }

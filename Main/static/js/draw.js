@@ -1,3 +1,4 @@
+import {drawDirection} from "./line-direction.js";
 import {drawStationText} from "./canvas-tools.js";
 
 // ============================================================
@@ -80,11 +81,17 @@ const BOX_COLORS = {
     swip: "#1e3c78",
     in:   "#32b432",
     out:  "#dc3232",
+    direction: "#666666",
 };
 
-export function drawBox(ctx, bid, pos, boxData, liveState, partImage, flashTime = 0) {
+export function drawBox(ctx, bid, pos, boxData, liveState, partImage, flashTime = 0, lineDirectionImage = null) {
     const { x, y, w, h } = pos;
     const color = BOX_COLORS[boxData.type] || "#888888";
+
+    if (boxData.type === 'direction') {
+        drawDirection(ctx, boxData, lineDirectionImage);
+        return;
+    }
 
     ctx.fillStyle = COLORS.white;
     ctx.fillRect(x, y, w, h);
@@ -177,6 +184,27 @@ function drawPartPlaceholder(ctx, cx, cy, radius = 10) {
 // --------------------------------------------------------
 // Draw an operator circle with label
 // --------------------------------------------------------
+export function drawOperatorTracer(ctx, points, color, currentTime, maxAge = 1.25) {
+    if (!Array.isArray(points) || points.length < 2) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let i = 1; i < points.length; i++) {
+        const previous = points[i - 1];
+        const point = points[i];
+        const age = currentTime - point.time;
+        const alpha = Math.max(0, 1 - age / maxAge) * 0.7;
+        if (alpha <= 0.02) continue;
+        ctx.strokeStyle = toRgbaString(color, alpha);
+        ctx.lineWidth = Math.max(2, 10 * alpha);
+        ctx.beginPath();
+        ctx.moveTo(previous.x, previous.y);
+        ctx.lineTo(point.x, point.y);
+        ctx.stroke();
+    }
+    ctx.restore();
+}
+
 export function drawOperator(ctx, name, cx, cy, color) {
     ctx.fillStyle = toRgbaString(color);
     ctx.beginPath();

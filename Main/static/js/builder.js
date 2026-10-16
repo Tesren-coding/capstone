@@ -2,6 +2,8 @@ import {CanvasViewport, drawStationText, stationProcesses, stationTotals, escape
 import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-sort.js";
 import {requestJson, postJson} from "./api.js";
 import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
+import {drawDirection, directionContainsPoint, directionResizeHandle,
+    resizeDirectionFromPoint, DIRECTION_MIN_WIDTH, DIRECTION_MIN_HEIGHT} from "./line-direction.js";
 import {OPERATOR_RADIUS, operatorPoint, operatorSlots, nearestOperatorSlot,
     stationInsertPosition, snapStation, updateAttachedOperators, detachStationOperators,
     remapOperatorAttachments} from "./builder-snapping.js";
@@ -13,6 +15,9 @@ import {OPERATOR_RADIUS, operatorPoint, operatorSlots, nearestOperatorSlot,
 const canvas     = document.getElementById("builder-canvas");
 const ctx        = canvas.getContext("2d");
 const statusText = document.getElementById("status-text");
+const lineDirectionImage = new Image();
+lineDirectionImage.onload = () => drawFrame();
+if (canvas.dataset.lineDirectionImageUrl) lineDirectionImage.src = canvas.dataset.lineDirectionImageUrl;
 
 const scenario = {
     stations:  {},
@@ -27,6 +32,7 @@ let suggestedFilename = 'scenario.json';
 let loadedFilename = null;
 let loadedRevision = null;
 let lastSavedSnapshot = null;
+let freshLineSnapshot = null; // unchanged defaults do not require a discard warning
 const DRAFT_KEY = 'capstone-builder-draft';
 const HANDOFF_KEY = 'capstone-builder-handoff';
 let reviewSnapshot=null,reviewRequest=0;
@@ -40,6 +46,7 @@ const SIZES = {
     swip:    { w: 90,  h: 60 },
     in:      { w: 90,  h: 60 },
     out:     { w: 90,  h: 60 },
+    direction: { w: 875, h: 85 },
 };
 
 const DEFAULT_COLORS = [
@@ -163,6 +170,71 @@ function createBox(x, y, type) {
     return id;
 }
 
+function lineArtifactPlacement() {
+    const stations = Object.values(scenario.stations);
+    
+    if (!stations.length) {
+        const gap = 25;
+
+        // Total width of arrow + gap + material box
+        const groupWidth =
+            SIZES.direction.w + gap + SIZES.in.w;
+
+        const groupHeight = 155;
+
+        // Center the complete group on the canvas
+        const centerX = (canvas.width - groupWidth) / 2;
+        const centerY = (canvas.height - groupHeight) / 2;
+
+        return {
+            raw: {
+                x: centerX + SIZES.direction.w + gap,
+                y: centerY
+            },
+            direction: {
+                x: centerX,
+                y: centerY + 35
+            },
+            finished: {
+                x: centerX + SIZES.direction.w + gap,
+                y: centerY + 95
+            }
+        };
+    }
+
+    // A generated C-shaped layout already has its own Incoming/Outgoing
+    // positions. Add only a decorative arrow above the top station row,
+    // without changing station locations or material-box coordinates.
+    const minX = Math.min(...stations.map(s => s.x));
+    const minY = Math.min(...stations.map(s => s.y));
+    const maxX = Math.max(...stations.map(s => s.x + s.w));
+    const anchorY = minY + (stations[0].h - SIZES.in.h) / 2;
+    return {
+        raw: {x: Math.max(20, minX - 140), y: anchorY},
+        direction: {x: Math.max(20, minX), y: Math.max(20, minY - SIZES.direction.h - 25)},
+        finished: {x: maxX + 50, y: anchorY},
+    };
+}
+
+function ensureDefaultLineArtifacts() {
+    const placement = lineArtifactPlacement();
+    if (!Object.values(scenario.boxes).some(box => box.type === 'in')) {
+        const id = createBox(placement.raw.x + SIZES.in.w / 2, placement.raw.y + SIZES.in.h / 2, 'in');
+        scenario.boxes[id].name = 'Raw Material';
+        scenario.boxes[id].start_count = 10;
+    }
+    if (!Object.values(scenario.boxes).some(box => box.type === 'direction')) {
+        const id = createBox(placement.direction.x + SIZES.direction.w / 2, placement.direction.y + SIZES.direction.h / 2, 'direction');
+        scenario.boxes[id].name = 'Line Direction';
+        Object.assign(scenario.boxes[id], {rotation: 0, flip_horizontal: false, flip_vertical: false});
+    }
+    if (!Object.values(scenario.boxes).some(box => box.type === 'out')) {
+        const id = createBox(placement.finished.x + SIZES.out.w / 2, placement.finished.y + SIZES.out.h / 2, 'out');
+        scenario.boxes[id].name = 'Finished Goods';
+        scenario.boxes[id].capacity = 50;
+    }
+}
+
 // ============================================================
 // PART 3b — Takt time tracking
 // ============================================================
@@ -201,6 +273,15 @@ canvas.addEventListener("click", (evt) => {
 // PART 5 — Drag + selection logic
 // ============================================================
 function findItemAtPosition(mx, my) {
+    if (selectedItem?.type === 'box') {
+        const selected = scenario.boxes[selectedItem.id];
+        if (selected?.type === 'direction') {
+            const handle = directionResizeHandle(selected);
+            if (Math.hypot(mx - handle.x, my - handle.y) <= 11 / view.scale) {
+                return {type: 'direction-resize', id: selectedItem.id, pos: selected};
+            }
+        }
+    }
     // Operator circles take precedence if an old, freely positioned operator
     // overlaps a station rectangle.
     for (const id in scenario.operators) {
@@ -217,7 +298,9 @@ function findItemAtPosition(mx, my) {
     }
     for (const id in scenario.boxes) {
         const p = scenario.boxes[id];
-        if (mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
+        if (p.type === 'direction'
+            ? directionContainsPoint(p, mx, my, 4 / view.scale)
+            : mx >= p.x && mx <= p.x + p.w && my >= p.y && my <= p.y + p.h) {
             return { type: "box", id, pos: p };
         }
     }
@@ -232,12 +315,12 @@ canvas.addEventListener("mousedown", (evt) => {
 
     if (item) {
         draggedItem = item;
-        selectedItem = item;
+        selectedItem = item.type === 'direction-resize' ? {type: 'box', id: item.id, pos: item.pos} : item;
         dragOffset.x = mouse.x - item.pos.x;
         dragOffset.y = mouse.y - item.pos.y;
         dragStart = {x: item.pos.x, y: item.pos.y};
-        canvas.style.cursor = "grabbing";
-        openSidePanel(item);
+        canvas.style.cursor = item.type === 'direction-resize' ? "nwse-resize" : "grabbing";
+        openSidePanel(selectedItem);
     } else {
         selectedItem = null;
         openSidePanel(null);
@@ -250,6 +333,11 @@ canvas.addEventListener("mousemove", (evt) => {
     if (view.isPanning) return;
     const mouse = getCanvasMousePos(evt);
     if (!draggedItem) {
+        if (!placingType) {
+            const item = findItemAtPosition(mouse.x, mouse.y);
+            canvas.style.cursor = item?.type === 'direction-resize' ? 'nwse-resize' : item ? 'grab' : 'default';
+            return;
+        }
         if (placingType === 'station') {
             placementPreview = stationInsertPosition(scenario.stations, mouse.x, mouse.y,
                 STATION_WIDTH, STATION_HEIGHT, view.scale);
@@ -262,7 +350,13 @@ canvas.addEventListener("mousemove", (evt) => {
     }
     const newX = mouse.x - dragOffset.x;
     const newY = mouse.y - dragOffset.y;
-    if (draggedItem.type === 'operator') {
+    if (draggedItem.type === 'direction-resize') {
+        resizeDirectionFromPoint(draggedItem.pos, mouse.x, mouse.y);
+        const wField = document.getElementById('field-direction-width');
+        const hField = document.getElementById('field-direction-height');
+        if (wField) wField.value = draggedItem.pos.w;
+        if (hField) hField.value = draggedItem.pos.h;
+    } else if (draggedItem.type === 'operator') {
         const op = scenario.operators[draggedItem.id];
         // Small pointer movements keep an already attached operator in place;
         // moving away detaches it. Releasing near ANY vacant slot reattaches.
@@ -367,6 +461,7 @@ function buildLocationOptions(action, selectedLoc) {
         }
         for (const bid in scenario.boxes) {
             const b = scenario.boxes[bid];
+            if (b.type === 'direction') continue;
             const sel = String(selectedLoc) === String(bid) ? "selected" : "";
             options += `<option value="${bid}" ${sel}>${escapeHtml(b.name)} (${b.type.toUpperCase()})</option>`;
         }
@@ -669,10 +764,31 @@ function openSidePanel(item) {
 
     } else if (item.type === "box") {
         const b = scenario.boxes[item.id];
-        panelTitle.textContent = `${b.type.toUpperCase()} Box`;
+        panelTitle.textContent = b.type === 'direction' ? 'Line Direction' : `${b.type.toUpperCase()} Box`;
 
         let extraFieldsHtml = "";
-        if (b.type === "swip") {
+        if (b.type === 'direction') {
+            extraFieldsHtml = `
+                <p style="font-size:12px; color:#556;">Drag the image to move it. Drag its bottom-right square to resize, or use the values below.</p>
+                <div style="display:flex; gap:10px; margin-bottom:10px;">
+                    <label style="flex:1;">Width
+                        <input id="field-direction-width" type="number" min="${DIRECTION_MIN_WIDTH}" step="1" value="${b.w}" style="width:100%;"></label>
+                    <label style="flex:1;">Height
+                        <input id="field-direction-height" type="number" min="${DIRECTION_MIN_HEIGHT}" step="1" value="${b.h}" style="width:100%;"></label>
+                </div>
+                <label for="field-direction-rotation">Rotation (degrees)</label>
+                <input id="field-direction-rotation" type="number" step="1" value="${b.rotation ?? 0}" style="width:100%; margin-bottom:8px;">
+                <div style="display:flex; gap:6px; margin-bottom:10px;">
+                    <button type="button" id="rotate-direction-left" style="flex:1;">↶ 90°</button>
+                    <button type="button" id="rotate-direction-right" style="flex:1;">↷ 90°</button>
+                </div>
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <button type="button" id="flip-direction-horizontal" style="flex:1;">Flip horizontal</button>
+                    <button type="button" id="flip-direction-vertical" style="flex:1;">Flip vertical</button>
+                </div>
+                <p id="direction-flip-state" style="font-size:11px; color:#556; margin:0;"></p>
+            `;
+        } else if (b.type === "swip") {
             extraFieldsHtml = `
                 <label style="display:flex; align-items:center; gap:6px;">
                     <input type="checkbox" id="field-haspart" ${b.has_part ? "checked" : ""}>
@@ -702,6 +818,48 @@ function openSidePanel(item) {
             drawFrame();
         });
 
+        if (b.type === 'direction') {
+            const angleInput = document.getElementById('field-direction-rotation');
+            const syncFlipState = () => {
+                document.getElementById('direction-flip-state').textContent =
+                    `Horizontal: ${b.flip_horizontal ? 'flipped' : 'normal'} · Vertical: ${b.flip_vertical ? 'flipped' : 'normal'}`;
+            };
+            for (const [dimension, minimum] of [['w', DIRECTION_MIN_WIDTH], ['h', DIRECTION_MIN_HEIGHT]]) {
+                const field = document.getElementById(`field-direction-${dimension === 'w' ? 'width' : 'height'}`);
+                field.addEventListener('change', () => {
+                    const next = Number(field.value);
+                    if (!Number.isFinite(next) || next < minimum) { field.value = b[dimension]; return; }
+                    // Keep its center fixed as width/height change.
+                    const diff = Math.round(next) - b[dimension];
+                    b[dimension] += diff;
+                    b[dimension === 'w' ? 'x' : 'y'] -= diff / 2;
+                    field.value = b[dimension];
+                    drawFrame();
+                });
+            }
+            angleInput.addEventListener('change', () => {
+                const angle = Number(angleInput.value);
+                if (!Number.isFinite(angle)) { angleInput.value = b.rotation ?? 0; return; }
+                b.rotation = ((angle % 360) + 360) % 360;
+                angleInput.value = b.rotation;
+                drawFrame();
+            });
+            for (const [button, shift] of [['rotate-direction-left', -90], ['rotate-direction-right', 90]]) {
+                document.getElementById(button).onclick = () => {
+                    b.rotation = ((((b.rotation || 0) + shift) % 360) + 360) % 360;
+                    angleInput.value = b.rotation;
+                    drawFrame();
+                };
+            }
+            for (const [button, field] of [['flip-direction-horizontal', 'flip_horizontal'], ['flip-direction-vertical', 'flip_vertical']]) {
+                document.getElementById(button).onclick = () => {
+                    b[field] = !b[field];
+                    syncFlipState();
+                    drawFrame();
+                };
+            }
+            syncFlipState();
+        }
         if (b.type === "swip") {
             document.getElementById("field-haspart").addEventListener("change", (e) => {
                 b.has_part = e.target.checked;
@@ -747,6 +905,7 @@ const BOX_COLORS = {
     swip: "#1e3c78",
     in:   "#32b432",
     out:  "#dc3232",
+    direction: "#666666",
 };
 
 function drawFrame() {
@@ -760,6 +919,14 @@ function drawFrame() {
     for (const id in scenario.boxes) {
         const b = scenario.boxes[id];
         const color = BOX_COLORS[b.type] || "#888888";
+
+        if (b.type === 'direction') {
+            drawDirection(ctx, b, lineDirectionImage, {
+                selected: selectedItem?.type === 'box' && selectedItem.id === id,
+                viewScale: view.scale,
+            });
+            continue;
+        }
 
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(b.x, b.y, b.w, b.h);
@@ -924,6 +1091,7 @@ function serializeScenario() {
 }
 
 function applyLoadedScenario(data) {
+    freshLineSnapshot = null;
     if (data.schema_version !== schemaVersion) throw new Error('Scenario must be migrated by the server before opening.');
     scenarioExtras = Object.fromEntries(Object.entries(data).filter(([key]) =>
         !['schema_version', 'takt_time', 'stations', 'operators', 'boxes'].includes(key)));
@@ -1008,10 +1176,10 @@ async function applyPlanningHandoff() {
     document.getElementById('planning-handoff-notice').hidden=false;
     const result=await postJson('/import-scenario',{scenario:pending.scenario});
     const hasItems=Object.values(scenario).some(items=>Object.keys(items).length>0)||taktTimeInput.value!=='30';
-    if(hasItems&&JSON.stringify(serializeScenario())!==lastSavedSnapshot&&!confirm('Open the generated line as a new draft and replace your unsaved builder changes? Save or export your current work first if you want to keep it.')){
+    if(hasItems&&isCurrentUnsaved()&&!confirm('Open the generated line as a new draft and replace your unsaved builder changes? Save or export your current work first if you want to keep it.')){
         statusText.textContent='Generated draft not opened. Your current builder changes are kept.';return;
     }
-    applyLoadedScenario(result.scenario);loadedFilename=loadedRevision=lastSavedSnapshot=null;
+    applyLoadedScenario(result.scenario);ensureDefaultLineArtifacts();loadedFilename=loadedRevision=lastSavedSnapshot=null;
     suggestedFilename=pending.suggestedFilename||'generated_line.json';rememberDraft();sessionStorage.removeItem(HANDOFF_KEY);
     document.getElementById('planning-handoff-notice').hidden=true;statusText.textContent='Opened a new generated line draft. Review material movement before simulation; Save Scenario creates a new file or version.';
 }
@@ -1101,7 +1269,7 @@ document.getElementById("load-scenario-btn").addEventListener("click", () => {
 
     const current = JSON.stringify(serializeScenario());
     const hasItems = Object.values(scenario).some(items => Object.keys(items).length > 0) || taktTimeInput.value !== '30';
-    if (hasItems && current !== lastSavedSnapshot && !confirm('Replace your unsaved builder changes with the selected scenario?')) return;
+    if (hasItems && isCurrentUnsaved() && !confirm('Replace your unsaved builder changes with the selected scenario?')) return;
     requestJson("/load-scenario/" + encodeURIComponent(filename))
         .then(data => {
             if (data.found) {
@@ -1161,8 +1329,50 @@ runScenarioBtn.addEventListener("click", () => {
     });
 });
 // ============================================================
-// PART 8 — Initialize
+// PART 8 — New blank line + initialization
 // ============================================================
+function startNewLine({persistDraft = true} = {}) {
+    for (const key of ['stations', 'operators', 'boxes']) {
+        for (const id of Object.keys(scenario[key])) delete scenario[key][id];
+    }
+    scenarioExtras = {};
+    loadedFilename = null;
+    loadedRevision = null;
+    lastSavedSnapshot = null;
+    suggestedFilename = 'scenario.json';
+    nextStationId = 1;
+    nextOperatorId = 1;
+    nextBoxId = 1;
+    colorIndex = 0;
+    reviewSnapshot = null;
+    reviewRequest++;
+    taktTimeInput.value = '30';
+    draggedItem = null;
+    dragStart = null;
+    selectedItem = null;
+    exitPlacementMode();
+    openSidePanel(null);
+    document.getElementById('scenario-select').value = '';
+    sessionStorage.removeItem(HANDOFF_KEY);
+    document.getElementById('planning-handoff-notice').hidden = true;
+    ensureDefaultLineArtifacts();
+    freshLineSnapshot = JSON.stringify(serializeScenario());
+    view.reset();
+    drawFrame();
+    if (persistDraft) rememberDraft();
+}
+
+function isCurrentUnsaved() {
+    const current = JSON.stringify(serializeScenario());
+    return current !== lastSavedSnapshot && current !== freshLineSnapshot;
+}
+
+document.getElementById('new-line-btn').addEventListener('click', () => {
+    if (isCurrentUnsaved() && !confirm('Create a new blank line? Unsaved changes to the current line will be discarded. Saved SQL scenarios will not be deleted.')) return;
+    startNewLine();
+    statusText.textContent = 'New blank line created with Raw Material, Line Direction and Finished Goods. Add stations and operators to begin.';
+});
+
 async function initBuilder() {
     const controls = [...document.querySelectorAll('button, input, select')];
     const disabled = controls.map(control => control.disabled);
@@ -1176,6 +1386,8 @@ async function initBuilder() {
             loadedRevision = draft.loadedRevision || null;
             lastSavedSnapshot = draft.lastSavedSnapshot || null;
             suggestedFilename = draft.suggestedFilename || loadedFilename || 'scenario.json';
+        } else {
+            startNewLine({persistDraft: false});
         }
         if(new URLSearchParams(location.search).get('source')==='planning')await applyPlanningHandoff();
         else document.getElementById('planning-handoff-notice').hidden=!sessionStorage.getItem(HANDOFF_KEY);
@@ -1206,7 +1418,7 @@ importFile.addEventListener('change', async () => {
         const result = await postJson('/import-scenario', {scenario: original});
         const current = JSON.stringify(serializeScenario());
         const hasItems = Object.values(scenario).some(items => Object.keys(items).length > 0) || taktTimeInput.value !== '30';
-        if (hasItems && current !== lastSavedSnapshot && !confirm('Replace your unsaved builder changes with the imported scenario?')) return;
+        if (hasItems && isCurrentUnsaved() && !confirm('Replace your unsaved builder changes with the imported scenario?')) return;
         applyLoadedScenario(result.scenario);
         loadedFilename = null;
         loadedRevision = null;

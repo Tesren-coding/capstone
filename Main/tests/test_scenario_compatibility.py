@@ -71,6 +71,14 @@ class CompatibilityTests(unittest.TestCase):
         with self.assertRaises(ScenarioValidationError):
             validate_scenario(empty)
 
+    def test_direction_box_is_valid_non_inventory_decor(self):
+        data = validate_scenario(legacy_scenario())
+        data['boxes']['DIR_1'] = {'x': 120, 'y': 140, 'w': 220, 'h': 28, 'type': 'direction', 'name': 'Line Direction'}
+        validated = validate_scenario(data)
+        self.assertEqual(validated['boxes']['DIR_1']['type'], 'direction')
+        events, _ = run_scenario_simulation(validated)
+        self.assertEqual(events[-1]['status'], 'simulation_complete')
+
     def test_machine_concurrency_events_after_migration(self):
         data = validate_scenario(legacy_scenario())
         data['stations']['1']['processes'][0].update(manual_time=1, auto_time=4)
