@@ -172,36 +172,16 @@ function createBox(x, y, type) {
 
 function lineArtifactPlacement() {
     const stations = Object.values(scenario.stations);
-    
     if (!stations.length) {
-        const gap = 25;
-
-        // Total width of arrow + gap + material box
-        const groupWidth =
-            SIZES.direction.w + gap + SIZES.in.w;
-
-        const groupHeight = 155;
-
-        // Center the complete group on the canvas
-        const centerX = (canvas.width - groupWidth) / 2;
-        const centerY = (canvas.height - groupHeight) / 2;
-
+        // Default blank-line composition: arrow points towards two vertically
+        // stacked material boxes, as in the planning workspace reference.
+        // These are canvas/world coordinates, not browser screen pixels.
         return {
-            raw: {
-                x: centerX + SIZES.direction.w + gap,
-                y: centerY
-            },
-            direction: {
-                x: centerX,
-                y: centerY + 35
-            },
-            finished: {
-                x: centerX + SIZES.direction.w + gap,
-                y: centerY + 95
-            }
+            raw: {x: 1070, y: 155},
+            direction: {x: 170, y: 190},
+            finished: {x: 1070, y: 250},
         };
     }
-
     // A generated C-shaped layout already has its own Incoming/Outgoing
     // positions. Add only a decorative arrow above the top station row,
     // without changing station locations or material-box coordinates.
@@ -1241,7 +1221,7 @@ document.getElementById('save-scenario-btn').addEventListener('click', async () 
     } finally { button.disabled = false; }
 });
 
-function refreshScenarioList() {
+function refreshScenarioList(selectedFilename = loadedFilename) {
     return fetch("/list-scenarios")
         .then(res => res.json())
         .then(data => {
@@ -1254,10 +1234,55 @@ function refreshScenarioList() {
                 opt.textContent = label;
                 select.appendChild(opt);
             });
-            if (loadedFilename) select.value = loadedFilename;
+            if (selectedFilename && data.files.includes(selectedFilename)) select.value = selectedFilename;
         })
         .catch(err => console.error("Error listing scenarios:", err));
 }
+
+// Rename a persisted scenario without saving unsaved edits or changing the canvas.
+document.getElementById('rename-scenario-btn').addEventListener('click', async () => {
+    const button = document.getElementById('rename-scenario-btn');
+    const selected = document.getElementById('scenario-select').value;
+    if (!selected) {
+        statusText.textContent = 'Select a saved scenario to rename first.';
+        return;
+    }
+    const input = prompt('Rename saved scenario (without .json):', selected.replace(/\.json$/i, '').replace(/_/g, ' '));
+    if (input === null) return;
+    if (!input.trim()) {
+        statusText.textContent = 'Please enter a non-empty scenario name.';
+        return;
+    }
+    button.disabled = true;
+    try {
+        // The loaded scenario carries a revision for optimistic-concurrency
+        // protection. Other selected files get their current revision from SQL.
+        let revision = selected === loadedFilename ? loadedRevision : null;
+        if (!revision) {
+            const current = await requestJson('/load-scenario/' + encodeURIComponent(selected));
+            if (!current.found) throw new Error('This scenario no longer exists. Refresh your saved scenarios.');
+            revision = current.revision || null;
+        }
+        const result = await postJson('/rename-scenario', {
+            filename: selected, new_name: input.trim(), expected_revision: revision,
+        });
+        if (result.status !== 'renamed') throw new Error(result.error || 'Could not rename scenario.');
+        if (selected === loadedFilename) {
+            loadedFilename = result.filename;
+            loadedRevision = result.revision;
+            suggestedFilename = result.filename;
+            // lastSavedSnapshot intentionally stays unchanged: any unsaved
+            // canvas edits remain unsaved after the database record is renamed.
+            rememberDraft();
+        }
+        await refreshScenarioList(result.filename);
+        statusText.textContent = `Renamed "${selected}" to "${result.filename}". Unsaved canvas changes were not saved.`;
+    } catch (error) {
+        statusText.textContent = 'Rename failed: ' + (error.message || 'Unknown error.');
+    } finally {
+        button.disabled = false;
+    }
+});
 
 document.getElementById("load-scenario-btn").addEventListener("click", () => {
     const filename = document.getElementById("scenario-select").value;

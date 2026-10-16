@@ -183,6 +183,44 @@ class SqlServerStore:
         saved_name = self._operate(task)
         return {'status': 'saved', 'filename': saved_name, 'revision': new_revision}
 
+    def rename(self, old_name, new_name, expected_revision=None):
+        """Move a save to a new SQL key, preserving payload/revision and timestamps.
+
+        SQL's composite primary key guards against duplicate names. The update
+        runs inside one transaction, including the optimistic revision check.
+        """
+        if not isinstance(new_name, str) or not new_name.strip():
+            raise ScenarioStorageError('invalid', 'Enter a new scenario name.')
+        old_filename = file_stem(old_name) + '.json'
+        new_filename = file_stem(new_name) + '.json'
+        if len(new_filename) > 255:
+            raise ScenarioStorageError('invalid', 'The scenario name is too long (maximum 250 characters).')
+
+        def task(cursor):
+            existing = cursor.execute(_SELECT_REVISION, self.kind, old_filename).fetchone()
+            if existing is None:
+                raise ScenarioStorageError('missing', 'The saved scenario no longer exists.', 409)
+            current_revision = existing[0].strip()
+            if expected_revision and expected_revision != current_revision:
+                raise ScenarioStorageError('conflict', 'The scenario changed since you loaded it. Reload before renaming.', 409)
+            if old_filename == new_filename:
+                return current_revision
+            try:
+                cursor.execute('UPDATE dbo.CapstoneSaves SET file_name = ? '
+                               'WHERE save_type = ? AND file_name = ? AND revision = ?',
+                               new_filename, self.kind, old_filename, current_revision)
+            except Exception as exc:
+                if _is_duplicate_error(exc):
+                    raise ScenarioStorageError('exists', 'A scenario with the new name already exists.',
+                                               409, filename=new_filename) from exc
+                raise
+            if cursor.rowcount != 1:
+                raise ScenarioStorageError('conflict', 'The saved scenario changed during renaming. Try again.', 409)
+            return current_revision
+
+        current_revision = self._operate(task)
+        return {'status': 'renamed', 'filename': new_filename, 'revision': current_revision}
+
     def delete(self, name):
         filename = file_stem(name) + '.json'
         def task(cursor):

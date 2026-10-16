@@ -41,13 +41,24 @@ FETCH_STUB = r'''() => {
    if(url==='/export-scenario') result=payload.scenario;
    if(url==='/list-scenarios') result={files:Object.keys(window.__savedByTest)};
    if(url==='/save-scenario'){
-     const filename=payload.filename||payload.name+'.json';
+     const filename=payload.filename||(payload.name.trim().replace(/[^A-Za-z0-9_\- ]/g,'').replace(/ /g,'_')+'.json');
      window.__savedByTest[filename]=payload.scenario;
      result={status:'saved',filename,revision:'r1'};
    }
    if(url.startsWith('/load-scenario/')){
      const filename=decodeURIComponent(url.split('/').pop());
-     result={found:true,filename,revision:'r1',scenario:window.__savedByTest[filename]};
+     result={found:!!window.__savedByTest[filename],filename,revision:'r1',scenario:window.__savedByTest[filename]};
+   }
+   if(url==='/rename-scenario'){
+     const original=payload.filename;
+     const filename=payload.new_name.trim().replace(/[^A-Za-z0-9_\- ]/g,'').replace(/ /g,'_').replace(/\.json$/i,'')+'.json';
+     if(!window.__savedByTest[original]) result={status:'missing',error:'Original not found.'};
+     else if(original!==filename && window.__savedByTest[filename]) result={status:'exists',error:'A scenario with the new name already exists.'};
+     else {
+       window.__savedByTest[filename]=window.__savedByTest[original];
+       if(original!==filename) delete window.__savedByTest[original];
+       result={status:'renamed',filename,revision:'r1'};
+     }
    }
    return new Response(JSON.stringify(result),{status:200,headers:{'Content-Type':'application/json'}});
  };

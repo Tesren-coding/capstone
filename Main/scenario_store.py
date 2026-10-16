@@ -108,6 +108,48 @@ class ScenarioStore:
                 raise
         return {'status': 'saved', 'filename': filename, 'revision': revision(raw)}
 
+    def rename(self, old_name, new_name, expected_revision=None):
+        """Rename the saved document without altering or reserializing its JSON.
+
+        A destination is created exclusively so a conflicting filename is never
+        overwritten. Both name and revision checks happen under the store lock.
+        """
+        if not isinstance(new_name, str) or not new_name.strip():
+            raise ScenarioStorageError('invalid', 'Enter a new scenario name.')
+        old_filename = file_stem(old_name) + '.json'
+        new_filename = file_stem(new_name) + '.json'
+        if len(new_filename) > 255:
+            raise ScenarioStorageError('invalid', 'The scenario name is too long (maximum 250 characters).')
+        with self.lock:
+            source = self.directory / old_filename
+            destination = self.directory / new_filename
+            try:
+                original = source.read_bytes()
+            except FileNotFoundError as exc:
+                raise ScenarioStorageError('missing', 'The saved scenario no longer exists.', 409) from exc
+            current_revision = revision(original)
+            if expected_revision and expected_revision != current_revision:
+                raise ScenarioStorageError('conflict', 'The scenario changed since you loaded it. Reload before renaming.', 409)
+            if old_filename == new_filename:
+                return {'status': 'renamed', 'filename': new_filename, 'revision': current_revision}
+            # Exclusive creation prevents overwriting other saves, including in
+            # the rare case a second process creates the destination concurrently.
+            try:
+                with destination.open('xb') as stream:
+                    stream.write(original)
+            except FileExistsError as exc:
+                raise ScenarioStorageError('exists', 'A scenario with the new name already exists.', 409,
+                                           filename=new_filename) from exc
+            except Exception:
+                destination.unlink(missing_ok=True)
+                raise
+            try:
+                source.unlink()
+            except Exception:
+                destination.unlink(missing_ok=True)
+                raise
+        return {'status': 'renamed', 'filename': new_filename, 'revision': current_revision}
+
     def delete(self, name):
         with self.lock:
             try:

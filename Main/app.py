@@ -92,6 +92,15 @@ def load_scenario(filename):
     return jsonify(scenario_store.load(filename))
 
 
+@app.route('/rename-scenario', methods=['POST'])
+def rename_scenario():
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        raise ScenarioStorageError('invalid', 'Choose a saved scenario and provide its new name.')
+    return jsonify(scenario_store.rename(payload.get('filename'), payload.get('new_name'),
+                                      payload.get('expected_revision')))
+
+
 @app.route('/delete-scenario/<filename>', methods=['POST'])
 def delete_scenario(filename):
     return jsonify(scenario_store.delete(filename))
