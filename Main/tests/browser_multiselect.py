@@ -74,7 +74,9 @@ def check():
         assert count_ring_pixels(two['x']+75,two['y']-26)==0
         click(op_before['x'], op_before['y'])
         assert selected()=={'operator:Op1'}
-        assert count_ring_pixels(two['x']+75,two['y']-26)>0
+        # With no assigned sequence step, an operator selection has no
+        # standing-point rings (only the relevant step station displays them).
+        assert count_ring_pixels(two['x']+75,two['y']-26)==0
 
         # Marquee intersects both stations and operator, but not the default arrow.
         drag(1370, 350, 1930, 620)

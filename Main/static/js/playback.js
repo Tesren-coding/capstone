@@ -200,6 +200,10 @@ async function init() {
         scenario  = data.scenario;
         simEvents = data.events;
         taktTime  = data.takt_time;
+        document.getElementById('physical-walking-summary').textContent =
+            `Physical scale: ${Number(scenario.layout_scale_px_per_m ?? 50).toFixed(0)} px/m · ` +
+            `Operator walking speed: ${Number(scenario.walking_speed_m_per_s ?? 1.2).toFixed(2)} m/s ` +
+            '(separate from playback speed)';
 
         initOperatorState();
         totalDuration = simEvents.reduce((latest, event) => Math.max(latest, event.time), 0);
@@ -301,6 +305,14 @@ function drawFrame(timestamp) {
         }
 
         drawOperator(ctx, scenario.operators[op].name || op, pos.x, pos.y, color);
+        if (opState.moves[op]) {
+            const move = opState.moves[op];
+            ctx.save();
+            ctx.fillStyle = '#1e3c78';
+            ctx.font = '10px Arial'; ctx.textAlign = 'center';
+            ctx.fillText(`${Number(move.distance_m || 0).toFixed(2)} m · ${Number(move.walking_speed_m_per_s || scenario.walking_speed_m_per_s || 1.2).toFixed(2)} m/s`, pos.x, pos.y + 28);
+            ctx.restore();
+        }
 
         if (opState.isBlocked[op]) {
             ctx.fillStyle    = "#cc0000";

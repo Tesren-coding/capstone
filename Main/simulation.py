@@ -1,10 +1,9 @@
 """Production-line simulation. Its event stream drives browser playback."""
-import math
 import simpy
 
 from scenario_schema import ScenarioValidationError, normalize_scenario, validate_scenario
-
-WALK_SPEED = 1000.0  # layout pixels per simulated minute
+from walking_geometry import (DEFAULT_LAYOUT_SCALE_PX_PER_M, DEFAULT_WALK_SPEED_M_PER_S,
+                              box_center, station_destination, walking_metrics)
 
 
 class ScenarioRuntimeError(Exception):
@@ -15,6 +14,8 @@ def run_scenario_simulation(scenario):
     data = validate_scenario(scenario)
     stations, operators, boxes = (data.get(k, {}) for k in ('stations', 'operators', 'boxes'))
     takt = data['takt_time']
+    pixels_per_meter = data.get('layout_scale_px_per_m', DEFAULT_LAYOUT_SCALE_PX_PER_M)
+    walking_speed = data.get('walking_speed_m_per_s', DEFAULT_WALK_SPEED_M_PER_S)
     env = simpy.Environment()
     stop = env.event()
     events = []
@@ -44,10 +45,6 @@ def run_scenario_simulation(scenario):
         if not stop.triggered:
             finish_machine(sid, op, process)
 
-    def center(loc):
-        item = stations.get(loc, boxes.get(loc))
-        return {'x': item['x'] + item['w'] / 2, 'y': item['y'] + item['h'] / 2}
-
     def operator_run(op, definition):
         position = {'x': definition['x'], 'y': definition['y']}
         home = dict(position)
@@ -56,9 +53,12 @@ def run_scenario_simulation(scenario):
 
         def travel(target, loc):
             nonlocal position
-            duration = math.hypot(target['x'] - position['x'], target['y'] - position['y']) / WALK_SPEED
-            if duration:
-                emit('moving', op, loc, start=dict(position), end=dict(target), duration=duration)
+            # Walking distance is derived from world-space layout units, not screen zoom.
+            distance_m, duration = walking_metrics(position, target, pixels_per_meter, walking_speed)
+            if duration > 1e-12:
+                emit('moving', op, loc, start=dict(position), end=dict(target),
+                     duration=duration, distance_m=round(distance_m, 4),
+                     walking_speed_m_per_s=walking_speed)
                 yield env.timeout(duration)
             position = dict(target)
             emit('arrived', op, loc, position=dict(position))
@@ -67,7 +67,8 @@ def run_scenario_simulation(scenario):
             cycle_start = env.now
             for index, step in enumerate(sequence):
                 loc, action = step['loc'], step['action']
-                yield from travel(center(loc), loc)
+                destination = station_destination(stations, loc, step, position, definition) if loc in stations else box_center(boxes[loc])
+                yield from travel(destination, loc)
                 if stop.triggered:
                     return
                 label = f"S{loc} ({stations[loc].get('name', loc)})" if loc in stations else boxes[loc].get('name', loc)

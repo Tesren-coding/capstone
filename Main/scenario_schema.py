@@ -100,7 +100,12 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
         raise ScenarioValidationError(['Scenario must contain valid JSON values and finite numbers.']) from exc
     if not is_number(data.get('takt_time'), positive=True):
         errors.append('Takt time must be a positive number of minutes.')
-    for key in ('stations', 'operators', 'boxes'):
+    # Optional in v2 for backward compatibility with saved scenarios.
+    if not is_number(data.get('layout_scale_px_per_m', 50), positive=True) or data.get('layout_scale_px_per_m', 50) > 10000:
+        errors.append('Layout scale must be greater than 0 and no more than 10000 pixels per meter.')
+    if not is_number(data.get('walking_speed_m_per_s', 1.2), positive=True) or data.get('walking_speed_m_per_s', 1.2) > 5:
+        errors.append('Walking speed must be greater than 0 and no more than 5 m/s.')
+    for key in ('stations', 'operators', 'boxes', 'dimensions'):
         if not isinstance(data.get(key, {}), dict):
             errors.append(f'{key} must be an object.')
     if errors:
@@ -173,6 +178,31 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
             value = box.get(field)
             if not isinstance(value, int) or isinstance(value, bool) or value < minimum:
                 errors.append(f'Box {bid}: {field} must be an integer ≥ {minimum}.')
+    # Rulers are non-inventory annotations, not simulation locations.
+    # Legacy scenarios without dimensions remain fully supported.
+    for did, dim in data.get('dimensions', {}).items():
+        if not isinstance(did, str) or not did or did in ('__proto__', 'constructor', 'prototype'):
+            errors.append('Dimension IDs must be nonempty safe strings.')
+        if not isinstance(dim, dict):
+            errors.append(f'Dimension {did} must be an object.')
+            continue
+        for field in ('x', 'y', 'x2', 'y2'):
+            if not is_number(dim.get(field), minimum=-float('inf')):
+                errors.append(f'Dimension {did}: {field} must be finite.')
+        if 'offset' in dim and not is_number(dim['offset'], minimum=-float('inf')):
+            errors.append(f'Dimension {did}: offset must be a finite canvas distance.')
+        for field in ('start_anchor', 'end_anchor'):
+            anchor=dim.get(field)
+            if anchor is None:
+                continue
+            if not isinstance(anchor, dict) or anchor.get('type') not in ('station', 'box'):
+                errors.append(f'Dimension {did}: {field} must reference a station or box.')
+                continue
+            # Deleted anchors are allowed: fallback points keep old annotations usable.
+            if not isinstance(anchor.get('id'), str) or anchor.get('id') in ('__proto__', 'constructor', 'prototype') or any(
+                not is_number(anchor.get(axis)) or anchor[axis] > 1 for axis in ('rx', 'ry')
+            ):
+                errors.append(f'Dimension {did}: {field} has invalid coordinates.')
     occupied_operator_slots = set()
     for op, operator in operators.items():
         if not isinstance(operator, dict):
@@ -211,6 +241,14 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
                 errors.append(f'{label} must be an object.')
                 continue
             action, loc = step.get('action'), step.get('loc')
+            # A standing side identifies where this operator performs the step.
+            # Older saves omit the setting and use the nearest available side.
+            standing_side = step.get('standing_side')
+            if standing_side is not None:
+                if standing_side not in ('top', 'right', 'bottom', 'left'):
+                    errors.append(f'{label}: standing side must be top, right, bottom or left.')
+                elif not isinstance(loc, str) or loc not in stations:
+                    errors.append(f'{label}: standing side can only be assigned at a station.')
             if action not in ('pick', 'work', 'drop'):
                 errors.append(f'{label}: invalid action.')
             if not isinstance(loc, str):

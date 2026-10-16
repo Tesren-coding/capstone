@@ -1269,6 +1269,17 @@
       "w": 90,
       "x": 622.4540997629899,
       "y": 450.3683379741907
+    },
+    "DIRECTION_24": {
+      "x": 37.75384336585239,
+      "y": 348.7155936754867,
+      "w": 2224,
+      "h": 93,
+      "type": "direction",
+      "name": "Line Direction",
+      "rotation": 0,
+      "flip_horizontal": false,
+      "flip_vertical": false
     }
   }
 }

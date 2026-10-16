@@ -4,9 +4,13 @@ import {requestJson, postJson} from "./api.js";
 import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
 import {drawDirection, directionContainsPoint, directionResizeHandle,
     resizeDirectionFromPoint, DIRECTION_MIN_WIDTH, DIRECTION_MIN_HEIGHT} from "./line-direction.js";
-import {OPERATOR_RADIUS, operatorPoint, operatorSlots, nearestOperatorSlot,
+import {OPERATOR_RADIUS, SIDES, operatorPoint, operatorSlots, nearestOperatorSlot,
     stationInsertPosition, snapStation, updateAttachedOperators, detachStationOperators,
     remapOperatorAttachments} from "./builder-snapping.js";
+import {smartSnapRect, nearestGapMeasurements, drawSmartGuides, meterLabel} from "./smart-guides.js";
+import {stationCorner,hitStationCorner,resizeStationRect,nearestDimensionPoint,
+    resolvedDimension,dimensionLinePoints,dimensionOffsetFromDrag,distanceFromSegment,drawDimension,drawStationDimensions,
+    drawStationHandles,MIN_STATION_WIDTH,MIN_STATION_HEIGHT} from "./dimension-tools.js";
 
 // builder.js — Scenario builder behavior.
 // ============================================================
@@ -15,6 +19,12 @@ import {OPERATOR_RADIUS, operatorPoint, operatorSlots, nearestOperatorSlot,
 const canvas     = document.getElementById("builder-canvas");
 const ctx        = canvas.getContext("2d");
 const statusText = document.getElementById("status-text");
+const scaleInput = document.getElementById('layout-scale-input');
+const walkSpeedInput = document.getElementById('walk-speed-input');
+const smartSnapInput = document.getElementById('smart-guide-toggle');
+const DEFAULT_PX_PER_M = 50;
+const DEFAULT_WALK_M_PER_S = 1.2;
+
 const lineDirectionImage = new Image();
 lineDirectionImage.onload = () => drawFrame();
 if (canvas.dataset.lineDirectionImageUrl) lineDirectionImage.src = canvas.dataset.lineDirectionImageUrl;
@@ -23,6 +33,7 @@ const scenario = {
     stations:  {},
     operators: {},
     boxes:     {},
+    dimensions: {}, // Saved independent measurements, optionally anchored to layout items.
 };
 
 const view = new CanvasViewport(canvas, document.getElementById('canvas-controls'), () => drawFrame());
@@ -40,6 +51,7 @@ let reviewSnapshot=null,reviewRequest=0;
 let nextStationId  = 1;
 let nextOperatorId = 1;
 let nextBoxId       = 1;
+let nextDimensionId = 1;
 
 const SIZES = {
     station: { w: STATION_WIDTH, h: STATION_HEIGHT },
@@ -65,19 +77,70 @@ let dragStart = null;
 const selectedKeys = new Set();
 let marquee = null;   // {start, current, base} in world coordinates
 let groupDrag = null; // {start, original} snapshot for translating a selection
+// The operator sequence step currently being edited; this is UI-only state.
+let standingPointEditor = null; // {operatorId, stepIndex}
+let pendingStandingClick = null; // defer click until mouseup so operators remain draggable
+let smartGuideData = null; // Only visible while dragging or previewing; never saved.
+let draggingWithoutSnap = false;
+let dimensionTool = false;
+let dimensionStart = null; // {x,y,anchor} once first endpoint is picked
+let dimensionPreview = null;
+
+function snapTargets(excluded = new Set()) {
+    // The direction graphic is measured using its rotated bounding rectangle.
+    // Exclude operators: their home attachment points must not redirect stations.
+    return allItems().filter(item => !['operator','dimension'].includes(item.type) &&
+        !excluded.has(selectionKey(item.type, item.id)))
+        .map(item => ({type:item.type==='station'?'station':'box', id:item.id, rect:itemBounds(item)}));
+}
+function guidePosition(rect, excludes, dockStations=false) {
+    // Alt temporarily disables snapping but still displays the physical gap.
+    const result = smartSnapRect(rect, snapTargets(excludes), view.scale,
+        {dockStations, snap:!!smartSnapInput?.checked && !draggingWithoutSnap});
+    smartGuideData = smartSnapInput?.checked ? result : null;
+    return result;
+}
+
+function validStandingStep(operatorId, index) {
+    const op = scenario.operators[operatorId];
+    return Number.isInteger(index) && !!op?.sequence?.[index] &&
+        !!scenario.stations[op.sequence[index].loc];
+}
+function syncStandingPointEditor(operatorId) {
+    if (!operatorId) { standingPointEditor = null; return; }
+    if (standingPointEditor?.operatorId === operatorId &&
+        validStandingStep(operatorId, standingPointEditor.stepIndex)) return;
+    const next = scenario.operators[operatorId]?.sequence?.findIndex(step =>
+        !!scenario.stations[step.loc]) ?? -1;
+    standingPointEditor = next >= 0 ? {operatorId, stepIndex:next} : null;
+}
+function activeStandingSlots() {
+    if (placingType || selectedItem?.type !== 'operator' || selectedKeys.size !== 1 ||
+        !standingPointEditor || standingPointEditor.operatorId !== selectedItem.id ||
+        !validStandingStep(standingPointEditor.operatorId, standingPointEditor.stepIndex)) return [];
+    const step = scenario.operators[standingPointEditor.operatorId].sequence[standingPointEditor.stepIndex];
+    return SIDES.map(side => ({side, stationId:step.loc,
+        ...operatorPoint(scenario.stations[step.loc], side), selected:step.standing_side === side}));
+}
+function standingSlotAt(point) {
+    const limit = Math.max(OPERATOR_RADIUS, 13 / view.scale);
+    return activeStandingSlots().find(slot => Math.hypot(point.x-slot.x, point.y-slot.y) <= limit) || null;
+}
 const selectionKey = (type, id) => `${type}:${id}`;
 
 function itemForKey(key) {
     const split = key.indexOf(':');
     const type = key.slice(0, split), id = key.slice(split + 1);
     const collection = type === 'station' ? scenario.stations :
-        type === 'operator' ? scenario.operators : scenario.boxes;
+        type === 'operator' ? scenario.operators :
+        type === 'dimension' ? scenario.dimensions : scenario.boxes;
     return collection[id] ? {type, id, pos: collection[id]} : null;
 }
 function setSelectedKeys(keys) {
     selectedKeys.clear();
     for (const key of keys) if (itemForKey(key)) selectedKeys.add(key);
     selectedItem = selectedKeys.size === 1 ? itemForKey([...selectedKeys][0]) : null;
+    syncStandingPointEditor(selectedItem?.type === 'operator' ? selectedItem.id : null);
     if (selectedKeys.size > 1) {
         panelTitle.textContent = `${selectedKeys.size} items selected`;
         panelFields.innerHTML = '<p>Drag any selected item to move the group. Ctrl-click to add or remove items. All station/operator connections are maintained when their station moves.</p>';
@@ -93,11 +156,73 @@ function allItems() {
         ...Object.entries(scenario.stations).map(([id,pos]) => ({type:'station',id,pos})),
         ...Object.entries(scenario.operators).map(([id,pos]) => ({type:'operator',id,pos})),
         ...Object.entries(scenario.boxes).map(([id,pos]) => ({type:'box',id,pos})),
+        ...Object.entries(scenario.dimensions).map(([id,pos]) => ({type:'dimension',id,pos})),
     ];
 }
 function rectFromPoints(a, b) {
     return {x: Math.min(a.x,b.x), y: Math.min(a.y,b.y),
         w: Math.abs(b.x-a.x), h: Math.abs(b.y-a.y)};
+}
+function dimensionBounds(type,id) {
+    if(type==='station') return scenario.stations[id] || null;
+    const box=scenario.boxes[id];
+    return box ? itemBounds({type:'box',id,pos:box}) : null;
+}
+function dimensionPoints(d) { return resolvedDimension(d,dimensionBounds); }
+function dimensionSnapPoint(mouse) {
+    return nearestDimensionPoint(mouse,snapTargets(),view.scale);
+}
+function dimensionAt(mouse) {
+    if(selectedItem?.type==='dimension') {
+        const dim=scenario.dimensions[selectedItem.id];
+        if(dim) {
+            const points=dimensionPoints(dim);
+            for(const which of ['start','end']) {
+                if(Math.hypot(mouse.x-points[which].x,mouse.y-points[which].y)<=10/view.scale)
+                    return {type:'dimension-endpoint',id:selectedItem.id,pos:dim,which};
+            }
+        }
+    }
+    for(const [id,dim] of Object.entries(scenario.dimensions)) {
+        const points=dimensionLinePoints(dim,dimensionBounds);
+        // Accept the ruler's label as a drag target too, not just its thin line.
+        const labelX=(points.start.x+points.end.x)/2+points.nx*17/view.scale;
+        const labelY=(points.start.y+points.end.y)/2+points.ny*17/view.scale;
+        if(distanceFromSegment(mouse,points.start,points.end)<=7/view.scale ||
+            (Math.abs(mouse.x-labelX)<=29/view.scale && Math.abs(mouse.y-labelY)<=11/view.scale))
+            return {type:'dimension',id,pos:dim};
+    }
+    return null;
+}
+function updateDimensionPanel() {
+    if(selectedItem?.type!=='dimension') return;
+    const dim=scenario.dimensions[selectedItem.id];
+    const output=document.getElementById('field-dimension-length');
+    if(dim&&output) {
+        const {start,end}=dimensionPoints(dim);
+        output.textContent=meterLabel(Math.hypot(end.x-start.x,end.y-start.y),Number(scaleInput.value));
+    }
+}
+function remapDimensionAnchors(mapping) {
+    for(const dim of Object.values(scenario.dimensions)) {
+        for(const key of ['start_anchor','end_anchor']) {
+            const a=dim[key];
+            if(a?.type==='station' && Object.hasOwn(mapping,a.id)) a.id=String(mapping[a.id]);
+        }
+    }
+}
+function releaseDeletedDimensionAnchors(type,id) {
+    for(const dim of Object.values(scenario.dimensions)) {
+        const points=dimensionPoints(dim);
+        for(const [which,coord] of [['start',points.start],['end',points.end]]) {
+            const anchor=dim[`${which}_anchor`];
+            if(anchor?.type===type && anchor.id===String(id)) {
+                if(which==='start'){dim.x=coord.x;dim.y=coord.y;}
+                else{dim.x2=coord.x;dim.y2=coord.y;}
+                dim[`${which}_anchor`]=null;
+            }
+        }
+    }
 }
 function rectIntersects(a, b) {
     return a.x <= b.x + b.w && a.x + a.w >= b.x &&
@@ -106,6 +231,12 @@ function rectIntersects(a, b) {
 function itemBounds(item) {
     const b = item.pos;
     if (item.type === 'operator') return {x:b.x-OPERATOR_RADIUS,y:b.y-OPERATOR_RADIUS,w:OPERATOR_RADIUS*2,h:OPERATOR_RADIUS*2};
+    if (item.type === 'dimension') {
+        const {start,end}=dimensionLinePoints(b,dimensionBounds);
+        const padding=5/Math.max(.05,view.scale);
+        return {x:Math.min(start.x,end.x)-padding,y:Math.min(start.y,end.y)-padding,
+                w:Math.abs(end.x-start.x)+padding*2,h:Math.abs(end.y-start.y)+padding*2};
+    }
     if (item.type !== 'box' || b.type !== 'direction') return b;
     const a = (b.rotation || 0) * Math.PI / 180;
     const w = Math.abs(b.w*Math.cos(a))+Math.abs(b.h*Math.sin(a));
@@ -117,18 +248,28 @@ function hitSelection(rect) {
         .map(item => selectionKey(item.type,item.id));
 }
 function beginGroupDrag(start) {
-    groupDrag = {start, original: new Map([...selectedKeys].map(key => {
+    const objects=[...selectedKeys].map(itemForKey).filter(Boolean);
+    const bounds=objects.map(itemBounds);
+    const x=Math.min(...bounds.map(b=>b.x)), y=Math.min(...bounds.map(b=>b.y));
+    const w=Math.max(...bounds.map(b=>b.x+b.w))-x;
+    const h=Math.max(...bounds.map(b=>b.y+b.h))-y;
+    groupDrag = {start, bounds:{x,y,w,h}, original: new Map([...selectedKeys].map(key => {
         const item = itemForKey(key);
-        return [key, {x:item.pos.x, y:item.pos.y, attached_to:item.pos.attached_to}];
+        return [key, {x:item.pos.x, y:item.pos.y, attached_to:item.pos.attached_to,
+            points:item.type==='dimension'?dimensionPoints(item.pos):null}];
     }))};
 }
 function moveGroup(to) {
-    const dx=to.x-groupDrag.start.x, dy=to.y-groupDrag.start.y;
+    let dx=to.x-groupDrag.start.x, dy=to.y-groupDrag.start.y;
+    const b=groupDrag.bounds;
+    const result=guidePosition({x:b.x+dx,y:b.y+dy,w:b.w,h:b.h},selectedKeys);
+    dx=result.x-b.x; dy=result.y-b.y;
     const movingStations = new Set([...selectedKeys].filter(k=>k.startsWith('station:')).map(k=>k.slice(8)));
+    const movingBoxes = new Set([...selectedKeys].filter(k=>k.startsWith('box:')).map(k=>k.slice(4)));
     // Move all selected stations first without single-station snap, preserving the group arrangement.
     for (const key of selectedKeys) {
         const item=itemForKey(key), original=groupDrag.original.get(key);
-        if (!item || !original || item.type==='operator') continue;
+        if (!item || !original || ['operator','dimension'].includes(item.type)) continue;
         item.pos.x=original.x+dx; item.pos.y=original.y+dy;
     }
     for (const key of selectedKeys) {
@@ -140,6 +281,20 @@ function moveGroup(to) {
         item.pos.x=original.x+dx; item.pos.y=original.y+dy;
     }
     for (const id of movingStations) updateAttachedOperators(scenario.stations, scenario.operators, id);
+    // Dimension anchors follow selected stations/boxes. Endpoints referring
+    // to outside objects become free points when their ruler is grouped/moved.
+    for (const key of selectedKeys) {
+        const item=itemForKey(key), original=groupDrag.original.get(key);
+        if(item?.type!=='dimension'||!original) continue;
+        for(const [which,point] of [['start',original.points.start],['end',original.points.end]]) {
+            const anchor=item.pos[`${which}_anchor`];
+            const follows=anchor && (anchor.type==='station'?movingStations.has(anchor.id):movingBoxes.has(anchor.id));
+            if(follows) continue;
+            if(which==='start') {item.pos.x=point.x+dx;item.pos.y=point.y+dy;}
+            else {item.pos.x2=point.x+dx;item.pos.y2=point.y+dy;}
+            item.pos[`${which}_anchor`]=null;
+        }
+    }
 }
 
 function snapOperatorToSlot(op, x, y, ignoreId = null) {
@@ -156,11 +311,11 @@ function snapOperatorToSlot(op, x, y, ignoreId = null) {
 
 function moveStation(id, x, y) {
     const station = scenario.stations[id];
-    const position = snapStation(scenario.stations, id, x, y, station.w, station.h, view.scale);
-    station.x = position.x;
-    station.y = position.y;
+    const result=guidePosition({x,y,w:station.w,h:station.h},
+        new Set([selectionKey('station',id)]), true);
+    station.x=result.x;station.y=result.y;
     updateAttachedOperators(scenario.stations, scenario.operators, id);
-    return position;
+    return result;
 }
 
 // ============================================================
@@ -170,6 +325,7 @@ const cancelPlaceBtn = document.getElementById("cancel-place-btn");
 
 document.querySelectorAll(".add-btn").forEach(btn => {
     btn.addEventListener("click", () => {
+        stopDimensionTool();
         placingType = btn.getAttribute("data-type");
         canvas.style.cursor = "crosshair";
         cancelPlaceBtn.style.display = "inline-block";
@@ -187,9 +343,32 @@ cancelPlaceBtn.addEventListener("click", () => {
     statusText.textContent = "Placement cancelled.";
 });
 
+const dimensionToolBtn=document.getElementById('dimension-tool-btn');
+function stopDimensionTool() {
+    dimensionTool=false;dimensionStart=null;dimensionPreview=null;
+    dimensionToolBtn.setAttribute('aria-pressed','false');
+    dimensionToolBtn.classList.remove('active-tool');
+    if(!placingType) canvas.style.cursor='default';
+}
+dimensionToolBtn.addEventListener('click', () => {
+    if(dimensionTool) {
+        stopDimensionTool();
+        statusText.textContent='Dimension tool disabled.';
+    } else {
+        exitPlacementMode();
+        setSelectedKeys([]);
+        dimensionTool=true;dimensionStart=null;dimensionPreview=null;
+        dimensionToolBtn.setAttribute('aria-pressed','true');
+        dimensionToolBtn.classList.add('active-tool');
+        canvas.style.cursor='crosshair';
+        statusText.textContent='Dimension: click two points on object edges. Drag the resulting dimension line away from the edges; dotted witness lines keep the measurement attached. Escape cancels.';
+    }
+    drawFrame();
+});
 function exitPlacementMode() {
     placingType = null;
     placementPreview = null;
+    smartGuideData = null;
     canvas.style.cursor = "default";
     cancelPlaceBtn.style.display = "none";
 }
@@ -312,7 +491,24 @@ function getCanvasMousePos(evt) {
 }
 
 canvas.addEventListener("click", (evt) => {
-    if (!placingType || view.isPanning || evt.shiftKey) return;
+    if (view.isPanning || evt.shiftKey) return;
+    if (dimensionTool) {
+        const point=dimensionSnapPoint(getCanvasMousePos(evt));
+        if(!dimensionStart) {
+            dimensionStart=point;
+            statusText.textContent='Dimension start set. Click the ending point.';
+        } else if(Math.hypot(point.x-dimensionStart.x,point.y-dimensionStart.y)>0.001) {
+            const id=`dim_${nextDimensionId++}`;
+            scenario.dimensions[id]={x:dimensionStart.x,y:dimensionStart.y,
+                x2:point.x,y2:point.y,start_anchor:dimensionStart.anchor,end_anchor:point.anchor,offset:-35};
+            stopDimensionTool();
+            setSelectedKeys([selectionKey('dimension',id)]);
+            statusText.textContent=`Dimension ${id} added. Drag the blue line to change its offset; dotted extension lines keep it attached to the edges.`;
+        }
+        drawFrame();
+        return;
+    }
+    if (!placingType) return;
 
     const pos = getCanvasMousePos(evt);
 
@@ -339,6 +535,14 @@ canvas.addEventListener("click", (evt) => {
 // PART 5 — Drag + selection logic
 // ============================================================
 function findItemAtPosition(mx, my) {
+    // A selected station reveals four independent resize handles.
+    if(selectedItem?.type==='station' && selectedKeys.size===1) {
+        const station=scenario.stations[selectedItem.id];
+        const corner=station && hitStationCorner(station,{x:mx,y:my},view.scale);
+        if(corner) return {type:'station-resize',id:selectedItem.id,pos:station,corner};
+    }
+    const dimension=dimensionAt({x:mx,y:my});
+    if(dimension) return dimension;
     if (selectedItem?.type === 'box') {
         const selected = scenario.boxes[selectedItem.id];
         if (selected?.type === 'direction') {
@@ -374,13 +578,24 @@ function findItemAtPosition(mx, my) {
 }
 
 canvas.addEventListener("mousedown", (evt) => {
-    if (placingType || view.isPanning || evt.button !== 0) return;
+    if (placingType || dimensionTool || view.isPanning || evt.button !== 0) return;
+    smartGuideData = null;
+    draggingWithoutSnap = evt.altKey;
     const mouse = getCanvasMousePos(evt);
+    // An explicit sequence standing-point click must win over hit-testing the
+    // operator sitting on that same snap circle. Apply on mouseup so dragging
+    // the operator remains possible without changing a sequence assignment.
+    const slot = !evt.ctrlKey && !evt.metaKey ? standingSlotAt(mouse) : null;
+    if (slot) {
+        pendingStandingClick = {slot, start:mouse};
+        canvas.style.cursor = 'pointer';
+        return;
+    }
     const item = findItemAtPosition(mouse.x, mouse.y);
     const additive = evt.ctrlKey || evt.metaKey;
 
     if (item) {
-        const key=selectionKey(item.type==='direction-resize'?'box':item.type,item.id);
+        const key=selectionKey(item.type==='direction-resize'?'box':item.type==='station-resize'?'station':item.type==='dimension-endpoint'?'dimension':item.type,item.id);
         if (additive) {
             const next=new Set(selectedKeys);
             if (next.has(key)) next.delete(key); else next.add(key);
@@ -388,7 +603,7 @@ canvas.addEventListener("mousedown", (evt) => {
             drawFrame();
             return;
         }
-        if (item.type === 'direction-resize') {
+        if (['direction-resize','station-resize','dimension-endpoint'].includes(item.type)) {
             setSelectedKeys([key]);
             draggedItem=item;
         } else if (selectedKeys.size > 1 && selectedKeys.has(key)) {
@@ -398,11 +613,17 @@ canvas.addEventListener("mousedown", (evt) => {
             draggedItem=item;
         }
         if (draggedItem) {
+            if(['station-resize','dimension-endpoint','dimension'].includes(item.type)) {
+                dragStart={x:mouse.x,y:mouse.y,rect:{...item.pos},
+                    points:item.type.startsWith('dimension')?dimensionPoints(item.pos):null,
+                    offset:item.type==='dimension'?Number(item.pos.offset||0):null};
+            }
             dragOffset.x = mouse.x-item.pos.x;
             dragOffset.y = mouse.y-item.pos.y;
-            dragStart = {x:item.pos.x,y:item.pos.y};
+            if(!['station-resize','dimension-endpoint','dimension'].includes(item.type))
+                dragStart = {x:item.pos.x,y:item.pos.y};
         }
-        canvas.style.cursor = item.type==='direction-resize' ? 'nwse-resize' : 'grabbing';
+        canvas.style.cursor = ['direction-resize','station-resize'].includes(item.type)?'nwse-resize':item.type==='dimension-endpoint'?'crosshair':'grabbing';
     } else {
         // Drag from empty space to draw a marquee; Ctrl-drag adds to selection.
         marquee = {start:mouse,current:mouse,base:additive?new Set(selectedKeys):new Set()};
@@ -415,6 +636,29 @@ canvas.addEventListener("mousedown", (evt) => {
 canvas.addEventListener("mousemove", (evt) => {
     if (view.isPanning) return;
     const mouse=getCanvasMousePos(evt);
+    if(dimensionTool) {
+        if(dimensionStart) dimensionPreview=dimensionSnapPoint(mouse);
+        drawFrame();
+        return;
+    }
+    draggingWithoutSnap = evt.altKey;
+    if (pendingStandingClick) {
+        if (Math.hypot(mouse.x-pendingStandingClick.start.x,
+                       mouse.y-pendingStandingClick.start.y) * view.scale < 6) return;
+        const old = pendingStandingClick;
+        pendingStandingClick = null;
+        const item = findItemAtPosition(old.start.x, old.start.y);
+        // Dragging an operator that shares its home snap circle with a
+        // selectable sequence point still moves its home position.
+        if (item?.type === 'operator' && item.id === selectedItem?.id) {
+            draggedItem = item;
+            dragStart = {x:item.pos.x, y:item.pos.y};
+            dragOffset = {x:old.start.x-item.pos.x, y:old.start.y-item.pos.y};
+        } else {
+            canvas.style.cursor = 'default';
+            return;
+        }
+    }
     if (marquee) {
         marquee.current=mouse;
         setSelectedKeys(new Set([...marquee.base,...hitSelection(rectFromPoints(marquee.start,mouse))]));
@@ -429,12 +673,19 @@ canvas.addEventListener("mousemove", (evt) => {
     if (!draggedItem) {
         if (!placingType) {
             const item=findItemAtPosition(mouse.x,mouse.y);
-            canvas.style.cursor=item?.type==='direction-resize'?'nwse-resize':item?'grab':'default';
+            canvas.style.cursor=standingSlotAt(mouse)?'pointer':['station-resize','direction-resize'].includes(item?.type)?'nwse-resize':item?.type==='dimension-endpoint'?'crosshair':item?'grab':'default';
             return;
         }
         if (placingType==='station') {
             placementPreview=stationInsertPosition(scenario.stations,mouse.x,mouse.y,
                 STATION_WIDTH,STATION_HEIGHT,view.scale);
+            // Show live distances against existing items while previewing the new station.
+            // Insertion itself remains controlled by stationInsertPosition
+            // to avoid overlapping another station on click.
+            const previewRect={x:placementPreview.x,y:placementPreview.y,
+                w:STATION_WIDTH,h:STATION_HEIGHT};
+            smartGuideData=smartSnapInput?.checked ? {rect:previewRect,guides:[],
+                measurements:nearestGapMeasurements(previewRect,snapTargets())}:null;
         } else if (placingType==='operator') {
             placementPreview=nearestOperatorSlot(scenario.stations,scenario.operators,
                 mouse.x,mouse.y,view.scale)||{x:mouse.x,y:mouse.y};
@@ -443,7 +694,35 @@ canvas.addEventListener("mousemove", (evt) => {
         return;
     }
     const newX=mouse.x-dragOffset.x, newY=mouse.y-dragOffset.y;
-    if (draggedItem.type==='direction-resize') {
+    if (draggedItem.type==='station-resize') {
+        const sid=draggedItem.id;
+        const original=dragStart.rect;
+        const snap=guidePosition({x:mouse.x,y:mouse.y,w:0,h:0},new Set([selectionKey('station',sid)]));
+        const rect=resizeStationRect(original,draggedItem.corner,{x:snap.x,y:snap.y});
+        Object.assign(scenario.stations[sid],rect);
+        updateAttachedOperators(scenario.stations,scenario.operators,sid);
+        smartGuideData=smartSnapInput?.checked ? {...snap,rect,
+            measurements:nearestGapMeasurements(rect,snapTargets(new Set([selectionKey('station',sid)])))}:null;
+        const wField=document.getElementById('field-station-width');
+        const hField=document.getElementById('field-station-height');
+        const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
+        if(wField)wField.value=(rect.w/ppm).toFixed(2);
+        if(hField)hField.value=(rect.h/ppm).toFixed(2);
+    } else if(draggedItem.type==='dimension-endpoint') {
+        const d=scenario.dimensions[draggedItem.id];
+        const point=dimensionSnapPoint(mouse);
+        const first=draggedItem.which==='start';
+        d[first?'x':'x2']=point.x;d[first?'y':'y2']=point.y;
+        d[`${draggedItem.which}_anchor`]=point.anchor;
+        updateDimensionPanel();
+    } else if(draggedItem.type==='dimension') {
+        const d=scenario.dimensions[draggedItem.id];
+        // Only move the dimension LINE, never the measured object anchors.
+        // Witness lines follow the anchors as stations move and resize.
+        d.offset=dimensionOffsetFromDrag({...d,offset:dragStart.offset},dimensionBounds,
+            {x:mouse.x-dragStart.x,y:mouse.y-dragStart.y});
+        updateDimensionPanel();
+    } else if (draggedItem.type==='direction-resize') {
         resizeDirectionFromPoint(draggedItem.pos,mouse.x,mouse.y);
         const wField=document.getElementById('field-direction-width');
         const hField=document.getElementById('field-direction-height');
@@ -452,30 +731,68 @@ canvas.addEventListener("mousemove", (evt) => {
     } else if (draggedItem.type==='operator') {
         const op=scenario.operators[draggedItem.id];
         if(dragStart && Math.hypot(newX-dragStart.x,newY-dragStart.y)*view.scale<5) return;
-        snapOperatorToSlot(op,newX,newY,draggedItem.id);
+        // Station attachment takes precedence; free operators can align to
+        // other canvas objects when no attachment point is close enough.
+        const slot=nearestOperatorSlot(scenario.stations,scenario.operators,
+            newX,newY,view.scale,draggedItem.id);
+        if(slot) {
+            snapOperatorToSlot(op,newX,newY,draggedItem.id);
+            smartGuideData=smartSnapInput?.checked ? {
+                rect:{x:op.x-OPERATOR_RADIUS,y:op.y-OPERATOR_RADIUS,
+                    w:OPERATOR_RADIUS*2,h:OPERATOR_RADIUS*2},guides:[],
+                measurements:[]}:null;
+        } else {
+            // Operator free movement stays exact: its station-attachment circles
+            // are the only snapping targets for operators. Do not pull an
+            // operator onto unrelated rectangular alignment anchors.
+            op.x=newX;op.y=newY;
+            delete op.attached_to;
+            smartGuideData=smartSnapInput?.checked ? smartSnapRect(
+                {x:op.x-OPERATOR_RADIUS,y:op.y-OPERATOR_RADIUS,
+                 w:OPERATOR_RADIUS*2,h:OPERATOR_RADIUS*2},
+                snapTargets(),view.scale,{snap:false}) : null;
+        }
     } else if(draggedItem.type==='station') {
         moveStation(draggedItem.id,newX,newY);
-    } else {
-        draggedItem.pos.x=newX;
-        draggedItem.pos.y=newY;
+    } else if(draggedItem.type==='box') {
+        const b=draggedItem.pos;
+        // Rotated line-direction bounding boxes do not start at b.x/b.y.
+        const current=itemBounds(draggedItem);
+        const offsetX=current.x-b.x,offsetY=current.y-b.y;
+        const r=guidePosition({x:newX+offsetX,y:newY+offsetY,w:current.w,h:current.h},
+            new Set([selectionKey('box',draggedItem.id)]));
+        b.x=r.x-offsetX;b.y=r.y-offsetY;
     }
     drawFrame();
 });
 
 function finishCanvasPointer() {
+    if (pendingStandingClick) {
+        const {slot} = pendingStandingClick;
+        pendingStandingClick = null;
+        const editor = standingPointEditor;
+        if (editor && validStandingStep(editor.operatorId,editor.stepIndex) &&
+            scenario.operators[editor.operatorId].sequence[editor.stepIndex].loc === slot.stationId) {
+            scenario.operators[editor.operatorId].sequence[editor.stepIndex].standing_side = slot.side;
+            statusText.textContent = `Operator ${editor.operatorId}, step ${editor.stepIndex+1}: standing point set to ${slot.side} of S${slot.stationId}.`;
+            renderSequenceList(scenario.operators[editor.operatorId]);
+        }
+    }
     const wasSelecting=!!marquee;
     marquee=null; groupDrag=null; draggedItem=null; dragStart=null;
+    smartGuideData=null;
     if(wasSelecting) statusText.textContent=selectedKeys.size
         ? `${selectedKeys.size} item(s) selected. Drag any selected item to move them together; Ctrl-click to adjust selection.`
         : 'No items in that selection. Drag a rectangle around items to select them.';
-    canvas.style.cursor=placingType?'crosshair':'default';
+    canvas.style.cursor=placingType||dimensionTool?'crosshair':'default';
     drawFrame();
 }
 canvas.addEventListener('mouseup',finishCanvasPointer);
 canvas.addEventListener('mouseleave',()=>{
     // End active drag on leaving the canvas so movement cannot get stuck.
+    if(pendingStandingClick) { pendingStandingClick=null; canvas.style.cursor='default'; }
     if(marquee||groupDrag||draggedItem) finishCanvasPointer();
-    if(placementPreview){placementPreview=null;drawFrame();}
+    if(placementPreview){placementPreview=null;smartGuideData=null;drawFrame();}
 });
 
 // ============================================================
@@ -579,6 +896,7 @@ function selectDefaultProcess(step) {
 // Render the ordered list of sequence steps for an operator
 // --------------------------------------------------------
 function renderSequenceList(op) {
+    if (selectedItem?.type === 'operator') syncStandingPointEditor(selectedItem.id);
     const container = document.getElementById("sequence-list");
     if (!container) return;
 
@@ -604,6 +922,16 @@ function renderSequenceList(op) {
                 ${dragHandle('builder-sequence',String(i),'work step '+(i+1))}
                 <button class="step-remove" data-idx="${i}" style="padding:2px 6px; background:#fde8e8;">✕</button>
               </div>
+              ${scenario.stations[step.loc] ? `
+                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-top:6px; font-size:11px;">
+                  <span><strong>Standing:</strong> ${step.standing_side ? escapeHtml(step.standing_side[0].toUpperCase()+step.standing_side.slice(1)) : 'Auto (nearest side)'}</span>
+                  <button type="button" class="step-standing-select" data-idx="${i}"
+                    aria-pressed="${standingPointEditor?.operatorId === selectedItem?.id && standingPointEditor?.stepIndex === i}"
+                    style="font-size:11px; padding:3px 6px; border:1px solid #4777ae; background:${standingPointEditor?.operatorId === selectedItem?.id && standingPointEditor?.stepIndex === i ? '#dbeafe' : '#ffffff'};">
+                    ${standingPointEditor?.operatorId === selectedItem?.id && standingPointEditor?.stepIndex === i ? '● Selecting on canvas' : '◎ Select on canvas'}
+                  </button>
+                  ${step.standing_side ? `<button type="button" class="step-standing-auto" data-idx="${i}" style="font-size:11px; padding:3px 6px;">Use Auto</button>` : ''}
+                </div>` : ''}
               ${step.action === 'work' ? `<label style="font-size:11px;">Process
                   <select class="step-process" data-idx="${i}" style="width:100%; font-size:12px;">${processOptions(step)}</select>
                 </label>` : ''}
@@ -617,8 +945,10 @@ function renderSequenceList(op) {
             const idx = parseInt(e.target.getAttribute("data-idx"));
             op.sequence[idx].action = e.target.value;
             op.sequence[idx].loc = "";
+            delete op.sequence[idx].standing_side;
             selectDefaultProcess(op.sequence[idx]);
             renderSequenceList(op);
+            drawFrame();
         });
     });
 
@@ -626,9 +956,26 @@ function renderSequenceList(op) {
         sel.addEventListener("change", (e) => {
             const idx = parseInt(e.target.getAttribute("data-idx"));
             op.sequence[idx].loc = e.target.value;
+            delete op.sequence[idx].standing_side;
             selectDefaultProcess(op.sequence[idx]);
             renderSequenceList(op);
+            drawFrame();
         });
+    });
+    container.querySelectorAll('.step-standing-select').forEach(button => {
+        button.onclick = e => {
+            standingPointEditor = {operatorId:selectedItem.id, stepIndex:Number(e.currentTarget.dataset.idx)};
+            renderSequenceList(op);
+            statusText.textContent = `Choose one of the four dotted circles around S${op.sequence[standingPointEditor.stepIndex].loc} for step ${standingPointEditor.stepIndex+1}.`;
+            drawFrame();
+        };
+    });
+    container.querySelectorAll('.step-standing-auto').forEach(button => {
+        button.onclick = e => {
+            delete op.sequence[Number(e.currentTarget.dataset.idx)].standing_side;
+            renderSequenceList(op);
+            drawFrame();
+        };
     });
     container.querySelectorAll('.step-process').forEach(select => {
         select.onchange = e => { op.sequence[Number(e.target.dataset.idx)].process = e.target.value; };
@@ -639,6 +986,7 @@ function renderSequenceList(op) {
             const idx = parseInt(e.target.getAttribute("data-idx"));
             op.sequence.splice(idx, 1);
             renderSequenceList(op);
+            drawFrame();
         });
     });
 }
@@ -668,6 +1016,7 @@ function changeStationId(oldId, newId) {
     });
     remapOperatorAttachments(scenario.operators,
         displaced ? {[oldId]: newId, [newId]: oldId} : {[oldId]: newId});
+    remapDimensionAnchors(displaced ? {[oldId]:newId,[newId]:oldId} : {[oldId]:newId});
     // Keep selected ID pointers consistent with station renumbering/swaps.
     const remapped=[...selectedKeys].map(key => key===selectionKey('station',oldId)
         ? selectionKey('station',newId) : displaced && key===selectionKey('station',newId)
@@ -736,6 +1085,7 @@ function reorderStations(id,beforeId) {
     ordered.forEach((old,index)=>{scenario.stations[slots[index]]=original[old];});
     Object.values(scenario.operators).forEach(op=>(op.sequence||[]).forEach(step=>{if(Object.hasOwn(mapping,String(step.loc)))step.loc=mapping[String(step.loc)];}));
     remapOperatorAttachments(scenario.operators, mapping);
+    remapDimensionAnchors(mapping);
     const remapped=[...selectedKeys].map(key=>key.startsWith('station:')
         ? selectionKey('station',mapping[key.slice(8)]||key.slice(8)):key);
     selectedKeys.clear();remapped.forEach(key=>selectedKeys.add(key));
@@ -781,7 +1131,14 @@ function openSidePanel(item) {
     }
     sidePanel.style.display = "block";
 
-    if (item.type === "station") {
+    if (item.type === 'dimension') {
+        const d=scenario.dimensions[item.id];
+        panelTitle.textContent='Dimension';
+        panelFields.innerHTML=`<p style="font-size:12px;">Measured length: <strong id="field-dimension-length"></strong></p>
+            <p style="font-size:12px;">Endpoints snap anywhere along station and box edges. Drag the blue dimension line to offset it; dotted extension lines connect the line to the measured edges without detaching its anchors.</p>
+            <p style="font-size:11px;color:#506177;">If anchored to an object, the measurement follows its position and size. Scale (px/m) controls the length displayed.</p>`;
+        updateDimensionPanel();
+    } else if (item.type === "station") {
         const s = scenario.stations[item.id];
         panelTitle.textContent = `Station S${item.id}`;
         const orderOpen=document.getElementById('station-order-details')?.open||false;
@@ -797,6 +1154,11 @@ function openSidePanel(item) {
             <details id="station-order-details" ${orderOpen?'open':''}><summary style="font-size:12px; cursor:pointer;">Drag to reorder station IDs</summary><ol class="station-order-list">${stationIds.map(id=>`<li data-builder-station="${id}">${dragHandle('builder-station',id,'station '+id)}<span>S${id} · ${escapeHtml(scenario.stations[id].name)}</span></li>`).join('')}</ol></details>
             <label>Name</label>
             <input type="text" id="field-name" value="${escapeHtml(s.name)}" style="width:100%; margin-bottom:8px;">
+            <div style="display:flex;gap:10px;margin:10px 0;">
+                <label style="flex:1;">Width (m)<input id="field-station-width" type="number" min="0.01" step="0.01" value="${(s.w/(Number(scaleInput.value)||DEFAULT_PX_PER_M)).toFixed(2)}" style="width:100%;"></label>
+                <label style="flex:1;">Height (m)<input id="field-station-height" type="number" min="0.01" step="0.01" value="${(s.h/(Number(scaleInput.value)||DEFAULT_PX_PER_M)).toFixed(2)}" style="width:100%;"></label>
+            </div>
+            <p style="font-size:11px;color:#506177;margin:0 0 8px;">Drag a selected station's corner to resize. The opposite corner stays fixed. Dimensions follow the current px/m scale.</p>
             <h4 style="margin:8px 0;">Processes</h4>
             <p style="font-size:11px; margin-bottom:8px;">Manual time requires the operator. Auto time runs after manual time; the operator can leave. Choose each process in a Work step.</p>
             <div id="process-list"></div>
@@ -815,6 +1177,16 @@ function openSidePanel(item) {
             s.name = e.target.value;
             drawFrame();
         });
+        for(const [field,key,min] of [['field-station-width','w',MIN_STATION_WIDTH],['field-station-height','h',MIN_STATION_HEIGHT]]) {
+            document.getElementById(field).addEventListener('change',evt=>{
+                const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
+                const meters=Number(evt.target.value);
+                if(Number.isFinite(meters)&&meters>0) s[key]=Math.max(min,meters*ppm);
+                evt.target.value=(s[key]/ppm).toFixed(2);
+                updateAttachedOperators(scenario.stations,scenario.operators,item.id);
+                drawFrame();
+            });
+        }
         if (!s.processes) s.processes = stationProcesses(s);
         renderStationProcesses(s, item.id);
         document.getElementById('add-process-btn').onclick = () => {
@@ -839,6 +1211,10 @@ function openSidePanel(item) {
             <input type="color" id="field-color" value="${rgbToHex(op.color)}" style="width:100%; margin-bottom:12px;">
             <hr>
             <label>Sequence</label>
+            <p style="font-size:11px; color:#45556a; margin:5px 0 9px;">
+              Choose a station step, then click one of its four dotted circles on the canvas.
+              Each step can use a different station side. IN, OUT and SWIP boxes use their center.
+            </p>
             <div id="sequence-list" style="margin-bottom:8px;"></div>
             <button id="add-step-btn" style="width:100%; padding:6px; background:#e8eef8; border:2px solid #1e3c78;">+ Add Step</button>
         `;
@@ -853,10 +1229,15 @@ function openSidePanel(item) {
         });
 
         renderSequenceList(op);
+        if (standingPointEditor) {
+            const step = op.sequence[standingPointEditor.stepIndex];
+            statusText.textContent = `Select a dotted circle around S${step.loc}, or choose another station step in the Sequence editor.`;
+        }
 
         document.getElementById("add-step-btn").addEventListener("click", () => {
             op.sequence.push({ action: "pick", loc: "" });
             renderSequenceList(op);
+            drawFrame();
         });
 
     } else if (item.type === "box") {
@@ -986,13 +1367,15 @@ deleteItemBtn.addEventListener("click", () => {
         const item=itemForKey(key);
         if(item?.type==='station') {
             detachStationOperators(scenario.operators,item.id);
+            releaseDeletedDimensionAnchors('station',item.id);
             delete scenario.stations[item.id];
         }
     }
     for (const key of keys) {
         const item=itemForKey(key);
         if(item?.type==='operator') delete scenario.operators[item.id];
-        if(item?.type==='box') delete scenario.boxes[item.id];
+        if(item?.type==='box'){releaseDeletedDimensionAnchors('box',item.id);delete scenario.boxes[item.id];}
+        if(item?.type==='dimension') delete scenario.dimensions[item.id];
     }
     setSelectedKeys([]);
     drawFrame();
@@ -1115,10 +1498,9 @@ function drawFrame() {
         }
     }
 
-    // Dotted rings are the available attachment points. Show them while
-    // placing/moving an operator, or while inspecting a station/operator.
-    if (placingType === 'operator' || draggedItem?.type === 'operator' ||
-        (selectedItem?.type === 'operator' && selectedKeys.size === 1)) {
+    // Available *home attachment* rings appear only during operator placement
+    // or drag, not when simply selecting an operator or a station.
+    if (placingType === 'operator' || draggedItem?.type === 'operator') {
         const slots = operatorSlots(scenario.stations, scenario.operators,
             draggedItem?.type === 'operator' ? draggedItem.id : null);
         ctx.save();
@@ -1129,6 +1511,33 @@ function drawFrame() {
             ctx.beginPath();
             ctx.arc(slot.x, slot.y, OPERATOR_RADIUS, 0, Math.PI * 2);
             ctx.stroke();
+        }
+        ctx.restore();
+    }
+
+    // Four clickable standing-point rings, ONLY around the station referenced
+    // by the active sequence step. Multiple stations are edited independently.
+    const standingSlots = activeStandingSlots();
+    if (standingSlots.length) {
+        const op = scenario.operators[selectedItem.id];
+        ctx.save();
+        ctx.lineWidth = 2 / view.scale;
+        ctx.strokeStyle = `rgb(${op.color.join(',')})`;
+        ctx.fillStyle = `rgba(${op.color.join(',')}, 0.20)`;
+        ctx.setLineDash([4 / view.scale, 4 / view.scale]);
+        for (const slot of standingSlots) {
+            ctx.beginPath();
+            ctx.arc(slot.x, slot.y, OPERATOR_RADIUS, 0, Math.PI * 2);
+            if (slot.selected) ctx.fill();
+            ctx.stroke();
+            if (slot.selected) {
+                ctx.setLineDash([]);
+                ctx.beginPath(); ctx.arc(slot.x,slot.y,4 / view.scale,0,Math.PI*2);
+                ctx.fillStyle = `rgb(${op.color.join(',')})`;
+                ctx.fill();
+                ctx.fillStyle = `rgba(${op.color.join(',')}, 0.20)`;
+                ctx.setLineDash([4 / view.scale, 4 / view.scale]);
+            }
         }
         ctx.restore();
     }
@@ -1147,6 +1556,16 @@ function drawFrame() {
             ctx.stroke();
         }
         ctx.restore();
+    }
+
+    // Selected station can be resized from any corner. Live width/height
+    // measurements use the same physical scale as walking-time calculations.
+    if(selectedItem?.type==='station' && selectedKeys.size===1) {
+        const station=scenario.stations[selectedItem.id];
+        if(station) {
+            drawStationDimensions(ctx,station,Number(scaleInput.value)||DEFAULT_PX_PER_M,view.scale);
+            drawStationHandles(ctx,station,view.scale);
+        }
     }
 
     // ---- draw operators ----
@@ -1181,6 +1600,20 @@ function drawFrame() {
             ctx.setLineDash([]);
         }
     }
+    // Saved dimensions remain visible outside measure mode, and recompute
+    // anchored endpoints whenever their station or box moves/resizes.
+    for(const [id,d] of Object.entries(scenario.dimensions)) {
+        drawDimension(ctx,d,dimensionBounds,Number(scaleInput.value)||DEFAULT_PX_PER_M,
+            view.scale,{selected:selectedKeys.has(selectionKey('dimension',id))});
+    }
+    if(dimensionTool && dimensionStart) {
+        const end=dimensionPreview||dimensionStart;
+        drawDimension(ctx,{x:dimensionStart.x,y:dimensionStart.y,x2:end.x,y2:end.y,offset:-35},
+            dimensionBounds,Number(scaleInput.value)||DEFAULT_PX_PER_M,view.scale,{preview:true});
+    }
+    // Draw alignment and measurement overlays above objects, without
+    // changing any operator/station drawing or storing the guides.
+    drawSmartGuides(ctx, smartGuideData, Number(scaleInput.value)||DEFAULT_PX_PER_M, view.scale);
     if (marquee) {
         const area=rectFromPoints(marquee.start,marquee.current);
         ctx.save();
@@ -1203,24 +1636,200 @@ function serializeScenario() {
         ...scenarioExtras,
         schema_version: schemaVersion,
         takt_time: Number(taktTimeInput.value),
+        layout_scale_px_per_m: Number(scaleInput.value),
+        walking_speed_m_per_s: Number(walkSpeedInput.value),
         stations:  scenario.stations,
         operators: scenario.operators,
         boxes:     scenario.boxes,
+        dimensions: scenario.dimensions,
     };
 }
 
+// ---- Builder-only editing history and internal object clipboard ----
+// A checkpoint captures the state BEFORE a user operation. Identical checkpoints
+// are skipped by undo, so selecting an item does not waste an undo step.
+const undoStack=[];
+const redoStack=[];
+const MAX_UNDO=80;
+let objectClipboard=null;
+let pasteGeneration=0;
+let redoBaseline=null;
+function editorSnapshot() {return JSON.stringify(serializeScenario());}
+function recordUndo() {
+    const current=editorSnapshot();
+    if(undoStack.at(-1)!==current) {
+        undoStack.push(current);
+        if(undoStack.length>MAX_UNDO) undoStack.shift();
+    }
+    // Selecting an item should not discard redo history. If the last
+    // checkpoint has changed since an undo, the next redo will reject it.
+}
+function restoreEditorSnapshot(json) {
+    const data=JSON.parse(json);
+    const keys=['stations','operators','boxes','dimensions'];
+    for(const key of keys) {
+        for(const id of Object.keys(scenario[key])) delete scenario[key][id];
+        Object.assign(scenario[key],data[key]||{});
+    }
+    scenarioExtras=Object.fromEntries(Object.entries(data).filter(([key]) =>
+        !['schema_version','takt_time','layout_scale_px_per_m','walking_speed_m_per_s',...keys].includes(key)));
+    taktTimeInput.value=String(data.takt_time??30);
+    scaleInput.value=String(data.layout_scale_px_per_m??DEFAULT_PX_PER_M);
+    walkSpeedInput.value=String(data.walking_speed_m_per_s??DEFAULT_WALK_M_PER_S);
+    nextStationId=Math.max(nextStationId,1,...Object.keys(scenario.stations).map(id=>Number(id)+1||1));
+    nextOperatorId=Math.max(nextOperatorId,1,...Object.keys(scenario.operators).map(id=>Number(id.replace(/^Op/,''))+1||1));
+    nextBoxId=Math.max(nextBoxId,1,...Object.keys(scenario.boxes).map(id=>Number(id.split('_').at(-1))+1||1));
+    nextDimensionId=Math.max(nextDimensionId,1,...Object.keys(scenario.dimensions).map(id=>Number(id.replace(/^dim_/,''))+1||1));
+    for(const id of Object.keys(scenario.stations)) updateAttachedOperators(scenario.stations,scenario.operators,id);
+    setSelectedKeys([]); draggedItem=null; groupDrag=null; marquee=null;
+    dimensionStart=null;dimensionPreview=null; smartGuideData=null;
+    exitPlacementMode();stopDimensionTool();
+    drawFrame();rememberDraft();
+}
+function undoEditor() {
+    const current=editorSnapshot();
+    if(redoStack.length && redoBaseline!==null && current!==redoBaseline) redoStack.length=0;
+    while(undoStack.length) {
+        const prior=undoStack.pop();
+        if(prior===current) continue;
+        redoStack.push(current);redoBaseline=prior;
+        restoreEditorSnapshot(prior);
+        statusText.textContent='Undo: last canvas edit restored.';
+        return true;
+    }
+    statusText.textContent='Nothing to undo.';
+    return false;
+}
+function redoEditor() {
+    const current=editorSnapshot();
+    if(redoStack.length && redoBaseline!==null && current!==redoBaseline) {
+        redoStack.length=0;statusText.textContent='Redo unavailable after new edits.';return false;
+    }
+    while(redoStack.length) {
+        const next=redoStack.pop();
+        if(next===current) continue;
+        undoStack.push(current);redoBaseline=next;
+        restoreEditorSnapshot(next);
+        statusText.textContent='Redo: edit restored.';
+        return true;
+    }
+    statusText.textContent='Nothing to redo.';
+    return false;
+}
+function copyCanvasSelection() {
+    const items=[...selectedKeys].map(itemForKey).filter(Boolean);
+    if(!items.length) return false;
+    objectClipboard=items.map(item=>({type:item.type,id:item.id,
+        pos:structuredClone(item.pos),
+        endpoints:item.type==='dimension'?dimensionPoints(item.pos):null}));
+    pasteGeneration=0;
+    statusText.textContent=`Copied ${items.length} canvas item(s). Press Ctrl+V to paste.`;
+    return true;
+}
+function pasteCanvasSelection() {
+    if(!objectClipboard?.length) return false;
+    recordUndo();
+    redoStack.length=0;
+    const shift=35*(++pasteGeneration), mappings={station:{},box:{},operator:{},dimension:{}};
+    const staged=[];
+    // Insert stations/boxes first to build reference maps for the operators/rulers.
+    for(const type of ['station','box','operator','dimension']) {
+        for(const item of objectClipboard.filter(i=>i.type===type)) {
+            const data=structuredClone(item.pos);
+            data.x+=shift;data.y+=shift;
+            if(type==='dimension') {data.x2+=shift;data.y2+=shift;}
+            let id;
+            if(type==='station') {
+                do {id=String(nextStationId++);} while(scenario.stations[id]);
+                scenario.stations[id]=data;
+            } else if(type==='box') {
+                do {id=`${String(data.type).toUpperCase()}_${nextBoxId++}`;} while(scenario.boxes[id]);
+                scenario.boxes[id]=data;
+            } else if(type==='operator') {
+                do {id=`Op${nextOperatorId++}`;} while(scenario.operators[id]);
+                if(!data.name || data.name===item.id) data.name=id;
+                scenario.operators[id]=data;
+            } else {
+                do {id=`dim_${nextDimensionId++}`;} while(scenario.dimensions[id]);
+                scenario.dimensions[id]=data;
+            }
+            mappings[type][item.id]=id;
+            staged.push({type,id,data,source:item});
+        }
+    }
+    for(const {type,data,source} of staged) {
+        if(type==='operator') {
+            const anchor=data.attached_to;
+            if(anchor) {
+                if(mappings.station[anchor.station_id])
+                    anchor.station_id=mappings.station[anchor.station_id];
+                else delete data.attached_to;
+            }
+            for(const step of data.sequence||[]) {
+                if(mappings.station[step.loc]) step.loc=mappings.station[step.loc];
+                if(mappings.box[step.loc]) step.loc=mappings.box[step.loc];
+            }
+        } else if(type==='dimension') {
+            for(const which of ['start','end']) {
+                const a=data[`${which}_anchor`];
+                if(!a) continue;
+                const newId=mappings[a.type]?.[a.id];
+                if(newId) a.id=newId;
+                else {
+                    const original=source.endpoints[which];
+                    data[which==='start'?'x':'x2']=original.x+shift;
+                    data[which==='start'?'y':'y2']=original.y+shift;
+                    data[`${which}_anchor`]=null;
+                }
+            }
+        }
+    }
+    for(const {type,id} of staged) if(type==='station')
+        updateAttachedOperators(scenario.stations,scenario.operators,id);
+    setSelectedKeys(staged.map(item=>selectionKey(item.type,item.id)));
+    drawFrame();
+    statusText.textContent=`Pasted ${staged.length} item(s), offset ${shift} canvas units.`;
+    return true;
+}
+// Capture BEFORE handlers mutate the scenario. Text fields retain native
+// copy/paste/undo; canvas shortcuts act only when the user is not typing.
+const isTextEditing=(element)=>!!element?.closest?.('input,textarea,select,[contenteditable="true"],[role="textbox"]');
+document.addEventListener('mousedown',evt=>{
+    if(evt.button===0 && !isTextEditing(evt.target) &&
+        (evt.target===canvas || evt.target.closest?.('#toolbar,#toolbar2,#panel-fields,#delete-item-btn')))
+        recordUndo();
+},true);
+document.addEventListener('focusin',evt=>{
+    if(isTextEditing(evt.target) && evt.target.closest?.('#side-panel,#toolbar2')) recordUndo();
+},true);
+document.addEventListener('input',evt=>{
+    if(evt.target.closest?.('#side-panel,#toolbar2')) recordUndo();
+},true);
+document.addEventListener('keydown',evt=>{
+    const modifier=(evt.ctrlKey||evt.metaKey)&&!evt.altKey;
+    if(!modifier || isTextEditing(evt.target)) return;
+    const key=evt.key.toLowerCase();
+    if(key==='z') {evt.preventDefault();evt.stopPropagation();evt.shiftKey?redoEditor():undoEditor();}
+    else if(key==='y') {evt.preventDefault();evt.stopPropagation();redoEditor();}
+    else if(key==='c' && selectedKeys.size) {evt.preventDefault();copyCanvasSelection();}
+    else if(key==='v' && objectClipboard?.length) {evt.preventDefault();pasteCanvasSelection();}
+},true);
+
 function applyLoadedScenario(data) {
+    undoStack.length=0;redoStack.length=0;redoBaseline=null;
     freshLineSnapshot = null;
     if (data.schema_version !== schemaVersion) throw new Error('Scenario must be migrated by the server before opening.');
     scenarioExtras = Object.fromEntries(Object.entries(data).filter(([key]) =>
-        !['schema_version', 'takt_time', 'stations', 'operators', 'boxes'].includes(key)));
+        !['schema_version', 'takt_time', 'layout_scale_px_per_m', 'walking_speed_m_per_s', 'stations', 'operators', 'boxes', 'dimensions'].includes(key)));
     for (const k in scenario.stations)  delete scenario.stations[k];
     for (const k in scenario.operators) delete scenario.operators[k];
     for (const k in scenario.boxes)     delete scenario.boxes[k];
+    for (const k in scenario.dimensions) delete scenario.dimensions[k];
 
     Object.assign(scenario.stations,  data.stations  || {});
     Object.assign(scenario.operators, data.operators || {});
     Object.assign(scenario.boxes,     data.boxes     || {});
+    Object.assign(scenario.dimensions, data.dimensions || {});
     // Older scenarios without attached_to remain free-floating, with original
     // coordinates/sizes untouched. Attached operators use their side anchor.
     Object.keys(scenario.stations).forEach(id =>
@@ -1228,10 +1837,14 @@ function applyLoadedScenario(data) {
 
     Object.values(scenario.stations).forEach(updateStationTotal);
     taktTimeInput.value = data.takt_time || 30;
+    scaleInput.value = data.layout_scale_px_per_m ?? DEFAULT_PX_PER_M;
+    walkSpeedInput.value = data.walking_speed_m_per_s ?? DEFAULT_WALK_M_PER_S;
 
-    nextStationId = nextOperatorId = nextBoxId = 1;
+    nextStationId = nextOperatorId = nextBoxId = nextDimensionId = 1;
+    stopDimensionTool();
     draggedItem = null;
     dragStart = null;
+    pendingStandingClick = null;
     exitPlacementMode();
     Object.keys(scenario.stations).forEach(sid => {
         const n = parseInt(sid, 10);
@@ -1240,6 +1853,10 @@ function applyLoadedScenario(data) {
     Object.keys(scenario.operators).forEach(oid => {
         const n = parseInt(oid.replace("Op", ""), 10);
         if (!isNaN(n) && n >= nextOperatorId) nextOperatorId = n + 1;
+    });
+    Object.keys(scenario.dimensions).forEach(id=>{
+        const n=Number(id.replace(/^dim_/,''));
+        if(Number.isInteger(n)&&n>=nextDimensionId) nextDimensionId=n+1;
     });
     Object.keys(scenario.boxes).forEach(bid => {
         const parts = bid.split("_");
@@ -1496,7 +2113,8 @@ runScenarioBtn.addEventListener("click", () => {
 // PART 8 — New blank line + initialization
 // ============================================================
 function startNewLine({persistDraft = true} = {}) {
-    for (const key of ['stations', 'operators', 'boxes']) {
+    undoStack.length=0;redoStack.length=0;redoBaseline=null;
+    for (const key of ['stations', 'operators', 'boxes', 'dimensions']) {
         for (const id of Object.keys(scenario[key])) delete scenario[key][id];
     }
     scenarioExtras = {};
@@ -1507,15 +2125,20 @@ function startNewLine({persistDraft = true} = {}) {
     nextStationId = 1;
     nextOperatorId = 1;
     nextBoxId = 1;
+    nextDimensionId = 1;
     colorIndex = 0;
     reviewSnapshot = null;
     reviewRequest++;
     taktTimeInput.value = '30';
+    scaleInput.value = String(DEFAULT_PX_PER_M);
+    walkSpeedInput.value = String(DEFAULT_WALK_M_PER_S);
     draggedItem = null;
     dragStart = null;
+    pendingStandingClick = null;
     setSelectedKeys([]);
     marquee=null;groupDrag=null;
     exitPlacementMode();
+    stopDimensionTool();
     document.getElementById('scenario-select').value = '';
     sessionStorage.removeItem(HANDOFF_KEY);
     document.getElementById('planning-handoff-notice').hidden = true;
@@ -1620,9 +2243,26 @@ document.getElementById('export-scenario-btn').addEventListener('click', async (
 
 initBuilder();
 
+// Guide visibility does not alter the saved layout. Changing scale updates the
+// displayed meter values immediately, and simulation uses the same scale.
+smartSnapInput?.addEventListener('change', () => {smartGuideData=null;drawFrame();});
+scaleInput?.addEventListener('input', () => {
+    updateDimensionPanel();
+    if(selectedItem?.type==='station') {
+        const station=scenario.stations[selectedItem.id];
+        const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
+        for(const [id,value] of [['field-station-width',station?.w],['field-station-height',station?.h]]) {
+            const input=document.getElementById(id);
+            if(input&&value) input.value=(value/ppm).toFixed(2);
+        }
+    }
+    drawFrame();
+});
+
 // Selection is transient; Escape cancels it without editing the scenario.
 document.addEventListener('keydown', evt => {
     if(evt.key!=='Escape') return;
-    if(placingType) exitPlacementMode();
+    if(dimensionTool){stopDimensionTool();drawFrame();}
+    else if(placingType) exitPlacementMode();
     else if(selectedKeys.size || marquee){marquee=null;groupDrag=null;setSelectedKeys([]);drawFrame();}
 });

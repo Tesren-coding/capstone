@@ -4,6 +4,8 @@ Saved PQPR projects, Yamazumi plans, builder setups and line scenarios can now b
 
 # Capstone Line Planning Toolkit
 
+**Line Builder update:** Resizable station corners, live meter dimensions and a saved two-point **↔ Dimension** tool are documented in [Updates/STATION_RESIZE_DIMENSION_TOOL.md](Updates/STATION_RESIZE_DIMENSION_TOOL.md).
+
 ## Install this update
 
 Copy these files into the matching folders in your project. Keep your existing
