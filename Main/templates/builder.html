@@ -17,6 +17,7 @@
     <button class="add-btn" data-type="swip"      style="padding:10px 18px; margin-right:6px;">+ SWIP Box</button>
     <button class="add-btn" data-type="in"        style="padding:10px 18px; margin-right:6px;">+ IN Box</button>
     <button class="add-btn" data-type="out"       style="padding:10px 18px; margin-right:24px;">+ OUT Box</button>
+    <button class="add-btn" data-type="direction" style="padding:10px 18px; margin-right:6px;">+ Line Direction</button>
     <button id="cancel-place-btn" style="padding:10px 18px; display:none; background:#fde8e8; border:2px solid #b52a2a;">Cancel Placement</button>
 </div>
 
@@ -46,7 +47,7 @@
     <span data-zoom-label>100%</span>
     <button type="button" data-zoom-in aria-label="Zoom in">+</button>
     <button type="button" data-zoom-reset>Reset view</button>
-    <span>Scroll to zoom · Shift + drag or middle mouse to pan</span>
+    <span>Scroll to zoom · Shift + drag or middle mouse to pan · Drag empty canvas to multi-select · Ctrl-click to adjust</span>
 </div>
 <canvas id="builder-canvas" width="2400" height="1042"
         data-line-direction-image-url="{{ url_for('static', filename='images/line_direction.png') }}"

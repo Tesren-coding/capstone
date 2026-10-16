@@ -61,6 +61,86 @@ let selectedItem = null;
 let placingType  = null;
 let placementPreview = null;
 let dragStart = null;
+// Canvas-only selection state: never included in saved scenario data.
+const selectedKeys = new Set();
+let marquee = null;   // {start, current, base} in world coordinates
+let groupDrag = null; // {start, original} snapshot for translating a selection
+const selectionKey = (type, id) => `${type}:${id}`;
+
+function itemForKey(key) {
+    const split = key.indexOf(':');
+    const type = key.slice(0, split), id = key.slice(split + 1);
+    const collection = type === 'station' ? scenario.stations :
+        type === 'operator' ? scenario.operators : scenario.boxes;
+    return collection[id] ? {type, id, pos: collection[id]} : null;
+}
+function setSelectedKeys(keys) {
+    selectedKeys.clear();
+    for (const key of keys) if (itemForKey(key)) selectedKeys.add(key);
+    selectedItem = selectedKeys.size === 1 ? itemForKey([...selectedKeys][0]) : null;
+    if (selectedKeys.size > 1) {
+        panelTitle.textContent = `${selectedKeys.size} items selected`;
+        panelFields.innerHTML = '<p>Drag any selected item to move the group. Ctrl-click to add or remove items. All station/operator connections are maintained when their station moves.</p>';
+        deleteItemBtn.textContent = `Delete ${selectedKeys.size} Selected`;
+        sidePanel.style.display = 'block';
+    } else {
+        deleteItemBtn.textContent = 'Delete';
+        openSidePanel(selectedItem);
+    }
+}
+function allItems() {
+    return [
+        ...Object.entries(scenario.stations).map(([id,pos]) => ({type:'station',id,pos})),
+        ...Object.entries(scenario.operators).map(([id,pos]) => ({type:'operator',id,pos})),
+        ...Object.entries(scenario.boxes).map(([id,pos]) => ({type:'box',id,pos})),
+    ];
+}
+function rectFromPoints(a, b) {
+    return {x: Math.min(a.x,b.x), y: Math.min(a.y,b.y),
+        w: Math.abs(b.x-a.x), h: Math.abs(b.y-a.y)};
+}
+function rectIntersects(a, b) {
+    return a.x <= b.x + b.w && a.x + a.w >= b.x &&
+        a.y <= b.y + b.h && a.y + a.h >= b.y;
+}
+function itemBounds(item) {
+    const b = item.pos;
+    if (item.type === 'operator') return {x:b.x-OPERATOR_RADIUS,y:b.y-OPERATOR_RADIUS,w:OPERATOR_RADIUS*2,h:OPERATOR_RADIUS*2};
+    if (item.type !== 'box' || b.type !== 'direction') return b;
+    const a = (b.rotation || 0) * Math.PI / 180;
+    const w = Math.abs(b.w*Math.cos(a))+Math.abs(b.h*Math.sin(a));
+    const h = Math.abs(b.w*Math.sin(a))+Math.abs(b.h*Math.cos(a));
+    return {x:b.x+b.w/2-w/2, y:b.y+b.h/2-h/2, w, h};
+}
+function hitSelection(rect) {
+    return allItems().filter(item => rectIntersects(rect,itemBounds(item)))
+        .map(item => selectionKey(item.type,item.id));
+}
+function beginGroupDrag(start) {
+    groupDrag = {start, original: new Map([...selectedKeys].map(key => {
+        const item = itemForKey(key);
+        return [key, {x:item.pos.x, y:item.pos.y, attached_to:item.pos.attached_to}];
+    }))};
+}
+function moveGroup(to) {
+    const dx=to.x-groupDrag.start.x, dy=to.y-groupDrag.start.y;
+    const movingStations = new Set([...selectedKeys].filter(k=>k.startsWith('station:')).map(k=>k.slice(8)));
+    // Move all selected stations first without single-station snap, preserving the group arrangement.
+    for (const key of selectedKeys) {
+        const item=itemForKey(key), original=groupDrag.original.get(key);
+        if (!item || !original || item.type==='operator') continue;
+        item.pos.x=original.x+dx; item.pos.y=original.y+dy;
+    }
+    for (const key of selectedKeys) {
+        const item=itemForKey(key), original=groupDrag.original.get(key);
+        if (!item || !original || item.type!=='operator') continue;
+        // Operator attached to a station in the group follows its station once, not twice.
+        if (item.pos.attached_to && movingStations.has(item.pos.attached_to.station_id)) continue;
+        if (item.pos.attached_to && (dx!==0 || dy!==0)) delete item.pos.attached_to;
+        item.pos.x=original.x+dx; item.pos.y=original.y+dy;
+    }
+    for (const id of movingStations) updateAttachedOperators(scenario.stations, scenario.operators, id);
+}
 
 function snapOperatorToSlot(op, x, y, ignoreId = null) {
     const slot = nearestOperatorSlot(scenario.stations, scenario.operators, x, y, view.scale, ignoreId);
@@ -241,7 +321,13 @@ canvas.addEventListener("click", (evt) => {
     } else if (placingType === "operator") {
         createOperator(pos.x, pos.y);
     } else {
-        createBox(pos.x, pos.y, placingType);
+        const id = createBox(pos.x, pos.y, placingType);
+        if (placingType === 'direction') {
+            Object.assign(scenario.boxes[id], {name: 'Line Direction',
+                rotation: 0, flip_horizontal: false, flip_vertical: false});
+            // Open the existing rotation/flip/resize controls immediately.
+            setSelectedKeys([selectionKey('box', id)]);
+        }
     }
 
     exitPlacementMode();
@@ -289,83 +375,107 @@ function findItemAtPosition(mx, my) {
 
 canvas.addEventListener("mousedown", (evt) => {
     if (placingType || view.isPanning || evt.button !== 0) return;
-
     const mouse = getCanvasMousePos(evt);
-    const item  = findItemAtPosition(mouse.x, mouse.y);
+    const item = findItemAtPosition(mouse.x, mouse.y);
+    const additive = evt.ctrlKey || evt.metaKey;
 
     if (item) {
-        draggedItem = item;
-        selectedItem = item.type === 'direction-resize' ? {type: 'box', id: item.id, pos: item.pos} : item;
-        dragOffset.x = mouse.x - item.pos.x;
-        dragOffset.y = mouse.y - item.pos.y;
-        dragStart = {x: item.pos.x, y: item.pos.y};
-        canvas.style.cursor = item.type === 'direction-resize' ? "nwse-resize" : "grabbing";
-        openSidePanel(selectedItem);
+        const key=selectionKey(item.type==='direction-resize'?'box':item.type,item.id);
+        if (additive) {
+            const next=new Set(selectedKeys);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            setSelectedKeys(next);
+            drawFrame();
+            return;
+        }
+        if (item.type === 'direction-resize') {
+            setSelectedKeys([key]);
+            draggedItem=item;
+        } else if (selectedKeys.size > 1 && selectedKeys.has(key)) {
+            beginGroupDrag(mouse);
+        } else {
+            setSelectedKeys([key]);
+            draggedItem=item;
+        }
+        if (draggedItem) {
+            dragOffset.x = mouse.x-item.pos.x;
+            dragOffset.y = mouse.y-item.pos.y;
+            dragStart = {x:item.pos.x,y:item.pos.y};
+        }
+        canvas.style.cursor = item.type==='direction-resize' ? 'nwse-resize' : 'grabbing';
     } else {
-        selectedItem = null;
-        openSidePanel(null);
+        // Drag from empty space to draw a marquee; Ctrl-drag adds to selection.
+        marquee = {start:mouse,current:mouse,base:additive?new Set(selectedKeys):new Set()};
+        if (!additive) setSelectedKeys([]);
+        canvas.style.cursor='crosshair';
     }
-
     drawFrame();
 });
 
 canvas.addEventListener("mousemove", (evt) => {
     if (view.isPanning) return;
-    const mouse = getCanvasMousePos(evt);
+    const mouse=getCanvasMousePos(evt);
+    if (marquee) {
+        marquee.current=mouse;
+        setSelectedKeys(new Set([...marquee.base,...hitSelection(rectFromPoints(marquee.start,mouse))]));
+        drawFrame();
+        return;
+    }
+    if (groupDrag) {
+        moveGroup(mouse);
+        drawFrame();
+        return;
+    }
     if (!draggedItem) {
         if (!placingType) {
-            const item = findItemAtPosition(mouse.x, mouse.y);
-            canvas.style.cursor = item?.type === 'direction-resize' ? 'nwse-resize' : item ? 'grab' : 'default';
+            const item=findItemAtPosition(mouse.x,mouse.y);
+            canvas.style.cursor=item?.type==='direction-resize'?'nwse-resize':item?'grab':'default';
             return;
         }
-        if (placingType === 'station') {
-            placementPreview = stationInsertPosition(scenario.stations, mouse.x, mouse.y,
-                STATION_WIDTH, STATION_HEIGHT, view.scale);
-        } else if (placingType === 'operator') {
-            placementPreview = nearestOperatorSlot(scenario.stations, scenario.operators,
-                mouse.x, mouse.y, view.scale) || {x: mouse.x, y: mouse.y};
+        if (placingType==='station') {
+            placementPreview=stationInsertPosition(scenario.stations,mouse.x,mouse.y,
+                STATION_WIDTH,STATION_HEIGHT,view.scale);
+        } else if (placingType==='operator') {
+            placementPreview=nearestOperatorSlot(scenario.stations,scenario.operators,
+                mouse.x,mouse.y,view.scale)||{x:mouse.x,y:mouse.y};
         } else return;
         drawFrame();
         return;
     }
-    const newX = mouse.x - dragOffset.x;
-    const newY = mouse.y - dragOffset.y;
-    if (draggedItem.type === 'direction-resize') {
-        resizeDirectionFromPoint(draggedItem.pos, mouse.x, mouse.y);
-        const wField = document.getElementById('field-direction-width');
-        const hField = document.getElementById('field-direction-height');
-        if (wField) wField.value = draggedItem.pos.w;
-        if (hField) hField.value = draggedItem.pos.h;
-    } else if (draggedItem.type === 'operator') {
-        const op = scenario.operators[draggedItem.id];
-        // Small pointer movements keep an already attached operator in place;
-        // moving away detaches it. Releasing near ANY vacant slot reattaches.
-        if (dragStart && Math.hypot(newX - dragStart.x, newY - dragStart.y) * view.scale < 5) return;
-        snapOperatorToSlot(op, newX, newY, draggedItem.id);
-    } else if (draggedItem.type === 'station') {
-        moveStation(draggedItem.id, newX, newY);
+    const newX=mouse.x-dragOffset.x, newY=mouse.y-dragOffset.y;
+    if (draggedItem.type==='direction-resize') {
+        resizeDirectionFromPoint(draggedItem.pos,mouse.x,mouse.y);
+        const wField=document.getElementById('field-direction-width');
+        const hField=document.getElementById('field-direction-height');
+        if(wField) wField.value=draggedItem.pos.w;
+        if(hField) hField.value=draggedItem.pos.h;
+    } else if (draggedItem.type==='operator') {
+        const op=scenario.operators[draggedItem.id];
+        if(dragStart && Math.hypot(newX-dragStart.x,newY-dragStart.y)*view.scale<5) return;
+        snapOperatorToSlot(op,newX,newY,draggedItem.id);
+    } else if(draggedItem.type==='station') {
+        moveStation(draggedItem.id,newX,newY);
     } else {
-        draggedItem.pos.x = newX;
-        draggedItem.pos.y = newY;
+        draggedItem.pos.x=newX;
+        draggedItem.pos.y=newY;
     }
     drawFrame();
 });
 
-canvas.addEventListener("mouseup", () => {
-    if (draggedItem) {
-        draggedItem = null;
-        dragStart = null;
-        canvas.style.cursor = placingType ? "crosshair" : "default";
-    }
-});
-
-canvas.addEventListener("mouseleave", () => {
-    if (draggedItem) {
-        draggedItem = null;
-        dragStart = null;
-        canvas.style.cursor = placingType ? "crosshair" : "default";
-    }
-    if (placementPreview) { placementPreview = null; drawFrame(); }
+function finishCanvasPointer() {
+    const wasSelecting=!!marquee;
+    marquee=null; groupDrag=null; draggedItem=null; dragStart=null;
+    if(wasSelecting) statusText.textContent=selectedKeys.size
+        ? `${selectedKeys.size} item(s) selected. Drag any selected item to move them together; Ctrl-click to adjust selection.`
+        : 'No items in that selection. Drag a rectangle around items to select them.';
+    canvas.style.cursor=placingType?'crosshair':'default';
+    drawFrame();
+}
+canvas.addEventListener('mouseup',finishCanvasPointer);
+canvas.addEventListener('mouseleave',()=>{
+    // End active drag on leaving the canvas so movement cannot get stuck.
+    if(marquee||groupDrag||draggedItem) finishCanvasPointer();
+    if(placementPreview){placementPreview=null;drawFrame();}
 });
 
 // ============================================================
@@ -416,8 +526,7 @@ document.addEventListener("mouseup", () => {
     panelDrag = null;
 });
 document.getElementById('panel-close').onclick = () => {
-    selectedItem = null;
-    openSidePanel(null);
+    setSelectedKeys([]);
     drawFrame();
 };
 
@@ -559,6 +668,11 @@ function changeStationId(oldId, newId) {
     });
     remapOperatorAttachments(scenario.operators,
         displaced ? {[oldId]: newId, [newId]: oldId} : {[oldId]: newId});
+    // Keep selected ID pointers consistent with station renumbering/swaps.
+    const remapped=[...selectedKeys].map(key => key===selectionKey('station',oldId)
+        ? selectionKey('station',newId) : displaced && key===selectionKey('station',newId)
+            ? selectionKey('station',oldId) : key);
+    selectedKeys.clear();remapped.forEach(key=>selectedKeys.add(key));
     nextStationId = Math.max(nextStationId, Number(newId) + 1);
     if (selectedItem?.type === 'station') {
         if (String(selectedItem.id) === oldId) selectedItem.id = newId;
@@ -622,6 +736,9 @@ function reorderStations(id,beforeId) {
     ordered.forEach((old,index)=>{scenario.stations[slots[index]]=original[old];});
     Object.values(scenario.operators).forEach(op=>(op.sequence||[]).forEach(step=>{if(Object.hasOwn(mapping,String(step.loc)))step.loc=mapping[String(step.loc)];}));
     remapOperatorAttachments(scenario.operators, mapping);
+    const remapped=[...selectedKeys].map(key=>key.startsWith('station:')
+        ? selectionKey('station',mapping[key.slice(8)]||key.slice(8)):key);
+    selectedKeys.clear();remapped.forEach(key=>selectedKeys.add(key));
     if(selectedItem?.type==='station')selectedItem.id=mapping[String(selectedItem.id)];
     draggedItem=null;openSidePanel(selectedItem);drawFrame();statusText.textContent='Station order updated. Operator references follow each station.';return mapping[id];
 }
@@ -862,19 +979,22 @@ function openSidePanel(item) {
 }
 
 deleteItemBtn.addEventListener("click", () => {
-    if (!selectedItem) return;
-
-    if (selectedItem.type === "station") {
-        detachStationOperators(scenario.operators, selectedItem.id);
-        delete scenario.stations[selectedItem.id];
-    } else if (selectedItem.type === "operator") {
-        delete scenario.operators[selectedItem.id];
-    } else if (selectedItem.type === "box") {
-        delete scenario.boxes[selectedItem.id];
+    const keys=[...selectedKeys];
+    if (!keys.length) return;
+    // Station removal detaches any operators anchored to it.
+    for (const key of keys) {
+        const item=itemForKey(key);
+        if(item?.type==='station') {
+            detachStationOperators(scenario.operators,item.id);
+            delete scenario.stations[item.id];
+        }
     }
-
-    selectedItem = null;
-    openSidePanel(null);
+    for (const key of keys) {
+        const item=itemForKey(key);
+        if(item?.type==='operator') delete scenario.operators[item.id];
+        if(item?.type==='box') delete scenario.boxes[item.id];
+    }
+    setSelectedKeys([]);
     drawFrame();
 });
 
@@ -902,9 +1022,17 @@ function drawFrame() {
 
         if (b.type === 'direction') {
             drawDirection(ctx, b, lineDirectionImage, {
-                selected: selectedItem?.type === 'box' && selectedItem.id === id,
+                selected: selectedKeys.has(selectionKey('box',id)) && selectedKeys.size === 1,
                 viewScale: view.scale,
             });
+            if(selectedKeys.size>1 && selectedKeys.has(selectionKey('box',id))) {
+                const bounds=itemBounds({type:'box',id,pos:b});
+                ctx.save(); ctx.strokeStyle='#0066ff';ctx.lineWidth=2/view.scale;
+                ctx.setLineDash([4/view.scale,4/view.scale]);
+                ctx.strokeRect(bounds.x-4/view.scale,bounds.y-4/view.scale,
+                    bounds.w+8/view.scale,bounds.h+8/view.scale);
+                ctx.restore();
+            }
             continue;
         }
 
@@ -949,7 +1077,7 @@ function drawFrame() {
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
 
-        if (selectedItem && selectedItem.type === "box" && selectedItem.id === id) {
+        if (selectedKeys.has(selectionKey('box',id))) {
             ctx.strokeStyle = "#0066ff";
             ctx.lineWidth = 3;
             ctx.setLineDash([4, 4]);
@@ -978,7 +1106,7 @@ function drawFrame() {
             ctx.fill();
         }
 
-        if (selectedItem && selectedItem.type === "station" && selectedItem.id === id) {
+        if (selectedKeys.has(selectionKey('station',id))) {
             ctx.strokeStyle = "#0066ff";
             ctx.lineWidth = 3;
             ctx.setLineDash([4, 4]);
@@ -990,7 +1118,7 @@ function drawFrame() {
     // Dotted rings are the available attachment points. Show them while
     // placing/moving an operator, or while inspecting a station/operator.
     if (placingType === 'operator' || draggedItem?.type === 'operator' ||
-        selectedItem?.type === 'operator' || selectedItem?.type === 'station') {
+        (selectedItem?.type === 'operator' && selectedKeys.size === 1)) {
         const slots = operatorSlots(scenario.stations, scenario.operators,
             draggedItem?.type === 'operator' ? draggedItem.id : null);
         ctx.save();
@@ -1043,7 +1171,7 @@ function drawFrame() {
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
 
-        if (selectedItem && selectedItem.type === "operator" && selectedItem.id === id) {
+        if (selectedKeys.has(selectionKey('operator',id))) {
             ctx.strokeStyle = "#0066ff";
             ctx.lineWidth = 3;
             ctx.setLineDash([4, 4]);
@@ -1052,6 +1180,17 @@ function drawFrame() {
             ctx.stroke();
             ctx.setLineDash([]);
         }
+    }
+    if (marquee) {
+        const area=rectFromPoints(marquee.start,marquee.current);
+        ctx.save();
+        ctx.fillStyle='rgba(0,102,255,0.10)';
+        ctx.fillRect(area.x,area.y,area.w,area.h);
+        ctx.strokeStyle='#0066ff';
+        ctx.lineWidth=1.5/view.scale;
+        ctx.setLineDash([5/view.scale,4/view.scale]);
+        ctx.strokeRect(area.x,area.y,area.w,area.h);
+        ctx.restore();
     }
     ctx.restore();
 }
@@ -1108,8 +1247,8 @@ function applyLoadedScenario(data) {
         if (!isNaN(n) && n >= nextBoxId) nextBoxId = n + 1;
     });
 
-    selectedItem = null;
-    openSidePanel(null);
+    setSelectedKeys([]);
+    marquee=null;groupDrag=null;
     view.reset();
     drawFrame();
     restorePlanningReview();
@@ -1374,9 +1513,9 @@ function startNewLine({persistDraft = true} = {}) {
     taktTimeInput.value = '30';
     draggedItem = null;
     dragStart = null;
-    selectedItem = null;
+    setSelectedKeys([]);
+    marquee=null;groupDrag=null;
     exitPlacementMode();
-    openSidePanel(null);
     document.getElementById('scenario-select').value = '';
     sessionStorage.removeItem(HANDOFF_KEY);
     document.getElementById('planning-handoff-notice').hidden = true;
@@ -1480,3 +1619,10 @@ document.getElementById('export-scenario-btn').addEventListener('click', async (
 });
 
 initBuilder();
+
+// Selection is transient; Escape cancels it without editing the scenario.
+document.addEventListener('keydown', evt => {
+    if(evt.key!=='Escape') return;
+    if(placingType) exitPlacementMode();
+    else if(selectedKeys.size || marquee){marquee=null;groupDrag=null;setSelectedKeys([]);drawFrame();}
+});
