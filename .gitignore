@@ -1,22 +1,26 @@
-# Python cache
-__pycache__/
-*.pyc
-*.pyo
 
-# Virtual environment
-venv/
+# Python virtual environments
 .venv/
-env
+venv/
 
-# Environment variable / secrets
-.env
+# Python-generated files
+__pycache__/
+*.py[cod]
+.pytest_cache/
 
-# VS code
+# Local IDE settings
 .vscode/
 
-#PyCharm
-.idea/
+# Temporary files and logs
+*.log
+migration_check.txt
 
-# OS files
-.DS_Store
-Thumbs.db
+# Local JSON save data (back up separately)
+scenarios/
+pqpr_projects/
+balancing_plans/
+builder_setups/
+
+# Local environment secrets
+.env
+.env.*
