@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+*.py[cod]
+.env
+.venv/
+venv/
+scenarios/
+pqpr_projects/
+balancing_plans/
+builder_setups/
+*.bak

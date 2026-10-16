@@ -3,11 +3,13 @@ from pathlib import Path
 from flask import Blueprint, jsonify, render_template, request
 from balancing_schema import BALANCING_SCHEMA_VERSION, validate_plan, plan_from_pqpr, analyse_plan
 from balancing_store import BalancingStore
+from storage_factory import make_store
 from scenario_schema import ScenarioValidationError
 from scenario_store import file_stem
 
 balancing = Blueprint('balancing', __name__, url_prefix='/line-balancing')
-balancing_store = BalancingStore(Path(__file__).resolve().parent/'balancing_plans')
+balancing_store = make_store('balancing', Path(__file__).resolve().parent / 'balancing_plans',
+                             BalancingStore, validate_plan, 'plan')
 
 
 def payload():

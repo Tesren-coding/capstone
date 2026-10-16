@@ -4,7 +4,7 @@
 <div id="pqpr-app" data-schema-version="{{ pqpr_schema_version }}">
     <section class="pqpr-heading">
         <div><p class="eyebrow">Product and process routing</p><h2>PQPR</h2>
-        <p>Define shared processes and enter each framesize's manual and automatic cycle times in the matrix.</p></div>
+        <p>Define the processes shared by your products, then check which ones each framesize needs.</p></div>
         <span id="pqpr-draft-state" class="pqpr-draft-state">New project</span>
     </section>
     <div class="pqpr-filebar" aria-label="Project files">
@@ -25,11 +25,11 @@
         <div class="pqpr-summary">
             <div><span id="pqpr-frame-count">0</span><p>Framesizes</p></div>
             <div><span id="pqpr-process-count">0</span><p>Shared processes</p></div>
-            <div><span id="pqpr-timing-count">0</span><p>Used cells missing time</p></div>
+            <div><span id="pqpr-timing-count">0</span><p>Processes missing time</p></div>
         </div>
         <section class="pqpr-panel" aria-labelledby="pqpr-matrix-title">
             <div class="pqpr-panel-heading"><div><h3 id="pqpr-matrix-title">Framesize × process matrix</h3>
-                <p>Add and name process columns here. Enter manual and automatic time for each framesize; empty unused cells mean not used.</p></div>
+                <p>Checked = included. Choose Always (P) or Sometimes (X). Unchecked = not used.</p></div>
                 <div class="pqpr-actions"><button id="pqpr-add-frame" class="pqpr-button">+ Framesize</button><button id="pqpr-add-process" class="pqpr-button">+ Process</button></div>
             </div>
             <div class="pqpr-legend" aria-label="Process colors">
@@ -38,17 +38,17 @@
                 <span><i class="pqpr-dot cat-unique"></i>Blue · Low hit rate / unique</span>
             </div>
             <div id="pqpr-matrix" class="pqpr-matrix-wrap"></div>
-            <p class="pqpr-table-note">Cycle time = manual + auto, in minutes per part. Blank automatic time defaults to 0. A used cell with blank manual time is incomplete. Choose Not used / clear to remove a process. Sometimes steps are included once in route totals. Parts per set is carried into Line Balancing as a product attribute; it does not multiply these per-part times.</p>
+            <p class="pqpr-table-note">Times are in minutes and shared across framesizes. Row totals include each checked process once, including Sometimes steps; they are not hit-rate-weighted or line-balancing results. Blank time means unknown.</p>
         </section>
         <details id="pqpr-frames-panel" class="pqpr-panel pqpr-editor-panel">
             <summary>Edit framesizes <span id="pqpr-frame-summary">0 products</span></summary>
             <p class="pqpr-editor-help">Drag ⠿ handles to reorder. Stage and component are optional labels, useful when a framesize appears in more than one route.</p>
-            <div class="pqpr-catalog-wrap"><table class="pqpr-catalog"><thead><tr><th>Framesize / product</th><th>Stage</th><th>Component</th><th>Parts per set</th><th>Actions</th></tr></thead><tbody id="pqpr-frames"></tbody></table></div>
+            <div class="pqpr-catalog-wrap"><table class="pqpr-catalog"><thead><tr><th>Framesize / product</th><th>Stage</th><th>Component</th><th>Actions</th></tr></thead><tbody id="pqpr-frames"></tbody></table></div>
         </details>
         <details id="pqpr-processes-panel" class="pqpr-panel pqpr-editor-panel">
             <summary>Edit shared processes <span id="pqpr-process-summary">0 processes</span></summary>
-            <p class="pqpr-editor-help">Edit names, colors and optional defaults for newly used cells. Existing matrix timings stay independent. Drag ⠿ handles to reorder columns and keep each framesize's timings.</p>
-            <div class="pqpr-catalog-wrap"><table class="pqpr-catalog"><thead><tr><th>Order</th><th>Process name</th><th>Color / category</th><th>Default manual (min)</th><th>Default auto (min)</th><th>Actions</th></tr></thead><tbody id="pqpr-processes"></tbody></table></div>
+            <p class="pqpr-editor-help">Set each process's color and manual/auto time here. Drag ⠿ handles to reorder; this changes the matrix column order and preserves applicability.</p>
+            <div class="pqpr-catalog-wrap"><table class="pqpr-catalog"><thead><tr><th>Order</th><th>Process name</th><th>Color / category</th><th>Manual (min)</th><th>Auto (min)</th><th>Actions</th></tr></thead><tbody id="pqpr-processes"></tbody></table></div>
         </details>
     </fieldset>
     <dialog id="pqpr-save-dialog" class="save-dialog"><h3>Save project</h3><p id="pqpr-save-message"></p><div class="dialog-actions">

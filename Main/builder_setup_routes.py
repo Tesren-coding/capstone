@@ -3,6 +3,7 @@ from pathlib import Path
 from flask import Blueprint, jsonify, render_template, request
 from builder_setup import SETUP_SCHEMA_VERSION, setup_from_plan, validate_setup, generate_scenario
 from scenario_store import ScenarioStore, file_stem
+from storage_factory import make_store
 from scenario_schema import ScenarioValidationError, validate_scenario, planning_review_required, planning_reviewed, review_planning_scenario
 
 bridge = Blueprint('bridge', __name__, url_prefix='/builder-setup')
@@ -14,7 +15,8 @@ class SetupStore(ScenarioStore):
         result = super().load(name); result['setup'] = result.pop('scenario'); return result
 
 
-setup_store = SetupStore(Path(__file__).resolve().parent/'builder_setups')
+setup_store = make_store('builder_setup', Path(__file__).resolve().parent / 'builder_setups',
+                         SetupStore, validate_setup, 'setup')
 
 
 def payload():

@@ -38,13 +38,13 @@ class PQPRTests(unittest.TestCase):
         self.assertEqual(result['framesizes'][1]['stage'], '')
         self.assertEqual(validate_pqpr(result), result)
 
-    def test_unknown_manual_stays_unknown_and_blank_auto_defaults_zero(self):
+    def test_counts_and_unknown_times_are_not_zero(self):
         data = validate_pqpr(project())
         self.assertEqual(frame_totals(data, data['framesizes'][0]),
                          {'process_count': 2, 'optional_count': 1, 'manual_time': 1.5, 'auto_time': 20})
         unknown = frame_totals(data, data['framesizes'][1])
         self.assertIsNone(unknown['manual_time'])
-        self.assertEqual(unknown['auto_time'], 0)
+        self.assertIsNone(unknown['auto_time'])
         data['framesizes'][1]['applicability'] = {}
         self.assertEqual(frame_totals(data, data['framesizes'][1])['manual_time'], 0)
 
@@ -108,7 +108,7 @@ class PQPRRouteTests(unittest.TestCase):
         self.assertEqual(self.client.post('/pqpr/api/import', json={'project': {'schema_version': 2, 'stations': {}}}).status_code, 400)
 
     def test_saved_future_format_and_invalid_excel_return_400(self):
-        future = project(); future['schema_version'] = 3
+        future = project(); future['schema_version'] = 2
         Path(self.temporary.name, 'future.json').write_text(json.dumps(future))
         result = self.client.get('/pqpr/api/projects/future.json')
         self.assertEqual(result.status_code, 400)
@@ -135,7 +135,7 @@ class ReferenceWorkbookTests(unittest.TestCase):
             data, warnings = import_worksheet(raw, sheet, 'reference.xlsx')
             self.assertEqual(len(data['processes']), 63 if sheet == 'PQPR (CS)' else 61)
             self.assertEqual(len(data['framesizes']), 5)
-            self.assertTrue(all(p['manual_time'] is None and p['auto_time'] == 0 for p in data['processes']))
+            self.assertTrue(all(p['manual_time'] is None and p['auto_time'] is None for p in data['processes']))
             self.assertEqual(sum(p['category'] == 'unique' for p in data['processes']), 2)
             self.assertTrue(any('Unrecognized' in text for text in warnings))
             self.assertTrue(any(status == 'optional' for f in data['framesizes'] for status in f['applicability'].values()))

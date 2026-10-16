@@ -1,130 +1,182 @@
-# Line Balancing and Yamazumi: format 3
+# Line balancing and Yamazumi — format 2
 
-Line Balancing at `/line-balancing` owns a process catalog and a separate list
-of assignable working elements. PQPR is an optional source of processes.
+Line Balancing is an independent dashboard app at `/line-balancing`. It owns
+its process list, timings, classifications, operators and work sequences.
+PQPR is an optional source of initial steps, not a required dependency.
 
-## Processes and working elements
+## Workflow
 
-A **process** is an operation such as Inspection. A **working element** is a
-smaller step of that operation, such as Load part, Inspect or Unload part.
+1. Open Line Balancing and click **+ Process step**. Enter the name, category,
+   manual/automatic minutes and Always/Sometimes case setting. Add as many
+   steps as needed; blank timings remain unknown.
+2. Add and name operators. Use the table's Operator dropdown, or drag a step's
+   ⠿ handle onto an operator's work list or Yamazumi bar.
+3. Set takt time in minutes. Drag a process-table handle onto another row to
+   reorder the process catalog. Drag operator handles to reorder their cards
+   and chart columns. These catalog/column orders do not change assignments.
+4. Drag assigned step handles between operator lists or reorder within a list.
+   Drag a Yamazumi segment between bars to reassign it. Within a bar, dropping
+   in the lower half of a segment inserts before it; the upper half inserts
+   after it. First work is at the bottom. Empty bar columns accept drops.
+5. Drag work onto **Drop a work step here to unassign it**, or use × on its
+   operator list. Unknown/zero-duration steps have no visible segment and can
+   still be assigned and reordered through table/list handles and dropdowns.
+6. Save/load plans, export/import JSON, or export the chart SVG. Remove a
+   process to remove its assignments too. Step and operator IDs remain stable;
+   deleted process IDs are not reused.
 
-1. Add processes independently, or load a PQPR project and select a framesize.
-   PQPR creates processes with that framesize's cell times, applicability,
-   categories and parts per set. It does not create working elements automatically.
-2. Click **+ Working element** on a process, or select its parent in the element
-   toolbar. Enter element names and measured manual/auto times. A new element's
-   manual time starts unknown and auto time defaults to 0; each belongs to a parent process.
-3. If a process should remain indivisible, explicitly choose **Use as one
-   element**. This copies its reference timings into one assignable element.
-   Adding more elements afterwards requires editing those timings to represent
-   the intended breakdown; the app does not infer a split.
-4. Add operators and assign working elements through the table or drag handles.
-   Drag elements between work lists or Yamazumi bars; drag within a bar/list to
-   reorder work. First work is at the bottom of a bar. Empty bars accept drops.
-5. Set takt in minutes per part, review workload, and save/export the plan.
+Handles support mouse and touch. **Alt+ArrowUp/Down** reorders the focused
+handle; Left/Right is equivalent. Escape, pointer cancellation, or dropping
+outside a valid target cancels without changing the plan. Reassignment via
+Operator dropdowns is available without dragging. During dragging, scrolling
+near the edge of the page or a scrollable list/chart reveals other targets.
 
-Process reference times are shown beside their element sums. They are not
-added to operator workloads. Only working-element times enter Yamazumi and
-manual totals. Parts per set is product information; times and takt remain per
-part and no quantity multiplication or batch scheduling is applied.
+Expand **Optional: start from PQPR** to load saved PQPR, its current-tab draft,
+or a PQPR JSON file. Choose a framesize and create a plan. The source and its
+IDs are copied as provenance. You may then independently add/remove/reorder
+steps, change categories/applicability and edit times/names; PQPR stays unchanged.
+Later PQPR changes do not update the plan. Creating another plan from PQPR
+replaces the current steps and assignments and prompts for unsaved changes.
 
-Process, working-element and operator lists have independent order. Drag
-handles reorder each; Alt+Arrow provides keyboard sorting. Escape/outside
-drops cancel. Operator sequences retain stable element IDs. Moving an element
-to another parent preserves its assignment while updating its parent/category
-and PQPR provenance. Removing a process removes its elements, assignments and
-row-break references. Removing an operator leaves its elements unassigned.
+## C-shaped layout preference
 
-A process or element can be Always or Sometimes. Always records stay included;
-Sometimes records may be excluded. Orange work is outside scope by default.
-An element is active only when both it and its parent are in scope. Exclusions
-retain assignments. In-scope processes with no breakdown are reported as
-incomplete, prevent complete whole-line metrics, and block scenario generation.
+The **C-shaped line and row break** panel previews one station per active
+process. Incoming begins at top right; stations run left, turn down at the
+chosen boundary, then continue right on the lower row to Outgoing.
 
-## Calculations and chart
+Hover a gap between station tokens to preview the turn without changing data.
+Click the gap, or drag the Row break marker to it, to commit the choice. Escape
+cancels; the focused marker supports Alt+Arrow keys. The saved optional
+`line_layout` record has shape `c` and `break_after_step_id` (a stable step ID or
+null for the balanced default). Reordering follows that ID; removing its step
+clears it. Fewer than two active steps have no selectable interior gap.
 
-Times are nonnegative decimal minutes. Blank manual time stays unknown (null);
-blank, null or omitted automatic time defaults to 0. New processes/elements
-start with auto time 0. Takt is positive minutes or null in an unfinished draft.
+Build Line setup copies the preference. Its own C preview lets you adjust the
+break between physical stations after grouping processes. Generation always
+includes Incoming and Outgoing endpoint boxes, while the sequence mode still
+controls whether Pick/Drop movement is proposed. See `BUILDER_SETUP_FORMAT.md`.
+
+## Timing and calculations
+
+All timing fields use minutes and may be decimal. Manual/auto times must be
+nonnegative or `null` (unknown); takt is positive or `null` for an unfinished
+plan. Zero is a known zero, distinct from a blank timing.
+
+An active step is included in the case and either is not orange/out-of-line,
+or the plan's include-out-of-line option is on. Exclusions retain assignments
+so restoring the scope/case restores the assigned work.
 
 | Result | Definition |
 | --- | --- |
-| Operator manual workload | Sum of active assigned elements' manual time; incomplete if any is unknown. |
-| Auto time | Separate sum of active assigned elements' auto time, using 0 for blank values. |
-| Manual / takt | Manual workload / takt × 100%. |
-| Above takt | Manual workload exceeds takt, using a 1e-9 minute tolerance. |
-| Minimum operators | Ceiling of total active manual time / takt, with binary-rounding allowance. |
-| Balance efficiency | Total manual / (operator count × largest manual workload) × 100%. |
-| Takt load | Total manual / (operator count × takt) × 100%. |
+| Operator manual workload | Sum of active assigned steps' manual time; incomplete if any is unknown. |
+| Automatic time | Separate process-time sum, incomplete if any active assigned auto time is unknown. It is not added to manual workload. |
+| Manual / takt | Operator manual workload / takt × 100%. |
+| Above takt | Complete operator manual workload exceeds takt (comparison tolerance 1e-9 minute). |
+| Minimum operators | Ceiling of total active manual time / takt; with a tiny binary-rounding allowance at integer boundaries. Requires known times/takt. |
+| Balance efficiency | Total active manual time / (number of operators × largest operator manual workload) × 100%. |
+| Takt load | Total active manual time / (number of operators × takt) × 100%. |
 
-Complete line metrics require every in-scope process to have elements and all
-active elements to be assigned with known manual times. All listed operators
-count, including empty ones. Automatic blanks default to 0 and do not block
-known manual workload analysis. Zero maximum workload makes efficiency undefined.
+Efficiency and takt load require all active steps to be assigned and manual
+times to be known. All listed operators count, including empty ones. A zero
+maximum workload has undefined balance efficiency. An operator with no active
+steps is shown as **No steps**. Missing automatic time does not block an
+otherwise complete manual workload comparison.
 
-Yamazumi draws known manual time only; **+ ?** identifies incomplete operator
-manual totals. Zero/unknown elements remain editable and assignable through
-tables/lists. Hover/focus segments for details; click to find the element row.
-Colors follow process category or element value-add classification (`va`,
-`sva`, `nva`, `unclassified`). Charts export as SVG.
+The minimum is a manual-time lower bound. Walking, waiting, precedence,
+material movement and shared-machine capacity can require more operators.
+Automatic operations may overlap, so their process-time sum is not elapsed
+time or machine utilization. This stage does not validate a feasible machine
+schedule or generate simulation sequences.
 
-The minimum is a manual-time lower bound. Walking, waiting, machine capacity,
-precedence and material movement are not calculated. Auto sums are not elapsed
-time or machine utilization. Sometimes work counts once when selected;
-percentage hit-rate input remains deferred.
+Sometimes steps are included once when selected, with no probability weighting.
+Hit-rate percentage input remains a future feature. PQPR Always/Sometimes data
+and its file version are unchanged.
 
-## C layout and station generation
+## Chart and colors
 
-The C preview shows one station per active parent process, in process order:
-IN at top right, stations left to the break, down, then right to OUT. Hover a
-gap to preview; click or drag the marker to commit. The preference uses
-`line_layout: {shape: "c", break_after_process_id: "p1"}`; null defaults to a
-balanced split. Stable IDs follow reordering, and deletion clears the hint.
+The SVG chart shows known manual time only. **+ ?** identifies an operator
+whose manual total is incomplete. Zero/unknown segments have no drawn height;
+the process table and operator list retain them. A dashed line shows takt.
+Hover or focus a segment for details; click or press Enter/Space to select its
+assignment row. Long labels are shortened visually and retain full details.
 
-Build Line setup initially groups a process's active working elements into
-one physical station. Mappings can then be changed to split or combine physical
-stations. Element IDs/times and operator work order are preserved in the
-simulation's existing station-process and Work-step records. See
-`BUILDER_SETUP_FORMAT.md` for review and transport requirements.
+Color mode **PQPR process category** keeps green/in-line, orange/out-of-line
+and blue/low-hit-rate-or-unique meanings. **Value-add classification** uses
+green/value added, yellow/semi value added, red/non value added and gray/
+unclassified. Every step starts unclassified; PQPR category does not imply
+value-add status. Classification edits belong only to this balance plan.
 
-## JSON contract and compatibility
+## Saved JSON
 
-`document_type` is `line_balance`; `schema_version` is 3.
+`document_type: "line_balance"` and `schema_version: 2` identify this format.
+It is independent of scenario format 2, event format 1 and PQPR format 1.
+Valid format-1 plans are checked under their original PQPR route rules and
+upgraded in memory to format 2, preserving IDs, assignments, metadata and source.
+Their original saved file is not rewritten until explicitly overwritten.
+Unsupported future versions are rejected with an error without replacing the
+current plan. A software patch does not require a schema change. Future
+changes to field meanings need an explicit migration and compatibility tests.
+
+Top-level fields:
 
 | Field | Meaning |
 | --- | --- |
-| `plan_name`, `takt_time` | Plan name and minutes per part. |
-| `parts_per_set` | Positive whole-number product quantity. |
-| `source`, `framesize_id` | Optional copied PQPR provenance and selected framesize; null for independent plans. |
-| `processes` | Parent process catalog in physical route order. |
-| `steps` | Working elements in editor order, including excluded elements. |
-| `operators` | Ordered `{id, name, sequence}` records; sequences contain working-element IDs. |
-| `next_process_id`, `next_step_id`, `next_operator_id` | Positive counters; new IDs use bp, s and o prefixes. |
-| `include_out_of_line`, `chart_color_mode` | Scope and process/value color mode. |
-| `line_layout` | Optional C preference with `break_after_process_id`. |
+| `plan_name` | Nonempty plan/line name. |
+| `takt_time` | Positive minutes or null for a draft. |
+| `source` | Optional `{project, filename, revision}` provenance copy, or null for independent plans (including plans with steps). |
+| `framesize_id` | Selected framesize in the optional source, or null in independent plans. |
+| `steps` | Independently editable process list in catalog order, including excluded steps. |
+| `operators` | Ordered `{id, name, sequence}` records; sequence contains step IDs. |
+| `next_operator_id` | Monotonic positive counter for new operator IDs. |
+| `next_step_id` | Monotonic positive counter for new independent step IDs (`s1`, `s2`, …). |
+| `include_out_of_line` | Whether orange processes are in workload scope; defaults false. |
+| `chart_color_mode` | `process` or `value`. |
+| `line_layout` | Optional `{shape: "c", break_after_step_id: <step ID or null>}`. |
 
-Each process has `id`, optional `pqpr_process_id`, `name`, `category`,
-`applicability`, `included`, `manual_time`, `auto_time` (reference totals).
-Each working element has `id`, required `balance_process_id` referring to its
-parent, optional provenance `process_id`, `name`, `category`, `applicability`,
-`included`, `manual_time`, `auto_time`, and `value_class`.
+Each step has `id`, `process_id`, `name`, `category`, `applicability`, `included`,
+`manual_time`, `auto_time`, and `value_class`. `id` owns assignments; `process_id` is an optional source provenance ID (null
+for new independent steps). A PQPR import initially uses the PQPR process IDs;
+subsequent edits are not constrained to its original route. Required steps
+stay included in the case, while the orange scope switch can exclude them from
+this line. Optional steps can be toggled. Changing applicability to Always
+sets included=true.
+`value_class` is `unclassified`, `va`, `sva`, or `nva`.
 
-Names must be nonempty. IDs are unique within each list, browser safe and
-stable. References must exist; an element can be assigned to at most one
-operator. Manual timing values are finite nonnegative numbers or null.
-Automatic null/missing values normalize to 0; invalid numbers/types are rejected.
-Unknown extra metadata is retained. Unsupported newer versions are rejected.
+IDs are stable; reordering does not change them. Duplicate assignments,
+missing references, invalid times and invalid versions are rejected. Extra
+metadata is retained during validation/import/export. Incomplete assignment
+and timing records remain valid saveable drafts, with incomplete results
+shown honestly in the UI.
 
-Format-1 plans are first checked against their original PQPR route rules.
-Formats 1 and 2 migrate in memory by adding one parent for each old step, keeping
-all old step IDs, times, assignments and sequence order. Thus previous work
-stays assignable and no breakdown is discarded. Old `break_after_step_id`
-preferences are retained and translated to a parent marker. Copied PQPR
-format-1 data also migrates. Original files are never rewritten on load/import.
+## Storage and endpoints
 
-Save/load uses `balancing_plans/` beside `app.py`, with overwrite, numbered
-copies and revision conflict protection. JSON export/import is self-contained;
-imports have no loaded-file overwrite association. Drafts persist in this tab.
-PQPR and setup copies are independent: later source edits never silently update
-plans or generated scenes. Creating a new plan from PQPR explicitly replaces
-the current plan and prompts for unsaved work.
+Plans are saved in `balancing_plans/`, created when needed. The shared atomic
+JSON storage supports create, overwrite, numbered copies and loaded-revision
+checks. Imported JSON has no association with an existing saved plan. Browser
+navigation retains a draft in this tab's session storage; save/export before
+closing the session for durable copies.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /line-balancing` | Editor and chart. |
+| `POST /line-balancing/api/from-pqpr` | Validated source-to-plan copy for a framesize. |
+| `GET /line-balancing/api/plans` | Saved plan filenames. |
+| `GET /line-balancing/api/plans/<filename>` | Load plan and revision. |
+| `POST /line-balancing/api/save` | Validated create/overwrite/duplicate with revision protection. |
+| `POST /line-balancing/api/import` | Validate without saving. |
+| `POST /line-balancing/api/export` | Portable JSON without saving. |
+| `POST /line-balancing/api/analyse` | Validated workload calculations. |
+
+Python's `balancing_schema.py` owns validation and backend analysis.
+`balancing_routes.py` owns HTTP and `balancing_store.py` adapts shared storage.
+Browser calculations and assignment operations are pure exports in
+`static/js/balancing-model.js`; `yamazumi.js` renders SVG and resolves chart
+drops; `drag-sort.js` provides shared pointer sorting and keyboard handles; `balancing.js` owns
+page behavior. `templates/balancing.html` contains markup only.
+
+`tests/test_balancing.py` checks independent plans, format-1 migrations, source copies, timing/scope
+rules, incomplete results, duplicate assignments, revisions and round trips. Browser verification
+also compares the browser's calculations with the backend on exported plans.
+Stage 4 is available through **Build line from this plan**. It maps a copied
+plan to physical stations, previews a new scenario, and requires material-flow
+review in Line Builder. See `BUILDER_SETUP_FORMAT.md`.

@@ -12,10 +12,8 @@ PQPR is optional: independent balance plans work identically.
    silently change it. To use a changed plan, explicitly load it again and
    create a new mapping. Unsaved setup changes prompt before replacement.
 2. Name the setup/scenario. Define physical stations and map each active
-   working element to one station. The initial mapping groups a parent process's
-   elements into one station; elements may be remapped to split or combine stations.
-   An in-scope process without working elements blocks scenario generation.
-   Rename/add/remove stations.
+   process to one station. The initial mapping uses one station per step;
+   several steps can be mapped to the same station. Rename/add/remove stations.
    Removing a mapped station clears its mappings so they must be reassigned.
 3. Stations always generate in a C-shaped path: Incoming at the top right,
    stations running left to the selected break, then continuing on the lower
@@ -46,10 +44,9 @@ marker and use Alt+Arrow keys for keyboard placement. The strip stays fixed
 while the C-shaped preview changes so the target does not move under the mouse.
 
 The break is saved as optional `line_layout: {shape: "c",
-break_after_process_id: "p3"}` in balance format 3. The referenced parent ID
-follows reordering. Older step markers migrate to their new parent process.
-Excluded processes retain the hint; removing that process clears it.
-Without an available interior hint, a balanced split is used.
+break_after_step_id: "s3"}` in balance format 2. The referenced ID follows its
+step through reordering. Excluded steps retain the hint; removing that step
+clears it. Without an available interior hint, a balanced split is used.
 
 Creating a setup copies the hint to `layout: {shape: "c",
 break_after_station_id: "3"}`. Its preview uses mapped physical stations;
@@ -68,8 +65,7 @@ station movement is needed to create the initial C.
 Older plans/setups without layout fields still import and default to C on new
 generation. Existing scenario files keep their saved coordinates until the
 user explicitly generates/opens another draft. Plan, setup and scenario format
-preferences remain optional. Balance formats 1 and 2 migrate to format 3;
-setup format 1 and scenario format 2 remain supported.
+versions remain unchanged because the saved layout preferences are optional.
 
 ## Two sequence modes
 
@@ -104,9 +100,8 @@ handoffs or prove a feasible schedule.
 
 Generation requires positive takt, at least one active process, all active
 steps assigned to operators, all active steps mapped to valid stations, and
-manual time known and both times nonnegative with positive combined processing
-time. Planning auto time defaults to 0 on load/import; blank manual time
-remains unknown. A known zero manual or auto time is valid.
+both manual/auto times known and nonnegative with positive combined processing
+time. A known zero manual or auto time is valid; blank is not silently zero.
 Setups with incomplete mapping/assignment/timing can still be saved as drafts.
 
 Active scope uses the balance plan's case and include-out-of-line option.
@@ -114,17 +109,14 @@ Excluded Sometimes/out-of-line steps are omitted from the scenario but remain
 in the embedded source copy. Unused physical station definitions and operators
 with no in-scope work are omitted, with notes in the preview.
 
-A physical station can hold multiple working elements, stored in the existing
-simulation `processes` array. Each retains its element ID, parent process ID/name,
-manual/auto times, category and value-add tag. Operators retain
+A physical station can hold multiple processes, each retaining its balance
+step ID, name, manual/auto times, category and value-add tag. Operators retain
 names, work order and source IDs; generated simulation IDs are `Op1`, `Op2`, …
 so the existing builder can add further operators normally.
 
 `planning_origin.setup_snapshot` stores the copied plan, its optional filename/
 revision, initial station definitions, mappings and generation mode. Station
-processes also carry `source_step_id`, optional `source_process_id`,
-`balance_process_id` and `parent_process_name`. `parts_per_set` is retained as
-scenario metadata; inventory and per-part timings are not multiplied.
+processes also carry `source_step_id` and optional `source_process_id`;
 operators carry `source_operator_id`. Provenance is a historical snapshot.
 Later builder edits do not edit the plan/setup, and station/process metadata
 travels with its records when the builder reorders them.

@@ -5,6 +5,7 @@ from flask import Flask, jsonify, render_template, request
 
 from scenario_schema import CURRENT_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, ScenarioValidationError, validate_scenario
 from scenario_store import ScenarioStore, ScenarioStorageError, file_stem
+from storage_factory import make_store
 from simulation import run_scenario_simulation, ScenarioRuntimeError
 from planning_pages import planning, MODULES
 from pqpr_routes import pqpr
@@ -16,7 +17,9 @@ app.register_blueprint(planning)
 app.register_blueprint(pqpr)
 app.register_blueprint(balancing)
 app.register_blueprint(bridge)
-scenario_store = ScenarioStore(Path(__file__).resolve().parent / 'scenarios')
+scenario_store = make_store('scenario', Path(__file__).resolve().parent / 'scenarios',
+                            ScenarioStore,
+                            lambda data: validate_scenario(data, require_runnable=False), 'scenario')
 
 # One latest run per server process; per-user run storage is a separate enhancement.
 LAST_SIMULATION = {'events': [], 'takt_time': 30, 'scenario': None,

@@ -53,15 +53,6 @@
 .pqpr-applicability { text-align:center!important; }
 .pqpr-applicability label { display:flex; align-items:center; justify-content:center; gap:7px; font-size:11px; cursor:pointer; margin:6px 0; }
 .pqpr-applicability select { width:100%; padding:5px!important; font-size:10px!important; margin-top:6px; }
-.pqpr-applicability label { justify-content:space-between; cursor:default; }
-.pqpr-applicability input { width:78px; min-width:0; padding:6px!important; font-size:12px!important; }
-.pqpr-applicability button { margin-top:8px; padding:4px!important; font-size:10px!important; }
-.pqpr-matrix thead input, .pqpr-matrix thead select { width:100%; min-width:0; font-size:12px!important; padding:6px!important; margin-bottom:5px; }
-.pqpr-matrix thead select { font-size:10px!important; }
-.pqpr-parts-label { display:flex; align-items:center; gap:8px; font-size:11px; margin-top:10px; font-weight:400; }
-.pqpr-parts-label input { width:68px; min-width:0; padding:5px!important; }
-.pqpr-add-column button { white-space:nowrap; }
-.pqpr-catalog input[data-field="parts_per_set"] { width:90px; }
 .pqpr-empty { padding:38px 22px; color:#35547d; text-align:center; }
 .pqpr-empty p { font-size:13px; line-height:1.6; margin-top:8px; color:#607189; }
 .pqpr-table-note { font-size:11px; line-height:1.7; color:#607189; margin-top:14px; }

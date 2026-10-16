@@ -3,9 +3,9 @@
 This is the contract shared by import/export, storage, the SimPy engine and
 browser playback. Runtime validation and migrations live in `scenario_schema.py`.
 
-PQPR projects use a separate version-2 contract documented in `PQPR_FORMAT.md`.
+PQPR projects use a separate version-1 contract documented in `PQPR_FORMAT.md`.
 They are stored in `pqpr_projects/`, not in the scenario directory.
-Balance plans also have a separate version-3 contract in `BALANCING_FORMAT.md`
+Balance plans also have a separate version-2 contract in `BALANCING_FORMAT.md`
 and are stored in `balancing_plans/`. Creating a plan does not create or change
 a line-builder scenario. Stage 4 setups use a separate format 1 in
 `BUILDER_SETUP_FORMAT.md`. Their explicit conversion creates a new scenario

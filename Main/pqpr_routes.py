@@ -3,12 +3,14 @@ from pathlib import Path
 from flask import Blueprint, jsonify, render_template, request
 from pqpr_schema import PQPR_SCHEMA_VERSION, validate_pqpr
 from pqpr_store import PQPRStore
+from storage_factory import make_store
 from pqpr_excel import worksheets, import_worksheet
 from scenario_schema import ScenarioValidationError
 from scenario_store import file_stem, ScenarioStorageError
 
 pqpr = Blueprint('pqpr', __name__, url_prefix='/pqpr')
-pqpr_store = PQPRStore(Path(__file__).resolve().parent / 'pqpr_projects')
+pqpr_store = make_store('pqpr', Path(__file__).resolve().parent / 'pqpr_projects',
+                        PQPRStore, validate_pqpr, 'project')
 
 
 @pqpr.route('')
