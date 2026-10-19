@@ -1,5 +1,6 @@
 import {drawDirection} from "./line-direction.js";
 import {drawStationText} from "./canvas-tools.js";
+import {operatorLegendEntries} from "./operator-highlight.js";
 
 // ============================================================
 // draw.js
@@ -258,26 +259,35 @@ export function drawBanner(ctx, simClock, taktTime, taktResetCount, width) {
 // --------------------------------------------------------
 // Draw legend at the bottom of the canvas
 // --------------------------------------------------------
-export function drawLegend(ctx, operatorNames, operators, partImage, height) {
-    let legendX = 20;
-    const legendY = height - 30;
+export function drawLegend(ctx, operatorNames, operators, partImage, height, highlightedOperator = null) {
+    const entries = operatorLegendEntries(operatorNames, height);
+    ctx.save();
+    for (const entry of entries) {
+        const isHighlighted = highlightedOperator === entry.id;
+        if (highlightedOperator && !isHighlighted) ctx.globalAlpha = 0.22;
+        else ctx.globalAlpha = 1;
 
-    operatorNames.forEach(op => {
-        ctx.fillStyle = toRgbString(operators[op].color);
+        if (isHighlighted) {
+            ctx.fillStyle = 'rgba(219,234,254,0.95)';
+            ctx.fillRect(entry.left, entry.top + 6, entry.width - 2, 34);
+            ctx.strokeStyle = '#1e3c78';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(entry.left, entry.top + 6, entry.width - 2, 34);
+        }
+        ctx.fillStyle = toRgbString(operators[entry.id].color);
         ctx.beginPath();
-        ctx.arc(legendX, legendY, 8, 0, Math.PI * 2);
+        ctx.arc(entry.x, entry.y, 8, 0, Math.PI * 2);
         ctx.fill();
-
-        ctx.fillStyle    = COLORS.black;
-        ctx.font         = "12px Arial";
-        ctx.textBaseline = "middle";
-        ctx.fillText(op, legendX + 12, legendY);
-
-        legendX += 80;
-    });
-
-    drawPart(ctx, legendX, legendY, partImage);
+        ctx.fillStyle = COLORS.black;
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(entry.id, entry.x + 12, entry.y);
+    }
+    ctx.globalAlpha = 1;
+    const partX = entries.length ? entries[entries.length - 1].right + 28 : 20;
+    drawPart(ctx, partX, height - 30, partImage);
     ctx.fillStyle = COLORS.black;
-    ctx.fillText("= Part", legendX + 14, legendY);
+    ctx.fillText('= Part', partX + 14, height - 30);
+    ctx.restore();
 }
-

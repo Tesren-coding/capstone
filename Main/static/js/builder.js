@@ -432,13 +432,23 @@ function createBox(x, y, type) {
 function lineArtifactPlacement() {
     const stations = Object.values(scenario.stations);
     if (!stations.length) {
-        // Default blank-line composition: arrow points towards two vertically
-        // stacked material boxes, as in the planning workspace reference.
-        // These are canvas/world coordinates, not browser screen pixels.
+        // Center the entire blank-line composition, rather than using fixed
+        // coordinates. The default arrow remains 875 × 85 canvas units.
+        const gap = 25;
+        const verticalGap = 35;
+        const boxGap = 35;
+        const groupWidth = SIZES.direction.w + gap + Math.max(SIZES.in.w, SIZES.out.w);
+        const groupHeight = Math.max(
+            verticalGap + SIZES.direction.h,
+            SIZES.in.h + boxGap + SIZES.out.h
+        );
+        const centerX = (canvas.width - groupWidth) / 2;
+        const centerY = (canvas.height - groupHeight) / 2;
         return {
-            raw: {x: 1070, y: 155},
-            direction: {x: 170, y: 190},
-            finished: {x: 1070, y: 250},
+            raw: {x: centerX + SIZES.direction.w + gap, y: centerY},
+            direction: {x: centerX, y: centerY + verticalGap},
+            finished: {x: centerX + SIZES.direction.w + gap,
+                       y: centerY + SIZES.in.h + boxGap},
         };
     }
     // A generated C-shaped layout already has its own Incoming/Outgoing

@@ -3,6 +3,7 @@ import {drawBox, drawStation, drawPart, drawOperator, drawOperatorTracer, drawBa
 import {buildPositionsFromScenario} from "./positions.js";
 import {buildOperatorState, updateOperators} from "./state.js";
 import {requestJson} from "./api.js";
+import {visitedLocationsForOperator, operatorAtLegendPoint} from "./operator-highlight.js";
 
 // playback.js — Simulation playback, controls and tooltips.
 // ============================================================
@@ -18,15 +19,62 @@ const view = new CanvasViewport(canvas, document.getElementById('canvas-controls
 });
 const tooltip = document.getElementById('station-tooltip');
 let hoverPointer = null;
+let hoveredCanvasOperator = null;
+let hoveredChipOperator = null;
+let pinnedOperator = null;
+let highlightedLocations = new Set();
+const highlightLegend = document.getElementById('operator-highlight-legend');
+const clearHighlightButton = document.getElementById('clear-operator-highlight');
+function activeHighlightOperator() {
+    const id = hoveredChipOperator ?? hoveredCanvasOperator ?? pinnedOperator;
+    return id && scenario?.operators?.[id] ? id : null;
+}
+function refreshHighlightUI() {
+    const focused = activeHighlightOperator();
+    highlightedLocations = focused ? visitedLocationsForOperator(scenario.operators[focused], scenario) : new Set();
+    clearHighlightButton.disabled = pinnedOperator === null;
+    for (const button of highlightLegend.querySelectorAll('[data-operator-id]')) {
+        const id = button.dataset.operatorId;
+        button.setAttribute('aria-pressed', String(pinnedOperator === id));
+        button.style.outline = focused === id ? '2px solid #1e3c78' : '';
+        button.style.opacity = focused && focused !== id ? '0.45' : '1';
+    }
+}
+function populateHighlightLegend() {
+    highlightLegend.replaceChildren();
+    for (const id of opNames) {
+        const operator = scenario.operators[id];
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.operatorId = id;
+        button.setAttribute('aria-label', `Highlight ${operator.name || id}'s work area`);
+        button.setAttribute('aria-pressed', 'false');
+        button.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:7px 11px;background:#fff;border:1px solid #9cacc1;border-radius:18px;cursor:pointer;font-size:13px;';
+        const swatch = document.createElement('span');
+        swatch.style.cssText = `display:inline-block;width:12px;height:12px;border-radius:50%;background:${Array.isArray(operator.color) ? `rgb(${operator.color.join(',')})` : operator.color || '#888'};`;
+        button.append(swatch, document.createTextNode(operator.name || id));
+        button.addEventListener('mouseenter', () => {hoveredChipOperator = id; refreshHighlightUI();});
+        button.addEventListener('mouseleave', () => {if (hoveredChipOperator === id) hoveredChipOperator = null; refreshHighlightUI();});
+        button.addEventListener('focus', () => {hoveredChipOperator = id; refreshHighlightUI();});
+        button.addEventListener('blur', () => {if (hoveredChipOperator === id) hoveredChipOperator = null; refreshHighlightUI();});
+        button.addEventListener('click', () => {pinnedOperator = pinnedOperator === id ? null : id; refreshHighlightUI();});
+        highlightLegend.append(button);
+    }
+    refreshHighlightUI();
+}
+clearHighlightButton.addEventListener('click', () => {pinnedOperator = null; hoveredChipOperator = null; hoveredCanvasOperator = null; refreshHighlightUI();});
 canvas.addEventListener('mousemove', e => {
     hoverPointer = { clientX: e.clientX, clientY: e.clientY };
+    const id = operatorAtLegendPoint(view.pixelPoint(e), opNames, canvas.height);
+    if (id !== hoveredCanvasOperator) {hoveredCanvasOperator = id; refreshHighlightUI();}
+    canvas.style.cursor = id ? 'pointer' : '';
     updateStationTooltip();
 });
-canvas.addEventListener('mouseleave', () => { hoverPointer = null; tooltip.hidden = true; });
+canvas.addEventListener('mouseleave', () => { hoverPointer = null; hoveredCanvasOperator = null; canvas.style.cursor = ''; tooltip.hidden = true; refreshHighlightUI(); });
 window.addEventListener('scroll', () => { hoverPointer = null; tooltip.hidden = true; }, true);
 
 function updateStationTooltip() {
-    if (!hoverPointer || !scenario || !opState || view.isPanning) { tooltip.hidden = true; return; }
+    if (!hoverPointer || !scenario || !opState || view.isPanning || hoveredCanvasOperator) { tooltip.hidden = true; return; }
     const p = view.worldPoint(hoverPointer);
     const entry = Object.entries(scenario.stations).reverse().find(([, s]) =>
         p.x >= s.x && p.x <= s.x + s.w && p.y >= s.y && p.y <= s.y + s.h);
@@ -206,6 +254,7 @@ async function init() {
             '(separate from playback speed)';
 
         initOperatorState();
+        populateHighlightLegend();
         totalDuration = simEvents.reduce((latest, event) => Math.max(latest, event.time), 0);
         timeline.max = totalDuration;
         timeline.disabled = totalDuration <= 0;
@@ -256,16 +305,26 @@ function drawFrame(timestamp) {
     ctx.save();
     view.apply(ctx);
 
+    const activeOperator = activeHighlightOperator();
+    // Recompute visited locations only when the operator focus changes.
+    // No scenario/event changes: this is purely visual.
+    const dimAlpha = 0.18;
+
     // ---- draw boxes ----
     for (const bid in positions.boxPositions) {
+        ctx.save();
+        if (activeOperator && !highlightedLocations.has(bid)) ctx.globalAlpha = dimAlpha;
         drawBox(ctx, bid, positions.boxPositions[bid], scenario.boxes[bid],
                 opState.boxState[bid], partImage, timestamp, lineDirectionImage);
+        ctx.restore();
     }
 
     // ---- draw stations ----
     for (const sid in positions.stationPositions) {
         const machine = opState.stationState[sid];
         const activeColor = machine.phase === 'automatic' ? '#c9def6' : scenario.operators[machine.operator]?.color || '#c8c8c8';
+        ctx.save();
+        if (activeOperator && !highlightedLocations.has(sid)) ctx.globalAlpha = dimAlpha;
         drawStation(ctx, sid, positions.stationPositions[sid], scenario.stations[sid], machine.busy, activeColor);
         if (machine.busy) {
             const pos = positions.stationPositions[sid];
@@ -276,6 +335,7 @@ function drawFrame(timestamp) {
             ctx.fillText(processText, pos.x, pos.y - 18);
             ctx.fillText(`${machine.phase === 'automatic' ? 'AUTO' : 'MANUAL'} · ${Math.max(0, machine.until - opState.time).toFixed(1)}m`, pos.x, pos.y - 6);
         }
+        ctx.restore();
     }
 
     // ---- draw dropped parts sitting at stations/boxes ----
@@ -283,18 +343,26 @@ function drawFrame(timestamp) {
     // station's solid rectangle, instead of hidden underneath it)
     for (const key in opState.droppedParts) {
         const p = opState.droppedParts[key];
+        ctx.save();
+        if (activeOperator && !highlightedLocations.has(key)) ctx.globalAlpha = dimAlpha;
         drawPart(ctx, p.x, p.y, partImage);
+        ctx.restore();
     }
 
     // ---- draw operator motion tracers ----
     opNames.forEach(op => {
         const baseColor = scenario.operators[op].color;
         const color = opState.isBlocked[op] ? [120, 120, 120] : baseColor;
+        ctx.save();
+        if (activeOperator && activeOperator !== op) ctx.globalAlpha = dimAlpha;
         drawOperatorTracer(ctx, opState.traces[op], color, opState.time);
+        ctx.restore();
     });
 
     // ---- draw operators and the parts they carry ----
     opNames.forEach(op => {
+        ctx.save();
+        if (activeOperator && activeOperator !== op) ctx.globalAlpha = dimAlpha;
         const pos       = opState.opPositions[op];
         const baseColor = scenario.operators[op].color;
         const color     = opState.isBlocked[op] ? [120, 120, 120] : baseColor;
@@ -321,13 +389,14 @@ function drawFrame(timestamp) {
             ctx.fillText("BLOCKED", pos.x, pos.y + 26);
             ctx.textAlign    = "left";
         }
+        ctx.restore();
     });
 
     ctx.restore();
     drawBanner(ctx, simClock, taktTime, taktResetCount, canvas.width);
     updateStationTooltip();
     // ---- legend ----
-    drawLegend(ctx, opNames, scenario.operators, partImage, canvas.height);
+    drawLegend(ctx, opNames, scenario.operators, partImage, canvas.height, activeOperator);
 
     // ---- paused overlay ----
     if (!isRunning) {

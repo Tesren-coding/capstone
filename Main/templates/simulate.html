@@ -37,6 +37,15 @@
     <button type="button" data-zoom-reset>Reset view</button>
     <span>Scroll to zoom · Shift + drag or middle mouse to pan</span>
 </div>
+<div id="operator-highlight-panel" style="max-width:900px;margin:10px auto 0;padding:10px 14px;background:#f7f9fc;border:1px solid #d7e0ed;border-radius:6px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <strong style="font-size:13px;">Operator work areas</strong>
+        <button id="clear-operator-highlight" type="button" style="padding:5px 10px;" disabled>Show all</button>
+    </div>
+    <div id="operator-highlight-legend" role="group" aria-label="Highlight an operator's assigned stations and material locations"
+         style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
+    <p style="font-size:12px;color:#475569;margin-top:7px;">Hover or focus an operator to highlight all assigned stations and IN/OUT/SWIP locations. Click to keep the highlight; click again or Show all to reset.</p>
+</div>
 <canvas id="sim-canvas" width="2400" height="1042"
         data-part-image-url="{{ url_for('static', filename='images/Part.png') }}"
         data-line-direction-image-url="{{ url_for('static', filename='images/line_direction.png') }}"

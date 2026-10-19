@@ -18,6 +18,8 @@ def check():
         page.wait_for_selector('body[data-builder-ready="true"]')
         canvas = page.locator('#builder-canvas')
         canvas.scroll_into_view_if_needed()
+        # Default artifacts are now centered, so move them outside the isolated marquee test region.
+        page.evaluate('Object.values(scenario.boxes).forEach((box,i)=>{box.x=25;box.y=20+i*100});drawFrame()')
 
         def coordinates(x, y, scale=1):
             rect = canvas.bounding_box()

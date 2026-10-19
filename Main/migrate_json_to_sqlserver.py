@@ -3,7 +3,7 @@
 Usage: python migrate_json_to_sqlserver.py --dry-run
        python migrate_json_to_sqlserver.py
        python migrate_json_to_sqlserver.py --overwrite  # explicit conflict replacement
-Run with CAPSTONE_SQLSERVER_CONNECTION_STRING set (see SQLSERVER_SETUP.md).
+Run with CAPSTONE_SQLSERVER_CONNECTION_STRING set (see Updates/SQLSERVER_SETUP.md).
 """
 import argparse
 import json

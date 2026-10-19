@@ -79,6 +79,8 @@ def check():
         page.wait_for_selector('body[data-builder-ready="true"]')
         canvas=page.locator('#builder-canvas')
         canvas.scroll_into_view_if_needed()
+        # Keep the new centered default artifacts outside this station geometry fixture.
+        page.evaluate('Object.values(scenario.boxes).forEach((box,i)=>{box.x=1600;box.y=100+i*130});drawFrame()')
 
         def mouse_at(x,y,scale=1):
             # Canvas world -> canvas pixels -> displayed CSS pixels.

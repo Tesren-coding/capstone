@@ -1,8 +1,10 @@
 ## SQL Server Express storage (new)
 
-Saved PQPR projects, Yamazumi plans, builder setups and line scenarios can now be stored in SQL Server Express. **See [SQLSERVER_SETUP.md](SQLSERVER_SETUP.md)** for Windows setup, SQL connection configuration, safe migration of existing JSON save directories, and verification. The default local JSON backend remains available until SQL mode is enabled with `CAPSTONE_STORAGE_BACKEND=sqlserver`.
+Saved PQPR projects, Yamazumi plans, builder setups and line scenarios can now be stored in SQL Server Express. **See [SQLSERVER_SETUP.md](Updates/SQLSERVER_SETUP.md)** for Windows setup, SQL connection configuration, safe migration of existing JSON save directories, and verification. The default local JSON backend remains available until SQL mode is enabled with `CAPSTONE_STORAGE_BACKEND=sqlserver`.
 
 # Capstone Line Planning Toolkit
+
+**Simulation update:** Hover an operator in the canvas legend or the new operator chips to isolate their full assigned work area. See [Updates/OPERATOR_WORK_AREA_HIGHLIGHT.md](Updates/OPERATOR_WORK_AREA_HIGHLIGHT.md).
 
 **Line Builder update:** Resizable station corners, live meter dimensions and a saved two-point **↔ Dimension** tool are documented in [Updates/STATION_RESIZE_DIMENSION_TOOL.md](Updates/STATION_RESIZE_DIMENSION_TOOL.md).
 
@@ -42,7 +44,7 @@ this tab restores its draft. Save or export scenarios to retain them beyond
 this session. `main.py` now opens the dashboard automatically.
 
 `/` and `/dashboard` are dashboard URLs. `/pqpr` opens the PQPR editor;
-`/line-balancing` opens the balancing editor. See `DEVELOPMENT_PLAN.md` for the staged feature and acceptance
+`/line-balancing` opens the balancing editor. See `Updates/DEVELOPMENT_PLAN.md` for the staged feature and acceptance
 plan. Scenario schema version 2 and event version 1 remain unchanged.
 
 ## PQPR projects
@@ -61,7 +63,7 @@ Save/load projects in `pqpr_projects/`, with overwrite or numbered copies.
 Import/export portable PQPR JSON. You can also import the supplied-style Excel
 workbook and choose its CS/FS worksheet. P/X and recognized header colors are
 retained; manual/auto times start blank and unsupported colors need review.
-See `PQPR_FORMAT.md` for the full contract, import rules and timing assumptions.
+See `Updates/PQPR_FORMAT.md` for the full contract, import rules and timing assumptions.
 
 Install updated requirements before running this release: Excel import adds
 `openpyxl`. Scenario format 2 and event format 1 remain unchanged; PQPR uses its
@@ -94,7 +96,7 @@ Save/load plans in `balancing_plans/`, with overwrite, numbered copies and
 revision protection. Import/export self-contained plan JSON. Plans created from PQPR retain an optional
 source copy: edits in the plan do not edit PQPR, and later PQPR changes do not
 silently alter the plan. **Create plan** explicitly replaces the current plan
-and prompts for unsaved changes. See `BALANCING_FORMAT.md` for calculations,
+and prompts for unsaved changes. See `Updates/BALANCING_FORMAT.md` for calculations,
 file fields and the workload assumptions.
 
 Stage 4 connects balance plans to physical stations and generates a new Line
@@ -133,7 +135,7 @@ then use **Check setup and mark reviewed** before running. Work-only drafts
 without deliveries or starting parts cannot pass the review. Core edits make
 the review stale. The simulation still checks actual machine/material flow.
 Source plan/setup snapshots and IDs remain as provenance; later edits do not
-silently change a generated scenario. See `BUILDER_SETUP_FORMAT.md`.
+silently change a generated scenario. See `Updates/BUILDER_SETUP_FORMAT.md`.
 
 ## Code organization
 
@@ -162,10 +164,10 @@ browser module system rather than globals or manually ordered script tags.
 | `static/js/pqpr.js`, `pqpr-model.js` | PQPR editing and display calculations. |
 | `balancing_routes.py`, `balancing_store.py`, `balancing_schema.py` | Balance-plan HTTP, persistence, validation and workload calculations. |
 | `static/js/balancing.js`, `balancing-model.js`, `yamazumi.js` | Balance editor, assignment operations, calculations and SVG chart. |
-| `BALANCING_FORMAT.md` | Balance-plan contract and workload assumptions. |
+| `Updates/BALANCING_FORMAT.md` | Balance-plan contract and workload assumptions. |
 | `scenario_schema.py` | Format versions, migrations and draft/run validation. |
 | `simulation.py` | SimPy processing and material-flow rules. |
-| `DATA_FORMAT.md` | Scenario/event contracts and future migration policy. |
+| `Updates/DATA_FORMAT.md` | Scenario/event contracts and future migration policy. |
 | `tests/test_scenario_compatibility.py` | Repeatable compatibility, storage and route checks. |
 
 Flask passes the part-image URL through the simulation canvas's
@@ -189,7 +191,7 @@ fields are retained when saving/exporting.
 Unversioned and version-1 files are legacy inputs. Version-2 files must use the
 process-list format. Future data-format changes need explicit migrations;
 application bug-fix patches do not automatically change the scenario version.
-See `DATA_FORMAT.md` for the fields, units, event meanings and release policy.
+See `Updates/DATA_FORMAT.md` for the fields, units, event meanings and release policy.
 
 ## Playback timeline
 

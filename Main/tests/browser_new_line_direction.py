@@ -44,9 +44,14 @@ def check():
         marker_id, marker = next((k,v) for k,v in initial['boxes'].items() if v['type']=='direction')
         raw = next(b for b in initial['boxes'].values() if b['type'] == 'in')
         finished = next(b for b in initial['boxes'].values() if b['type'] == 'out')
-        assert (marker['x'], marker['y'], marker['w'], marker['h']) == (170, 190, 875, 85), marker
-        assert (raw['x'], raw['y']) == (1070, 155), raw
-        assert (finished['x'], finished['y']) == (1070, 250), finished
+        assert (marker['w'], marker['h']) == (875, 85), marker
+        # The full three-object group is now centered dynamically on the canvas.
+        assert (marker['x'], marker['y']) == (705, 478.5), marker
+        assert (raw['x'], raw['y']) == (1605, 443.5), raw
+        assert (finished['x'], finished['y']) == (1605, 538.5), finished
+        group_x=(marker['x']+finished['x']+finished['w'])/2
+        group_y=(raw['y']+finished['y']+finished['h'])/2
+        assert (group_x,group_y)==(1200,521)
         assert raw['x'] > marker['x'] + marker['w'] and raw['y'] < finished['y']
         assert marker['rotation']==0 and not marker['flip_horizontal'] and not marker['flip_vertical']
         click(marker['x']+marker['w']/2, marker['y']+marker['h']/2)
@@ -103,7 +108,7 @@ def check():
         assert not blank['stations'] and not blank['operators']
         assert sorted(b['type'] for b in blank['boxes'].values())==['direction','in','out']
         default_marker = next(b for b in blank['boxes'].values() if b['type']=='direction')
-        assert (default_marker['x'], default_marker['y'], default_marker['w'], default_marker['h']) == (170, 190, 875, 85)
+        assert (default_marker['x'], default_marker['y'], default_marker['w'], default_marker['h']) == (705, 478.5, 875, 85)
         assert default_marker['rotation']==0
         assert page.evaluate('window.__savedByTest["direction-check.json"]')==saved
         assert page.locator('#scenario-select').input_value()==''

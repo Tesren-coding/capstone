@@ -7,7 +7,8 @@ from browser_builder_smoke import HTML,BUNDLE,FETCH_STUB
 TEST_HOOK = r'''
 window.__guideTest={
   install:()=>{
-    // Start far enough away from default material boxes / line direction.
+    // Isolate station-to-station snapping from the newly centered blank-line artifacts.
+    Object.values(scenario.boxes).forEach((box,i)=>{box.x=25;box.y=20+i*100});
     const id1=String(createStation(1475,648));
     const id2=String(createStation(1900,648));
     drawFrame();return {id1,id2};

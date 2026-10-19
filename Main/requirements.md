@@ -80,15 +80,15 @@ Create or load a scenario, configure its stations and operators, then select
 **Run Simulation**. Save layouts with **Save Scenario**. Use **Import JSON**
 to open a scenario file from your PC and **Export JSON** to download a portable
 copy. Older supported formats are converted without changing the original file.
-See `DATA_FORMAT.md` for compatibility rules.
+See `Updates/DATA_FORMAT.md` for compatibility rules.
 
 For balancing, add process steps directly, add operators and assign work.
 PQPR import is optional. Drag handles or chart segments to reorder/assign steps. Set takt time and review the manual-workload chart. Save plans
-with **Save plan** or export portable plan JSON. See `BALANCING_FORMAT.md`.
+with **Save plan** or export portable plan JSON. See `Updates/BALANCING_FORMAT.md`.
 
 Select **Build line from this plan** to map processes to stations and generate
 a new scenario draft. Review material movement in Line Builder before running.
-Save mappings with **Save setup**. See `BUILDER_SETUP_FORMAT.md`.
+Save mappings with **Save setup**. See `Updates/BUILDER_SETUP_FORMAT.md`.
 
 Press **Ctrl+C** in the terminal to stop the server.
 
