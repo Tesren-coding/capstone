@@ -41,7 +41,9 @@ def check():
         assert set(data['operators'])=={'Op1','Op2','Op3','Op4'}
         assert data['operators']['Op4']['name']=='Op4'
 
-        # Renumber closes gaps while preserving each operator's data.
+        # Reorder is the single control for both changing order and filling gaps.
+        # No separate Renumber Operators button remains.
+        assert page.locator('#renumber-operators-btn').count()==0
         page.evaluate('''() => {
             scenario.operators.Op3.sequence = [{action:'work', loc:'1'}];
             scenario.operators.Op3.color = [1, 2, 3];
@@ -49,13 +51,16 @@ def check():
             delete scenario.operators.Op2;
             delete scenario.operators.Op4;
         }''')
-        page.locator('#renumber-operators-btn').click()
+        page.locator('#reorder-operators-btn').click()
+        handle=page.locator('[data-operator-order-id="Op3"] .drag-handle')
+        handle.focus()
+        page.keyboard.press('Alt+ArrowUp')
         data=page.evaluate('serializeScenario()')
         assert set(data['operators'])=={'Op1','Op2'},data
-        assert data['operators']['Op2']['name']=='Op2'
-        assert data['operators']['Op2']['color']==[1,2,3]
-        assert data['operators']['Op2']['sequence']==[{'action':'work','loc':'1'}]
-        assert page.evaluate('scenario.operators.Op2.name')=='Op2'
+        assert data['operators']['Op1']['name']=='Op1'
+        assert data['operators']['Op1']['color']==[1,2,3]
+        assert data['operators']['Op1']['sequence']==[{'action':'work','loc':'1'}]
+        assert page.evaluate('scenario.operators.Op1.name')=='Op1'
 
         # Legacy custom names are normalized in memory; IDs and settings stay.
         page.evaluate('''() => {
@@ -69,7 +74,7 @@ def check():
         assert page.locator('#panel-title').inner_text()=='Op1'
         assert page.locator('#field-name').count()==0
         assert not errors,errors
-        print('Chromium operator naming, lowest-free-ID reuse, clipboard, renumber, and legacy load: passed.')
+        print('Chromium operator naming, ID reuse, clipboard, reorder-only and legacy load: passed.')
         browser.close()
 
 

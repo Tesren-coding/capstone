@@ -88,15 +88,17 @@ def check():
         assert page.evaluate('serializeScenario().operators')==swapped
         assert page.locator('#operator-order-panel').is_visible()
 
-        # Renumber gaps from an old scenario retains all assignments.
+        # Reordering a gappy legacy ID list normalizes IDs without a separate button.
         page.evaluate('''() => {delete scenario.operators.Op2;drawFrame();}''')
         assert ids()==['Op1','Op3']
-        page.locator('#renumber-operators-btn').click()
+        assert page.locator('#renumber-operators-btn').count()==0
+        page.locator('[data-operator-order-id="Op3"] .drag-handle').focus()
+        page.keyboard.press('Alt+ArrowUp')
         data=page.evaluate('serializeScenario().operators')
         assert set(data)=={'Op1','Op2'}
-        assert data['Op2']['name']=='Op2'
+        assert data['Op1']['name']=='Op1' and data['Op2']['name']=='Op2'
         assert not errors,errors
-        print('Chromium operator reorder: drag, identities, active selection, undo/redo, keyboard, load, gaps passed.')
+        print('Chromium operator reorder: drag, identities, active selection, undo/redo, keyboard, load, gap removal passed.')
         browser.close()
 
 if __name__=='__main__': check()

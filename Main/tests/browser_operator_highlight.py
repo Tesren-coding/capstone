@@ -7,7 +7,7 @@ from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 content=(ROOT/'templates/simulate.html').read_text().split('{% block content %}',1)[1].split('{% endblock %}',1)[0]
 HTML='''<!doctype html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;} canvas#sim-canvas{width:1000px!important;height:434.17px!important;max-width:none!important;} .canvas-controls{display:flex;gap:8px}</style></head><body data-event-schema-version="1">'''+content+'</body></html>'
-SOURCES=['canvas-tools.js','line-direction.js','operator-highlight.js','draw.js','positions.js','state.js','api.js','playback.js']
+SOURCES=['canvas-tools.js','line-direction.js','operator-highlight.js','simulation-metrics.js','draw.js','positions.js','state.js','api.js','playback.js']
 BUNDLE=''
 for filename in SOURCES:
     source=(ROOT/'static/js'/filename).read_text()

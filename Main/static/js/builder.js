@@ -474,22 +474,6 @@ function applyOperatorOrder(ids) {
     return true;
 }
 
-function renumberOperators() {
-    const ids = orderedOperatorIds(scenario.operators);
-    if (!ids.length) {
-        statusText.textContent = 'There are no operators to renumber.';
-        return;
-    }
-    if (!remapOperatorOrder(scenario.operators, ids).changed) {
-        statusText.textContent = 'Operator IDs are already sequential (Op1, Op2, ...).';
-        return;
-    }
-    if (!confirm('Renumber all operators from Op1 in ascending ID order? Assignments, positions and colors are preserved.')) return;
-    applyOperatorOrder(ids);
-}
-
-document.getElementById('renumber-operators-btn').addEventListener('click', renumberOperators);
-
 installDrag(operatorOrderList, {
     source(node) {
         if (node.dataset.dragType !== 'operator-order' || !scenario.operators[node.dataset.dragId]) return null;

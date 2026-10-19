@@ -147,7 +147,9 @@ browser module system rather than globals or manually ordered script tags.
 | --- | --- |
 | `templates/` | Shared layout, dashboard and each app's markup. |
 | `static/js/builder.js` | Builder state, placement, editor panels, import/export, save/load and launch. |
-| `static/js/playback.js` | Playback clock, seeking, controls, tooltips and frame composition. |
+| `static/js/playback.js` | Playback clock, seeking, controls, tooltips, summary updates and frame composition. |
+| `static/js/simulation-metrics.js` | Planned initial SWIP and time-varying in-line WIP calculations. |
+| `static/simulation-dashboard.css` | Responsive dashboard cards below the simulation canvas. |
 | `static/js/api.js` | Shared JSON request handling. |
 | `static/js/drag-sort.js` | Mouse/touch sorting, drag feedback and keyboard handle operations across apps. |
 | `static/js/state.js` | Replay events into simulation display state. |
@@ -243,10 +245,30 @@ The list includes each operator's color and assigned locations so operators
 remain distinguishable after renumbering. The top row becomes Op1.
 
 Each operator keeps their color, position, station-side attachment, standing
-point settings and work sequence. **Renumber Operators** separately closes
-gaps left by deleted operators without changing their current numerical order.
-Reordering supports **Ctrl + Z** / **Ctrl + Y**, but does not alter a saved SQL
-scenario until you choose **Save Scenario**.
+point settings and work sequence. Reordering also closes gaps in older
+operator IDs (`Op1`, `Op3`, etc.) by renumbering the resulting order.
+There is no separate Renumber Operators button. Reordering supports
+**Ctrl + Z** / **Ctrl + Y**, but does not alter a saved SQL scenario until you
+choose **Save Scenario**.
+
+## Simulation inventory & SWIP dashboard
+
+A **Line Inventory & Flow** summary appears below the Simulation canvas after a
+simulation loads. The starting SWIP cards count the **configured** initial
+parts held by stations (`has_part`) and SWIP boxes (`has_part`):
+
+- **Total Initial SWIP** = station starting parts + occupied SWIP boxes.
+- **Total SWIP Boxes** = number of SWIP buffer boxes.
+- **SWIP Boxes Starting With Parts** = number of occupied SWIP boxes (also
+  shown as occupied / total).
+- **SWIP Starting in Stations** = number of stations seeded with parts.
+
+The live cards update during playback and timeline scrubbing: **Current In-Line
+WIP** (stations + SWIP boxes + parts carried by operators), **Finished Goods
+Output**, **Raw Material Remaining**, and **Simulation Time**. IN/OUT inventory
+and Line Direction images are excluded from starting SWIP. The starting counts
+are not a calculated minimum WIP required to sustain production; they reflect
+how the scenario was configured. See `Updates/SWIP_FIRST_SIMULATION_DASHBOARD.md`.
 
 ## Material movement and processing rules
 
