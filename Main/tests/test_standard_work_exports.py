@@ -65,11 +65,11 @@ class StandardWorkExportsTest(unittest.TestCase):
         self.assertEqual(len(p.slides),3)
         for slide in p.slides:
             pictures=[sh for sh in slide.shapes if sh.shape_type==MSO_SHAPE_TYPE.PICTURE]
-            self.assertGreaterEqual(len(pictures),5)  # arrow + Part icons incl. legend
+            self.assertGreaterEqual(len(pictures),4)  # arrow + starting Part icons; no injected legend icon
             text=' '.join(sh.text for sh in slide.shapes if sh.has_text_frame)
             self.assertIn('SWIP',text)
             self.assertNotIn('SWIP: Buffer',text)
-            self.assertIn('Part icon = starting SWIP',text)
+            self.assertNotIn('Part icon = starting SWIP',text)  # supplied legend left untouched
             for label in ('IN: Raw','OUT: Finished','SWIP'):
                 matches=[sh for sh in slide.shapes if sh.has_text_frame and label in sh.text]
                 self.assertTrue(matches,label)
@@ -81,6 +81,26 @@ class StandardWorkExportsTest(unittest.TestCase):
         self.assertTrue({'1','2','3'}.issubset(numbers))
         self.assertTrue(any(sh.shape_type==MSO_SHAPE_TYPE.FREEFORM and
                             sh.fill.type is not None for sh in op_slide.shapes))
+
+    def test_sws_template_frame_is_unchanged_and_canvas_is_separate(self):
+        from copy import deepcopy
+        from pathlib import Path
+        base=Presentation(str(Path(__file__).resolve().parents[1] / 'resources' / 'SWS_Frame.pptx'))
+        output=Presentation(BytesIO(export_sws_pptx(self.sample()).getvalue()))
+        original=[sh._element.xml for sh in base.slides[0].shapes]
+        self.assertEqual(len(output.slides),3)
+        for slide in output.slides:
+            self.assertEqual([sh._element.xml for sh in list(slide.shapes)[:len(original)]],original)
+            # Generated additions must remain inside the blank drawing region;
+            # labels, operator movement lines and part icons must not cross
+            # the user-editable header, legend or footer regions.
+            for sh in list(slide.shapes)[len(original):]:
+                self.assertGreaterEqual(sh.top / 914400, 1.15, sh.name)
+                self.assertLessEqual((sh.top+sh.height) / 914400, 6.17, sh.name)
+            # The frame's blank user-editable data fields remain blank.
+            tables=[sh.table for sh in slide.shapes if sh.has_table]
+            self.assertEqual(tables[0].cell(1,3).text,'')
+            self.assertEqual(tables[1].cell(0,1).text,'')
 
     def test_sws_preserves_direction_transform(self):
         scenario=self.sample()

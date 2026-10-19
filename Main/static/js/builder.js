@@ -2,7 +2,7 @@ import {CanvasViewport, drawStationText, stationProcesses, stationTotals, escape
 import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-sort.js";
 import {requestJson, postJson} from "./api.js";
 import {orderedOperatorIds, remapOperatorOrder} from "./operator-order.js";
-import {sequenceToTasks, tasksToSequence, taskWorkSequenceIndex, defaultOperatorTask} from "./operator-tasks.js";
+import {sequenceToTasks, tasksToSequence, defaultOperatorTask} from "./operator-tasks.js";
 import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
 import {drawDirection, directionContainsPoint, directionResizeHandle,
     resizeDirectionFromPoint, DIRECTION_MIN_WIDTH, DIRECTION_MIN_HEIGHT} from "./line-direction.js";
@@ -78,8 +78,9 @@ let dragStart = null;
 const selectedKeys = new Set();
 let marquee = null;   // {start, current, base} in world coordinates
 let groupDrag = null; // {start, original} snapshot for translating a selection
-// The operator sequence step currently being edited; this is UI-only state.
-let standingPointEditor = null; // {operatorId, stepIndex}
+// Standing-side editing is operator-wide: show every visited station at once.
+// No extra persisted setting is needed; the existing sequence standing_side
+// remains authoritative for walking, saves and standard-work exports.
 let pendingStandingClick = null; // defer click until mouseup so operators remain draggable
 let smartGuideData = null; // Only visible while dragging or previewing; never saved.
 let draggingWithoutSnap = false;
@@ -102,30 +103,44 @@ function guidePosition(rect, excludes, dockStations=false) {
     return result;
 }
 
-function validStandingStep(operatorId, index) {
-    const op = scenario.operators[operatorId];
-    return Number.isInteger(index) && !!op?.sequence?.[index] &&
-        !!scenario.stations[op.sequence[index].loc];
+// A visited station is any station referenced by one of this operator's
+// underlying actions: Collect, Work, Deliver and legacy steps all count.
+function operatorStationVisits(operator) {
+    const visits = new Map();
+    for (const [stepIndex, step] of (operator?.sequence || []).entries()) {
+        const stationId = String(step.loc ?? '');
+        if (!Object.hasOwn(scenario.stations, stationId)) continue;
+        if (!visits.has(stationId)) visits.set(stationId, []);
+        visits.get(stationId).push(stepIndex);
+    }
+    return visits;
 }
-function syncStandingPointEditor(operatorId) {
-    if (!operatorId) { standingPointEditor = null; return; }
-    if (standingPointEditor?.operatorId === operatorId &&
-        validStandingStep(operatorId, standingPointEditor.stepIndex)) return;
-    const next = scenario.operators[operatorId]?.sequence?.findIndex(step =>
-        !!scenario.stations[step.loc]) ?? -1;
-    standingPointEditor = next >= 0 ? {operatorId, stepIndex:next} : null;
+function visitStandingSide(operator, indexes) {
+    const sides = [...new Set(indexes.map(index => operator.sequence[index].standing_side || 'auto'))];
+    return sides.length === 1 ? sides[0] : 'mixed';
 }
 function activeStandingSlots() {
-    if (placingType || selectedItem?.type !== 'operator' || selectedKeys.size !== 1 ||
-        !standingPointEditor || standingPointEditor.operatorId !== selectedItem.id ||
-        !validStandingStep(standingPointEditor.operatorId, standingPointEditor.stepIndex)) return [];
-    const step = scenario.operators[standingPointEditor.operatorId].sequence[standingPointEditor.stepIndex];
-    return SIDES.map(side => ({side, stationId:step.loc,
-        ...operatorPoint(scenario.stations[step.loc], side), selected:step.standing_side === side}));
+    if (placingType || selectedItem?.type !== 'operator' || selectedKeys.size !== 1) return [];
+    const operator = scenario.operators[selectedItem.id];
+    if (!operator) return [];
+    const slots = [];
+    for (const [stationId, indexes] of operatorStationVisits(operator)) {
+        const currentSide = visitStandingSide(operator, indexes);
+        for (const side of SIDES) {
+            slots.push({stationId, side, ...operatorPoint(scenario.stations[stationId], side),
+                selected: currentSide === side, mixed: currentSide === 'mixed'});
+        }
+    }
+    return slots;
 }
 function standingSlotAt(point) {
     const limit = Math.max(OPERATOR_RADIUS, 13 / view.scale);
-    return activeStandingSlots().find(slot => Math.hypot(point.x-slot.x, point.y-slot.y) <= limit) || null;
+    let result = null, bestDistance = limit;
+    for (const slot of activeStandingSlots()) {
+        const distance = Math.hypot(point.x - slot.x, point.y - slot.y);
+        if (distance <= bestDistance) { result = slot; bestDistance = distance; }
+    }
+    return result;
 }
 const selectionKey = (type, id) => `${type}:${id}`;
 
@@ -141,7 +156,6 @@ function setSelectedKeys(keys) {
     selectedKeys.clear();
     for (const key of keys) if (itemForKey(key)) selectedKeys.add(key);
     selectedItem = selectedKeys.size === 1 ? itemForKey([...selectedKeys][0]) : null;
-    syncStandingPointEditor(selectedItem?.type === 'operator' ? selectedItem.id : null);
     if (selectedKeys.size > 1) {
         panelTitle.textContent = `${selectedKeys.size} items selected`;
         panelFields.innerHTML = '<p>Drag any selected item to move the group. Ctrl-click to add or remove items. All station/operator connections are maintained when their station moves.</p>';
@@ -455,7 +469,6 @@ function applyOperatorOrder(ids) {
     recordUndo();
     redoStack.length = 0;
     const previousSelection = [...selectedKeys];
-    const previousStanding = standingPointEditor;
     for (const id of Object.keys(scenario.operators)) delete scenario.operators[id];
     Object.assign(scenario.operators, operators);
     draggedItem = null;
@@ -463,11 +476,6 @@ function applyOperatorOrder(ids) {
         const [type, id] = key.split(':');
         return type === 'operator' && mapping[id] ? selectionKey(type, mapping[id]) : key;
     }));
-    if (previousStanding && mapping[previousStanding.operatorId] &&
-        selectedItem?.type === 'operator' && selectedItem.id === mapping[previousStanding.operatorId] &&
-        validStandingStep(selectedItem.id, previousStanding.stepIndex)) {
-        standingPointEditor = {...previousStanding, operatorId: selectedItem.id};
-    }
     renderOperatorOrderList(true);
     drawFrame();
     rememberDraft();
@@ -703,9 +711,8 @@ canvas.addEventListener("mousedown", (evt) => {
     smartGuideData = null;
     draggingWithoutSnap = evt.altKey;
     const mouse = getCanvasMousePos(evt);
-    // An explicit sequence standing-point click must win over hit-testing the
-    // operator sitting on that same snap circle. Apply on mouseup so dragging
-    // the operator remains possible without changing a sequence assignment.
+    // Standing-point clicks take precedence over object hit testing. Defer
+    // to mouseup so the operator remains draggable from its home position.
     const slot = !evt.ctrlKey && !evt.metaKey ? standingSlotAt(mouse) : null;
     if (slot) {
         pendingStandingClick = {slot, start:mouse};
@@ -891,12 +898,19 @@ function finishCanvasPointer() {
     if (pendingStandingClick) {
         const {slot} = pendingStandingClick;
         pendingStandingClick = null;
-        const editor = standingPointEditor;
-        if (editor && validStandingStep(editor.operatorId,editor.stepIndex) &&
-            scenario.operators[editor.operatorId].sequence[editor.stepIndex].loc === slot.stationId) {
-            scenario.operators[editor.operatorId].sequence[editor.stepIndex].standing_side = slot.side;
-            statusText.textContent = `Operator ${editor.operatorId}, step ${editor.stepIndex+1}: standing point set to ${slot.side} of S${slot.stationId}.`;
-            renderSequenceList(scenario.operators[editor.operatorId]);
+        if (selectedItem?.type === 'operator' && selectedKeys.size === 1) {
+            const operator = scenario.operators[selectedItem.id];
+            const indexes = operatorStationVisits(operator).get(slot.stationId) || [];
+            if (indexes.length) {
+                recordUndo();
+                redoStack.length = 0;
+                // One station-side selection covers ALL this operator's visits,
+                // including inbound/outbound transfers and processing.
+                for (const index of indexes) operator.sequence[index].standing_side = slot.side;
+                statusText.textContent = `${selectedItem.id}: stand on the ${slot.side} side of S${slot.stationId} (${indexes.length} action${indexes.length===1?'':'s'}).`;
+                renderSequenceList(operator);
+                rememberDraft();
+            }
         }
     }
     const wasSelecting=!!marquee;
@@ -1030,15 +1044,6 @@ function renderOperatorTasks(op) {
       <select class="task-field" data-task-index="${i}" data-field="process" style="width:100%;font-size:12px;">
         ${processOptions({loc:task.station, process:task.process})}
       </select>`;
-    const side = (task,i) => {
-        const idx=taskWorkSequenceIndex(tasks,i);
-        return idx < 0 || !scenario.stations[task.station] ? '' : `
-        <div style="font-size:11px;margin:7px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:5px;">
-          <span>Stand: ${task.work_side ? escapeHtml(task.work_side) : 'Auto (nearest)'}</span>
-          <button type="button" class="task-standing-select" data-task-index="${i}" style="font-size:11px;">◎ Choose side on canvas</button>
-          ${task.work_side ? `<button type="button" class="task-standing-auto" data-task-index="${i}" style="font-size:11px;">Auto</button>` : ''}
-        </div>`;
-    };
     container.innerHTML = tasks.length ? tasks.map((task,i)=>`
       <div class="operator-task-card" data-task-index="${i}" style="background:#f8fbff;border:1px solid #c9d8eb;border-radius:7px;padding:9px;margin:8px 0;">
         <div style="display:flex;align-items:center;gap:5px;justify-content:space-between;">
@@ -1052,7 +1057,7 @@ function renderOperatorTasks(op) {
         ${task.kind === 'legacy' ? `<p style="font-size:11px;color:#7c4a11;">Incomplete/legacy action (${escapeHtml(task.step?.action||'?')}). Open Advanced actions to edit.</p>` : ''}
         ${['transfer','cycle'].includes(task.kind) ? location('source','Collect from',i) : ''}
         ${['transfer','cycle'].includes(task.kind) && scenario.stations[task.source] ? `<label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:5px;"><input class="task-wait-process" type="checkbox" data-task-index="${i}" ${task.wait_for_process?'checked':''}> Wait until station processing is complete</label>` : ''}
-        ${['process','cycle'].includes(task.kind) ? location('station','Workstation',i,true)+process(task,i)+side(task,i) : ''}
+        ${['process','cycle'].includes(task.kind) ? location('station','Workstation',i,true)+process(task,i) : ''}
         ${['transfer','cycle'].includes(task.kind) ? location('target','Deliver to',i) : ''}
         ${task.kind==='transfer'?'<p style="font-size:11px;color:#536b87;">Material movement only; another operator may process the part.</p>':''}
       </div>`).join('') : '<p style="font-size:12px;color:#607086;">No tasks. Add a transfer, process, or full cycle below.</p>';
@@ -1083,33 +1088,57 @@ function renderOperatorTasks(op) {
         container.querySelectorAll('.'+kind).forEach(button=>button.onclick=e=>{
             const i=Number(e.currentTarget.dataset.taskIndex);
             [tasks[i],tasks[i+change]]=[tasks[i+change],tasks[i]];
-            standingPointEditor=null;
             commit(tasks);
         });
     container.querySelectorAll('.task-remove').forEach(button=>button.onclick=e=>{
         tasks.splice(Number(e.currentTarget.dataset.taskIndex),1);
-        standingPointEditor=null;
         commit(tasks);
     });
-    container.querySelectorAll('.task-standing-select').forEach(button=>button.onclick=e=>{
-        const idx=taskWorkSequenceIndex(tasks,Number(e.currentTarget.dataset.taskIndex));
-        if(idx<0)return;
-        standingPointEditor={operatorId:selectedItem.id,stepIndex:idx};
-        renderSequenceList(op);
-        statusText.textContent='Click a dotted circle around the task workstation to set the standing point.';
-        drawFrame();
-    });
-    container.querySelectorAll('.task-standing-auto').forEach(button=>button.onclick=e=>{
-        delete tasks[Number(e.currentTarget.dataset.taskIndex)].work_side;
-        commit(tasks);
+
+}
+
+// One row per visited station, regardless of how many task/action entries
+// take place there. Reset is deliberately station-wide as well.
+function renderOperatorStandingList(op) {
+    const container = document.getElementById('operator-standing-list');
+    if (!container || selectedItem?.type !== 'operator') return;
+    const visits = operatorStationVisits(op);
+    if (!visits.size) {
+        container.innerHTML = '<p style="font-size:11px;color:#607086;">Assign a task at a station to show its four standing points.</p>';
+        return;
+    }
+    container.innerHTML = [...visits].map(([id,indexes]) => {
+        const side = visitStandingSide(op,indexes);
+        const title = scenario.stations[id]?.name || `Station ${id}`;
+        const label = side === 'auto' ? 'Auto (nearest)' : side === 'mixed' ? 'Mixed (choose one side)' : side[0].toUpperCase()+side.slice(1);
+        return `<div class="operator-station-standing" data-standing-station="${escapeHtml(id)}"
+            style="display:flex;align-items:center;gap:6px;margin:5px 0;padding:6px 7px;background:#f2f7fd;border:1px solid #d4e3f3;border-radius:5px;font-size:11px;">
+            <span style="flex:1;min-width:0;"><strong>S${escapeHtml(id)} — ${escapeHtml(title)}</strong><br>
+            <span class="standing-side-label">${escapeHtml(label)}</span> · ${indexes.length} visit action${indexes.length===1?'':'s'}</span>
+            <button type="button" class="operator-standing-auto" data-standing-station="${escapeHtml(id)}"
+                ${side==='auto'?'disabled':''} title="Use automatic standing side for every visit to this station">Auto</button>
+        </div>`;
+    }).join('');
+    container.querySelectorAll('.operator-standing-auto').forEach(button => {
+        button.onclick = () => {
+            const indexes = operatorStationVisits(op).get(button.dataset.standingStation) || [];
+            if (!indexes.length) return;
+            recordUndo();
+            redoStack.length = 0;
+            for (const index of indexes) delete op.sequence[index].standing_side;
+            statusText.textContent = `${selectedItem.id}: automatic standing side restored at S${button.dataset.standingStation}.`;
+            renderSequenceList(op);
+            drawFrame();
+            rememberDraft();
+        };
     });
 }
 
 // Render the ordered list of sequence steps for an operator
 // --------------------------------------------------------
 function renderSequenceList(op) {
-    if (selectedItem?.type === 'operator') syncStandingPointEditor(selectedItem.id);
     const container = document.getElementById("sequence-list");
+    renderOperatorStandingList(op);
     renderOperatorTasks(op);
     if (!container) return;
 
@@ -1135,16 +1164,6 @@ function renderSequenceList(op) {
                 ${dragHandle('builder-sequence',String(i),'work step '+(i+1))}
                 <button class="step-remove" data-idx="${i}" style="padding:2px 6px; background:#fde8e8;">✕</button>
               </div>
-              ${scenario.stations[step.loc] ? `
-                <div style="display:flex; align-items:center; flex-wrap:wrap; gap:5px; margin-top:6px; font-size:11px;">
-                  <span><strong>Standing:</strong> ${step.standing_side ? escapeHtml(step.standing_side[0].toUpperCase()+step.standing_side.slice(1)) : 'Auto (nearest side)'}</span>
-                  <button type="button" class="step-standing-select" data-idx="${i}"
-                    aria-pressed="${standingPointEditor?.operatorId === selectedItem?.id && standingPointEditor?.stepIndex === i}"
-                    style="font-size:11px; padding:3px 6px; border:1px solid #4777ae; background:${standingPointEditor?.operatorId === selectedItem?.id && standingPointEditor?.stepIndex === i ? '#dbeafe' : '#ffffff'};">
-                    ${standingPointEditor?.operatorId === selectedItem?.id && standingPointEditor?.stepIndex === i ? '● Selecting on canvas' : '◎ Select on canvas'}
-                  </button>
-                  ${step.standing_side ? `<button type="button" class="step-standing-auto" data-idx="${i}" style="font-size:11px; padding:3px 6px;">Use Auto</button>` : ''}
-                </div>` : ''}
               ${step.action === 'work' ? `<label style="font-size:11px;">Process
                   <select class="step-process" data-idx="${i}" style="width:100%; font-size:12px;">${processOptions(step)}</select>
                 </label>` : ''}
@@ -1174,21 +1193,6 @@ function renderSequenceList(op) {
             renderSequenceList(op);
             drawFrame();
         });
-    });
-    container.querySelectorAll('.step-standing-select').forEach(button => {
-        button.onclick = e => {
-            standingPointEditor = {operatorId:selectedItem.id, stepIndex:Number(e.currentTarget.dataset.idx)};
-            renderSequenceList(op);
-            statusText.textContent = `Choose one of the four dotted circles around S${op.sequence[standingPointEditor.stepIndex].loc} for step ${standingPointEditor.stepIndex+1}.`;
-            drawFrame();
-        };
-    });
-    container.querySelectorAll('.step-standing-auto').forEach(button => {
-        button.onclick = e => {
-            delete op.sequence[Number(e.currentTarget.dataset.idx)].standing_side;
-            renderSequenceList(op);
-            drawFrame();
-        };
     });
     container.querySelectorAll('.step-process').forEach(select => {
         select.onchange = e => { op.sequence[Number(e.target.dataset.idx)].process = e.target.value; };
@@ -1423,6 +1427,13 @@ function openSidePanel(item) {
             <label>Color</label>
             <input type="color" id="field-color" value="${rgbToHex(op.color)}" style="width:100%; margin-bottom:12px;">
             <hr>
+            <label>Standing locations</label>
+            <p style="font-size:11px;color:#45556a;margin:5px 0 8px;">
+              Select this operator to show all stations it visits on the canvas.
+              Click a dotted circle at any station to assign that side for all its tasks there.
+            </p>
+            <div id="operator-standing-list" style="margin-bottom:12px;"></div>
+            <hr>
             <label>Operator tasks</label>
             <p style="font-size:11px; color:#45556a; margin:5px 0 9px;">
               Assign a transfer, processing work, or the full collect–work–deliver cycle.
@@ -1437,7 +1448,7 @@ function openSidePanel(item) {
             </div>
             <details id="advanced-operator-actions">
               <summary style="cursor:pointer;font-size:12px;">Advanced: individual Pick / Work / Drop actions</summary>
-              <p style="font-size:11px;color:#45556a;">Edit older or unusual sequences here. Station side circles are also available through the task cards.</p>
+              <p style="font-size:11px;color:#45556a;">Edit older or unusual sequences here. Configure standing sides directly by selecting the operator on the canvas.</p>
               <div id="sequence-list" style="margin-bottom:8px;"></div>
               <button id="add-step-btn" style="width:100%;padding:6px;">+ Raw step</button>
             </details>
@@ -1449,9 +1460,8 @@ function openSidePanel(item) {
         });
 
         renderSequenceList(op);
-        if (standingPointEditor) {
-            const step = op.sequence[standingPointEditor.stepIndex];
-            statusText.textContent = `Select a dotted circle around S${step.loc}, or choose another station step in the Sequence editor.`;
+        if (operatorStationVisits(op).size) {
+            statusText.textContent = `Select a dotted circle at any station visited by ${item.id} to set its standing side.`;
         }
 
         panelFields.querySelectorAll('[data-add-task]').forEach(button=>{
@@ -1745,8 +1755,8 @@ function drawFrame() {
         ctx.restore();
     }
 
-    // Four clickable standing-point rings, ONLY around the station referenced
-    // by the active sequence step. Multiple stations are edited independently.
+    // Show all stations referenced by this operator's sequence at once.
+    // Each side controls every visit/action at that station for this operator.
     const standingSlots = activeStandingSlots();
     if (standingSlots.length) {
         const op = scenario.operators[selectedItem.id];

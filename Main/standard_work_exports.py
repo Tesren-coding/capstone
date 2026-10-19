@@ -9,6 +9,7 @@ safety points, waiting time, or certification information absent from the scenar
 from __future__ import annotations
 
 from datetime import date
+from copy import deepcopy
 from io import BytesIO
 import math
 import re
@@ -232,208 +233,213 @@ def add_part_icon(slide, x, y, size=.18, count=None):
         sws_text(slide,x+size*.65,y-.10,.43,.14,f'×{count}',size=7.4,color='#1D3954',bold=True)
 
 
-def add_numbered_steps(slide, groups, *, overview=False):
-    """Place individual circular step badges near their visit positions.
+def add_numbered_steps(slide, visits, *, overview=False):
+    """Place one circular badge per movement stop, with small offsets.
 
-    Badges deliberately do not cover one another. A leader connects each
-    offset circle to its actual visit point.
+    `visits` is a flat list of per-stop dictionaries:
+      {'operator': 'Op1', 'hue': '#RRGGBB', 'point': (x,y), 'number': 1}
+    Repeated visits to the same physical location remain separate circles.
     """
-    taken=[]
-    for group in sorted(groups,key=lambda item:(item['point'][1],item['point'][0],item['operator'])):
-        anchor=group['point']; hue=group['hue']
-        numbers=group['numbers']
-        for index,number in enumerate(numbers):
-            d=.235
-            best=None
-            for ring in range(1,14):
-                radius=.31+(ring-1)*.12
-                for angle_index in range(16):
-                    theta=(2*math.pi*angle_index/16)+(index%4)*.21
-                    x=anchor[0]+radius*math.cos(theta)-d/2
-                    y=anchor[1]+radius*math.sin(theta)-d/2
-                    # Avoid leaving the printed plan, overlapping existing labels,
-                    # and drifting too far from the actual station visit.
-                    overflow=max(0,.27-x)+max(0,x+d-13.05)+max(0,1.03-y)+max(0,y+d-5.72)
-                    rect=(x,y,x+d,y+d)
-                    collision=sum(max(0,d+.055-math.hypot(x-r[0],y-r[1]))**2 for r in taken)
-                    score=overflow*500+collision*700+radius*.20
-                    if best is None or score<best[0]:best=(score,x,y)
-                if best and best[0]<.20: break
-            _,x,y=best
-            x=max(.27,min(13.05-d,x));y=max(1.03,min(5.72-d,y))
-            taken.append((x,y,x+d,y+d))
-            line=slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(anchor[0]), Inches(anchor[1]),
-                                             Inches(x+d/2), Inches(y+d/2))
-            line.line.color.rgb=rgb(hue);line.line.width=Pt(.6)
-            badge=slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x), Inches(y), Inches(d), Inches(d))
-            badge.fill.solid();badge.fill.fore_color.rgb=rgb('#FFFFFF')
-            badge.line.color.rgb=rgb(hue);badge.line.width=Pt(1.2)
-            tf=badge.text_frame;tf.clear()
-            tf.margin_left=tf.margin_right=tf.margin_top=tf.margin_bottom=0
-            tf.vertical_anchor=MSO_ANCHOR.MIDDLE
-            para=tf.paragraphs[0];para.alignment=PP_ALIGN.CENTER
-            run=para.add_run();run.text=str(number)
-            run.font.bold=True;run.font.size=Pt(7.7 if len(str(number))<3 else 6.5)
-            run.font.color.rgb=rgb(hue)
-            if overview and index==0:
-                # Keep operator identity visible when two operators visit the
-                # same location; operator-specific slides need only numbers.
-                sws_text(slide,x-.08,y-.14,.55,.13,group['operator'],size=5.6,color=hue,bold=True)
+    taken = []
+    for visit in sorted(visits, key=lambda item: (item['operator'], item['number'])):
+        anchor = visit['point']
+        hue = visit['hue']
+        number = visit['number']
+        d = .235
+        best = None
+        for ring in range(1, 12):
+            radius = .24 + (ring - 1) * .10
+            for angle_index in range(18):
+                theta = (2 * math.pi * angle_index / 18) + (number % 5) * .18
+                x = anchor[0] + radius * math.cos(theta) - d / 2
+                y = anchor[1] + radius * math.sin(theta) - d / 2
+                overflow = max(0, .25 - x) + max(0, x + d - 13.05) + max(0, 1.28 - y) + max(0, y + d - 6.04)
+                collision = sum(max(0, d + .05 - math.hypot((x + d/2) - ox, (y + d/2) - oy))**2 for ox, oy in taken)
+                score = overflow * 500 + collision * 800 + radius * .15
+                if best is None or score < best[0]:
+                    best = (score, x, y)
+            if best and best[0] < .14:
+                break
+        _, x, y = best
+        x = max(.25, min(13.05 - d, x))
+        y = max(1.28, min(6.04 - d, y))
+        taken.append((x + d/2, y + d/2))
+        line = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(anchor[0]), Inches(anchor[1]),
+                                          Inches(x + d/2), Inches(y + d/2))
+        line.line.color.rgb = rgb(hue)
+        line.line.width = Pt(.6)
+        badge = slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x), Inches(y), Inches(d), Inches(d))
+        badge.fill.solid(); badge.fill.fore_color.rgb = rgb('#FFFFFF')
+        badge.line.color.rgb = rgb(hue); badge.line.width = Pt(1.2)
+        tf = badge.text_frame; tf.clear()
+        tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+        tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+        para = tf.paragraphs[0]; para.alignment = PP_ALIGN.CENTER
+        run = para.add_run(); run.text = str(number)
+        run.font.bold = True; run.font.size = Pt(7.7 if len(str(number)) < 3 else 6.6)
+        run.font.color.rgb = rgb(hue)
+        if overview and number == 1:
+            sws_text(slide, x - .06, y - .14, .60, .13, visit['operator'], size=5.6, color=hue, bold=True)
 
 
-def sws_slide(prs, scenario, selected_operator=None):
-    slide = prs.slides.add_slide(prs.slide_layouts[6])
+def movement_visits(scenario, operator_id):
+    """Return only movement destinations in visit order.
+
+    The underlying simulator still uses action-level Pick/Work/Drop data, but
+    the SWS route should present only the operator's physical movement from one
+    location to another. Consecutive steps at the same destination collapse into
+    one visit, so Work/Pick/Drop at one station becomes a single numbered stop.
+    """
+    visits = []
+    previous = None
+    for row in planned_steps(scenario, operator_id):
+        point = row.get('position')
+        if not point:
+            continue
+        current = (float(point['x']), float(point['y']))
+        if previous is None or math.dist(current, previous) > 1e-6:
+            visits.append({'number': len(visits) + 1, 'point': current, 'loc': row.get('loc')})
+            previous = current
+    return visits
+
+
+def _copy_template_shapes(target_slide, source_slide):
+    for shape in source_slide.shapes:
+        target_slide.shapes._spTree.insert_element_before(deepcopy(shape._element), 'p:extLst')
+
+
+def _load_or_create_sws_presentation():
+    template = Path(__file__).resolve().parent / 'resources' / 'SWS_Frame.pptx'
+    if template.is_file():
+        prs = Presentation(str(template))
+        # Keep a pristine copy of the frame for additional slides.
+        source_prs = Presentation(str(template))
+        return prs, source_prs.slides[0], True
+    prs = Presentation()
+    prs.slide_width = Inches(13.333)
+    prs.slide_height = Inches(7.5)
+    return prs, None, False
+
+
+def _new_sws_slide(prs, template_slide=None):
+    if template_slide is None:
+        return prs.slides.add_slide(prs.slide_layouts[6])
+    blank = prs.slide_layouts[6]
+    slide = prs.slides.add_slide(blank)
+    _copy_template_shapes(slide, template_slide)
+    return slide
+
+
+def _table_shapes(slide):
+    return [shape for shape in slide.shapes if getattr(shape, 'has_table', False)]
+
+
+def sws_slide(prs, scenario, selected_operator=None, template_slide=None, reuse_existing_first=False):
+    slide = prs.slides[0] if (reuse_existing_first and len(prs.slides) >= 1 and not selected_operator) else _new_sws_slide(prs, template_slide)
     all_operators = operator_ids(scenario)
-    if selected_operator:
-        ids = [selected_operator]
-        subtitle = f"Operator movement route — {selected_operator}"
-    else:
-        ids = all_operators
-        subtitle = 'Line layout and operator movement routes'
+    ids = [selected_operator] if selected_operator else all_operators
 
-    # Emulate reference SWS's tabular header, plan body, and legend/footer.
-    sws_box(slide, 0.2, 0.12, 1.12, 0.37, 'Line Name', bold=True, size=8)
-    sws_box(slide, 1.32, 0.12, 3.04, 0.37, scenario_name(scenario), size=9)
-    sws_box(slide, 4.36, 0.12, 5.1, 0.37, 'STANDARD WORK SHEET', bold=True, size=17)
-    sws_box(slide, 9.46, 0.12, 1.68, 0.37, 'New / Revised', bold=True, size=8)
-    sws_box(slide, 11.14, 0.12, 1.98, 0.37, date.today().isoformat(), size=9)
-    sws_box(slide, 0.2, 0.49, 1.12, 0.38, 'Part / Frame', bold=True, size=8)
-    frame = str(scenario.get('framesize') or scenario.get('part_name') or '—')
-    sws_box(slide, 1.32, 0.49, 3.04, 0.38, frame[:50], size=9)
-    sws_box(slide, 4.36, 0.49, 5.1, 0.38, subtitle, size=9, color=BLUE)
-    sws_box(slide, 9.46, 0.49, 1.68, 0.38, 'Department', bold=True, size=8)
-    sws_box(slide, 11.14, 0.49, 1.98, 0.38, str(scenario.get('department') or '—'), size=9)
+    # The uploaded SWS frame is a blank, user-editable form. Do not fill or
+    # modify any of its existing metadata, tables, legend or footer fields.
+    # Only draw the physical line and the selected operators' movement routes
+    # in the empty central canvas.
 
     stations = scenario.get('stations', {})
-    boxes = {k:v for k,v in scenario.get('boxes', {}).items() if v.get('type') in ('in','out','swip')}
+    boxes = {k: v for k, v in scenario.get('boxes', {}).items() if v.get('type') in ('in', 'out', 'swip')}
     directions = [v for v in scenario.get('boxes', {}).values() if v.get('type') == 'direction']
     objects = [*stations.values(), *boxes.values()]
-    # Include rotated arrows in the layout bounds so they're never cropped.
     for item in directions:
-        angle=math.radians(float(item.get('rotation', 0) or 0))
-        cx=float(item['x'])+float(item['w'])/2; cy=float(item['y'])+float(item['h'])/2
-        rw=abs(float(item['w'])*math.cos(angle))+abs(float(item['h'])*math.sin(angle))
-        rh=abs(float(item['w'])*math.sin(angle))+abs(float(item['h'])*math.cos(angle))
-        objects.append({'x':cx-rw/2,'y':cy-rh/2,'w':rw,'h':rh})
+        angle = math.radians(float(item.get('rotation', 0) or 0))
+        cx = float(item['x']) + float(item['w']) / 2; cy = float(item['y']) + float(item['h']) / 2
+        rw = abs(float(item['w']) * math.cos(angle)) + abs(float(item['h']) * math.sin(angle))
+        rh = abs(float(item['w']) * math.sin(angle)) + abs(float(item['h']) * math.cos(angle))
+        objects.append({'x': cx - rw / 2, 'y': cy - rh / 2, 'w': rw, 'h': rh})
     if objects:
         x0 = min(float(v['x']) for v in objects); y0 = min(float(v['y']) for v in objects)
         x1 = max(float(v['x']) + float(v['w']) for v in objects)
         y1 = max(float(v['y']) + float(v['h']) for v in objects)
     else:
-        x0=y0=0.; x1=875.; y1=500.
-    # Reserve room for standing points and operator home positions outside
-    # object boundaries, so curves do not clip against the slide edges.
-    operator_positions = [p for op in scenario.get('operators', {}).values()
-                          for p in [(float(op['x']), float(op['y']))]]
+        x0 = y0 = 0.; x1 = 875.; y1 = 500.
+    operator_positions = [p for op in scenario.get('operators', {}).values() for p in [(float(op['x']), float(op['y']))]]
     if operator_positions:
         x0 = min(x0, *(p[0] for p in operator_positions))
         y0 = min(y0, *(p[1] for p in operator_positions))
         x1 = max(x1, *(p[0] for p in operator_positions))
         y1 = max(y1, *(p[1] for p in operator_positions))
     x0 -= 35.0; y0 -= 35.0; x1 += 35.0; y1 += 35.0
-    world_w = max(250., x1-x0); world_h = max(190., y1-y0)
-    # Draw all movable objects with proportional geometry, bounded by printable body.
-    scale = min(12.45/world_w, 4.72/world_h)
-    xpad = (12.45 - world_w*scale)/2
-    ypad = (4.72 - world_h*scale)/2
+    world_w = max(250., x1 - x0); world_h = max(190., y1 - y0)
+
+    # Use the supplied SWS frame exactly and draw inside its open body region.
+    # Exact open body of the supplied frame, minus generous protection margins:
+    # header ends at 1.178 in; legend starts at 6.19 in; footer at 6.70 in.
+    BODY_X = 0.36; BODY_Y = 1.37; BODY_W = 12.60; BODY_H = 4.54
+    scale = min(BODY_W / world_w, BODY_H / world_h)
+    xpad = (BODY_W - world_w * scale) / 2
+    ypad = (BODY_H - world_h * scale) / 2
+
     def xy(p):
-        return (0.45 + xpad + (float(p['x'])-x0)*scale,
-                1.05 + ypad + (float(p['y'])-y0)*scale)
-    def center(item):
-        return xy({'x': item['x']+item['w']/2,'y':item['y']+item['h']/2})
-    # Keep every Line Direction image as an editable PowerPoint picture.
-    # Place these behind stations and operator movement paths, preserving the
-    # builder's size, position, rotation and horizontal/vertical flips.
-    arrow_png=Path(__file__).resolve().parent/'static'/'images'/'line_direction.png'
+        return (BODY_X + xpad + (float(p['x']) - x0) * scale,
+                BODY_Y + ypad + (float(p['y']) - y0) * scale)
+
+    arrow_png = Path(__file__).resolve().parent / 'static' / 'images' / 'line_direction.png'
     for direction in directions:
-        x,y=xy(direction)
-        w=max(.01,float(direction['w'])*scale)
-        h=max(.01,float(direction['h'])*scale)
+        x, y = xy(direction)
+        w = max(.01, float(direction['w']) * scale)
+        h = max(.01, float(direction['h']) * scale)
         if arrow_png.is_file():
-            image=slide.shapes.add_picture(str(arrow_png), Inches(x), Inches(y), Inches(w), Inches(h))
-            image.rotation=float(direction.get('rotation',0) or 0)
-            transform=image._element.spPr.xfrm
-            if direction.get('flip_horizontal'): transform.set('flipH','1')
-            if direction.get('flip_vertical'): transform.set('flipV','1')
-        else:
-            # Backup marker if the image asset is not available.
-            sws_text(slide,x,y,w,max(.18,h),'→  LINE DIRECTION',size=11,color='#9A9A9A',bold=True)
+            image = slide.shapes.add_picture(str(arrow_png), Inches(x), Inches(y), Inches(w), Inches(h))
+            image.rotation = float(direction.get('rotation', 0) or 0)
+            transform = image._element.spPr.xfrm
+            if direction.get('flip_horizontal'): transform.set('flipH', '1')
+            if direction.get('flip_vertical'): transform.set('flipV', '1')
 
     for sid, station in stations.items():
-        x,y = xy(station)
-        w=max(.36,station['w']*scale);h=max(.25,station['h']*scale)
+        x, y = xy(station)
+        w = max(.36, station['w'] * scale); h = max(.25, station['h'] * scale)
         title = f"S{sid}. {station.get('name', 'Station')}"
-        sws_box(slide,x,y,w,h,title[:55],bg='#ECF2F9',border='#426A92',size=7.0 if w<1.3 else 8.3)
+        sws_box(slide, x, y, w, h, title[:55], bg='#ECF2F9', border='#426A92', size=7.0 if w < 1.3 else 8.3)
         if station.get('has_part'):
-            add_part_icon(slide,x+w-.17,y+h-.19,size=.16)
+            add_part_icon(slide, x + w - .17, y + h - .19, size=.16)
+
     for bid, box in boxes.items():
-        x,y=xy(box); w=max(.32,box['w']*scale);h=max(.22,box['h']*scale)
-        kind=box.get('type')
-        fill={'in':'#E2F5E9','out':'#FFF0E9','swip':'#FFF6D9'}[kind]
-        name=box.get('name',bid)
-        label='SWIP' if kind=='swip' else f"{kind.upper()}: {name}"
-        if kind=='in':label+=f"\n×{box.get('start_count',0)}"
-        sws_box(slide,x,y,w,h,label[:56],bg=fill,border={'in':'#348C5B','out':'#C96D42','swip':'#BF941E'}[kind],
-                size=7.3,dotted=True)
-        if (kind=='swip' and box.get('has_part')) or (kind=='in' and int(box.get('start_count') or 0)>0):
-            add_part_icon(slide,x+w-.16,y+h-.18,size=.15)
+        x, y = xy(box); w = max(.32, box['w'] * scale); h = max(.22, box['h'] * scale)
+        kind = box.get('type')
+        fill = {'in': '#E2F5E9', 'out': '#FFF0E9', 'swip': '#FFF6D9'}[kind]
+        name = box.get('name', bid)
+        label = 'SWIP' if kind == 'swip' else f"{kind.upper()}: {name}"
+        if kind == 'in':
+            label += f'\n×{box.get("start_count", 0)}'
+        sws_box(slide, x, y, w, h, label[:56], bg=fill,
+                border={'in': '#348C5B', 'out': '#C96D42', 'swip': '#BF941E'}[kind], size=7.3, dotted=True)
+        if (kind == 'swip' and box.get('has_part')) or (kind == 'in' and int(box.get('start_count') or 0) > 0):
+            add_part_icon(slide, x + w - .16, y + h - .18, size=.15)
 
-    # Curves follow each action. Number labels are aggregated for repeated
-    # visits to the same location, then positioned using a collision check.
-    # This avoids circles overwriting one another when Work/Pick/Drop or
-    # multiple operators reuse the same station/box.
-    annotation_groups=[]
+    annotation_visits = []
     for i, opid in enumerate(ids):
-        operator=scenario['operators'][opid]
-        hue=route_color(operator)
-        origin=xy({'x':operator['x'],'y':operator['y']})
-        steps=planned_steps(scenario,opid)
-        previous=origin
-        groups=[]
-        for row in steps:
-            current=xy(row['position'])
-            add_curved_path(slide,previous,current,hue,bend=(.055+(i%4)*.03)*(-1 if (i+row['index'])%2 else 1))
-            previous=current
-            matched=next((group for group in groups if math.dist(current,group['point'])<.075),None)
-            if matched:
-                matched['numbers'].append(str(row['index']))
-            else:
-                groups.append({'point':current,'numbers':[str(row['index'])]})
-        for group in groups:
-            annotation_groups.append({'operator':opid,'hue':hue,'point':group['point'],
-                                      'numbers':group['numbers']})
+        operator = scenario['operators'][opid]
+        hue = route_color(operator)
+        origin = xy({'x': operator['x'], 'y': operator['y']})
+        visits = movement_visits(scenario, opid)
+        previous = origin
+        for visit in visits:
+            current = xy({'x': visit['point'][0], 'y': visit['point'][1]})
+            add_curved_path(slide, previous, current, hue, bend=(.055 + (i % 4) * .03) * (-1 if (i + visit['number']) % 2 else 1))
+            previous = current
+            annotation_visits.append({'operator': opid, 'hue': hue, 'point': current, 'number': visit['number']})
 
-    add_numbered_steps(slide,annotation_groups,overview=selected_operator is None)
+    add_numbered_steps(slide, annotation_visits, overview=selected_operator is None)
 
-    # Operator colored key. If there are many, the specific route slides stay readable.
-    sws_text(slide,0.26,5.84,2.3,.24,'OPERATOR ROUTE LEGEND',size=10,bold=True,color=BLUE)
-    add_part_icon(slide,9.30,5.83,.17)
-    sws_text(slide,9.51,5.82,3.54,.23,'Part icon = starting SWIP',size=8.5,bold=True,color=BLUE)
-    for n,opid in enumerate(ids[:24]):
-        col=n%12; row=n//12
-        x=.35+col*1.035; y=6.10+row*.25
-        circle=slide.shapes.add_shape(MSO_SHAPE.OVAL, Inches(x), Inches(y), Inches(.13), Inches(.13))
-        circle.fill.solid();circle.fill.fore_color.rgb=rgb(route_color(scenario['operators'][opid]));circle.line.fill.background()
-        sws_text(slide,x+.17,y-.01,.72,.23,opid,size=8)
-    sws_text(slide,.25,6.72,12.8,.24,'DRAFT — Route geometry represents direct walking paths, not obstacle/aisle avoidance.',size=8,color='#8E4B1E')
-    footer=[('SWIP',str(swip_total(scenario))),('Takt Time',f"{scenario.get('takt_time',0):g} min"),('Operators',str(len(all_operators))),
-            ('Quality Check','Not configured'),('Safety Precaution','Not configured')]
-    x=.2
-    for title,value in footer:
-        width=2.59
-        sws_box(slide,x,6.98,width,.21,title,size=8,bold=True)
-        sws_box(slide,x,7.19,width,.22,value,size=8)
-        x+=width
 
 
 def export_sws_pptx(scenario):
-    prs = Presentation()
-    prs.slide_width=Inches(13.333)
-    prs.slide_height=Inches(7.5)
-    sws_slide(prs, scenario)
+    prs, template_slide, reuse_first = _load_or_create_sws_presentation()
+    if len(prs.slides) == 0:
+        prs.slide_width = Inches(13.333)
+        prs.slide_height = Inches(7.5)
+    sws_slide(prs, scenario, template_slide=template_slide, reuse_existing_first=reuse_first)
     for opid in operator_ids(scenario):
-        sws_slide(prs, scenario, opid)
-    out=BytesIO();prs.save(out);out.seek(0)
+        sws_slide(prs, scenario, opid, template_slide=template_slide, reuse_existing_first=False)
+    out = BytesIO(); prs.save(out); out.seek(0)
     return out
 
 

@@ -1,4 +1,4 @@
-"""Browser interaction: choose station standing points on canvas; box destinations stay unconfigured.
+"""Browser check for operator-wide, per-station standing points.
 Run: python tests/browser_walking_points.py
 """
 from playwright.sync_api import sync_playwright
@@ -11,11 +11,19 @@ window.__walkingTest = {
         const otherSid = String(createStation(1920, 680));
         const first = scenario.stations[sid];
         const opId = createOperator(first.x + first.w/2, first.y - 26);
-        scenario.operators[opId].sequence.push({action:'work',loc:sid,process:'p1'});
-        scenario.operators[opId].sequence.push({action:'pick',loc:otherSid});
+        // The operator works at S1, transfers from S1 to S2 and back.
+        scenario.operators[opId].sequence = [
+            {action:'work',loc:sid,process:'p1'},
+            {action:'pick',loc:sid},
+            {action:'drop',loc:otherSid},
+            {action:'pick',loc:otherSid},
+            {action:'drop',loc:sid},
+        ];
+        const secondId=createOperator(1180, 300);
+        scenario.operators[secondId].sequence=[{action:'work',loc:sid,process:'p1'}];
         setSelectedKeys([selectionKey('operator',opId)]);
         drawFrame();
-        return {sid, otherSid, opId};
+        return {sid, otherSid, opId, secondId};
     },
     snapshot: () => JSON.parse(JSON.stringify(serializeScenario())),
     load: value => applyLoadedScenario(value),
@@ -35,8 +43,8 @@ window.__walkingTest = {
 
 def check():
     with sync_playwright() as p:
-        browser = p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
-        page = browser.new_page(viewport={'width':1450,'height':1000})
+        browser = p.chromium.launch(executable_path='/usr/bin/chromium', headless=True, args=['--no-sandbox'])
+        page = browser.new_page(viewport={'width':1450, 'height':1000})
         errors=[]
         page.on('pageerror', lambda err: errors.append(str(err)))
         page.set_content(HTML)
@@ -47,62 +55,68 @@ def check():
         assert page.input_value('#walk-speed-input')=='1.2'
         canvas=page.locator('#builder-canvas')
         canvas.scroll_into_view_if_needed()
-        def mouse_at(x,y,scale=1):
+        def mouse_at(x,y,zoom=1):
             box=canvas.bounding_box()
-            return (box['x']+(x*scale+1200*(1-scale))*box['width']/2400,
-                    box['y']+(y*scale+521*(1-scale))*box['height']/1042)
-        def click_world(x,y,scale=1):
-            page.mouse.click(*mouse_at(x,y,scale))
+            return (box['x']+(x*zoom+1200*(1-zoom))*box['width']/2400,
+                    box['y']+(y*zoom+521*(1-zoom))*box['height']/1042)
+        def click_world(x,y,zoom=1):
+            page.mouse.click(*mouse_at(x,y,zoom))
         info=page.evaluate('window.__walkingTest.install()')
-        assert page.locator('.step-standing-side').count()==0, 'Dropdown should be gone.'
-        assert page.locator('.step-standing-select').count()==2
-        assert page.locator('.step-standing-select[aria-pressed="true"]').count()==1
+        assert page.locator('.step-standing-select').count()==0
+        assert page.locator('.task-standing-select').count()==0
+        assert page.locator('.operator-station-standing').count()==2
         slots=page.evaluate('window.__walkingTest.standingSlots()')
-        assert len(slots)==4 and {s['stationId'] for s in slots}=={info['sid']},slots
-        slot=next(s for s in slots if s['side']=='right')
-        click_world(slot['x'],slot['y'])
-        step=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence'][0]
-        assert step['standing_side']=='right',step
-        page.locator('#advanced-operator-actions').evaluate('(el)=>el.open=true')
-        assert 'Right' in page.locator('.sequence-step').first.inner_text()
-        assert page.locator('.step-standing-auto').count()==1
-        # Choose second step: ONLY its station shows the four rings.
-        page.locator('#advanced-operator-actions').evaluate('(el)=>el.open=true')
-        page.locator('.step-standing-select').nth(1).click()
-        slots=page.evaluate('window.__walkingTest.standingSlots()')
-        assert len(slots)==4 and {s['stationId'] for s in slots}=={info['otherSid']},slots
-        slot=next(s for s in slots if s['side']=='bottom')
-        click_world(slot['x'],slot['y'])
+        assert len(slots)==8 and {s['stationId'] for s in slots}=={info['sid'],info['otherSid']}, slots
+        # One click at S1 changes ALL three references to that station.
+        first=next(s for s in slots if s['stationId']==info['sid'] and s['side']=='right')
+        click_world(first['x'],first['y'])
         steps=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence']
-        assert steps[0]['standing_side']=='right' and steps[1]['standing_side']=='bottom',steps
-        # A station selection never displays these rings.
+        assert [steps[i]['standing_side'] for i in (0,1,4)]==['right']*3, steps
+        assert not any('standing_side' in steps[i] for i in (2,3)), steps
+        # Another station is configurable immediately; no process selection.
+        second=next(s for s in slots if s['stationId']==info['otherSid'] and s['side']=='bottom')
+        click_world(second['x'],second['y'])
+        steps=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence']
+        assert [steps[i]['standing_side'] for i in (2,3)]==['bottom']*2, steps
+        assert page.locator('.operator-station-standing').count()==2
+        assert page.locator('.operator-standing-auto:not([disabled])').count()==2
+        # Sides are operator-specific, NOT stored on the shared station.
+        page.evaluate('(id) => window.__walkingTest.activateOperator(id)',info['secondId'])
+        slots=page.evaluate('window.__walkingTest.standingSlots()')
+        assert len(slots)==4 and {s['stationId'] for s in slots}=={info['sid']}
+        left=next(s for s in slots if s['side']=='left')
+        click_world(left['x'],left['y'])
+        operators=page.evaluate('window.__walkingTest.snapshot()')['operators']
+        assert operators[info['secondId']]['sequence'][0]['standing_side']=='left'
+        assert operators[info['opId']]['sequence'][0]['standing_side']=='right'
+        # Selection of a station does not display standing-point rings.
         station=page.evaluate('window.__walkingTest.snapshot()')['stations'][info['sid']]
         click_world(station['x']+30,station['y']+25)
         assert page.evaluate('window.__walkingTest.selected()')==['station:'+info['sid']]
         assert page.evaluate('window.__walkingTest.standingSlots()')==[]
-        # Re-select and test zoom-aware mouse click.
-        page.evaluate('(id) => window.__walkingTest.activateOperator(id)',info['opId'])
+        # Clicking the actual operator icon activates ALL its standing rings.
+        operator=page.evaluate('([id]) => window.__walkingTest.snapshot().operators[id]',[info['opId']])
+        click_world(operator['x'],operator['y'])
+        assert page.evaluate('window.__walkingTest.selected()')==['operator:'+info['opId']]
+        assert len(page.evaluate('window.__walkingTest.standingSlots()'))==8
+        # Then verify zoom-aware standing-point clicks.
         page.locator('[data-zoom-in]').click()
         assert page.locator('[data-zoom-label]').inner_text()=='125%'
         slots=page.evaluate('window.__walkingTest.standingSlots()')
-        assert len(slots)==4 and {s['stationId'] for s in slots}=={info['sid']}
-        left=next(s for s in slots if s['side']=='left')
-        click_world(left['x'],left['y'],1.25)
-        steps=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence']
-        assert steps[0]['standing_side']=='left' and steps[1]['standing_side']=='bottom',steps
-        # Still able to drag operator from its home ring, even if this is also
-        # a selectable standing point (choose the top dot first).
-        top=next(s for s in slots if s['side']=='top')
+        assert len(slots)==8
+        top=next(s for s in slots if s['stationId']==info['sid'] and s['side']=='top')
         click_world(top['x'],top['y'],1.25)
-        assert page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence'][0]['standing_side']=='top'
+        steps=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence']
+        assert all(steps[i]['standing_side']=='top' for i in (0,1,4))
+        # Operator can still be dragged from a coincident home/standing ring.
         page.mouse.move(*mouse_at(top['x'],top['y'],1.25))
         page.mouse.down()
         page.mouse.move(*mouse_at(top['x']+70,top['y']-45,1.25),steps=10)
         page.mouse.up()
-        updated=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]
-        assert 'attached_to' not in updated,updated
-        assert abs(updated['x']-(top['x']+70))<3,updated
-        # Scale and speed survive save/load, as do standing-side choices.
+        op=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]
+        assert 'attached_to' not in op, op
+        assert abs(op['x']-(top['x']+70))<3,op
+        # Standing-point changes survive save/load with the original schema.
         page.locator('#layout-scale-input').fill('60')
         page.locator('#walk-speed-input').fill('1.4')
         saved=page.evaluate('window.__walkingTest.snapshot()')
@@ -111,14 +125,14 @@ def check():
         assert page.input_value('#walk-speed-input')=='1.4'
         assert page.evaluate('window.__walkingTest.snapshot()')==saved
         page.evaluate('(id) => window.__walkingTest.activateOperator(id)',info['opId'])
-        page.locator('#advanced-operator-actions').evaluate('(el)=>el.open=true')
-        page.locator('.step-standing-auto').first.click()
-        assert 'standing_side' not in page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence'][0]
-        # Boxes have no dotted side-selection and don't receive standing_side.
+        page.locator('.operator-standing-auto[data-standing-station="'+info['sid']+'"]',).click()
+        steps=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence']
+        assert all('standing_side' not in steps[i] for i in (0,1,4)),steps
+        assert all(steps[i]['standing_side']=='bottom' for i in (2,3)),steps
+        # Boxes have no side circles.
         page.evaluate('(id) => window.__walkingTest.boxStepOnly(id)',info['opId'])
         assert page.evaluate('window.__walkingTest.standingSlots()')==[]
-        assert page.locator('.step-standing-select').count()==0
-        assert page.locator('.step-standing-side').count()==0
+        assert page.locator('.operator-station-standing').count()==0
         page.on('dialog', lambda dialog:dialog.accept())
         page.click('#new-line-btn')
         assert page.input_value('#layout-scale-input')=='50'
@@ -126,6 +140,6 @@ def check():
         assert page.evaluate('window.__walkingTest.snapshot()')['operators']=={}
         assert errors==[],errors
         browser.close()
-    print('Chromium: clickable station-side rings, only assigned station visible, zoom, drag, Auto, saved positions, box centers unchanged, New Line passed.')
+    print('Chromium: multi-station operator standing dots, grouped picks/works/drops, multi-operator isolation, zoom, drag, Auto, save/load, New Line passed.')
 
 if __name__=='__main__': check()

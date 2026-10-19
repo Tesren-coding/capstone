@@ -38,7 +38,8 @@ def check():
         page.locator('[data-add-task="process"]').click()
         page.locator('.task-field[data-field="station"]').select_option(str(data['station']))
         assert page.evaluate('(id) => scenario.operators[id].sequence[0].process',data['process'])=='p1'
-        assert page.locator('.task-standing-select').count()==1
+        assert page.locator('.operator-station-standing').count()==1
+        assert page.locator('.task-standing-select').count()==0
         page.evaluate('(id) => setSelectedKeys([selectionKey("operator",id)])',data['outbound'])
         page.locator('[data-add-task="transfer"]').click()
         page.locator('.task-field[data-field="source"]').select_option(str(data['station']))
