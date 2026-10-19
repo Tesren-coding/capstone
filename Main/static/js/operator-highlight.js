@@ -1,5 +1,11 @@
-// Presentation-only helper for highlighting each operator's full work area.
+// Presentation-only helpers for highlighting each operator's full work area.
 // Never change saved scenarios or simulation event contents to calculate focus.
+// Scenario operators are stored by ID in an object. Its insertion order is NOT
+// a reliable operator-number order (for example Op10 can precede Op2).
+const operatorIdCollator = new Intl.Collator('en', {numeric: true, sensitivity: 'base'});
+export function sortOperatorIds(ids) {
+    return [...ids].sort((a, b) => operatorIdCollator.compare(a, b) || a.localeCompare(b));
+}
 export function visitedLocationsForOperator(operator, scenario) {
     const visited = new Set();
     const locations = {...(scenario.stations || {}), ...(scenario.boxes || {})};

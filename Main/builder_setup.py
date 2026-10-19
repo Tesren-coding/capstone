@@ -97,8 +97,9 @@ def generate_scenario(original):
                      for s in active if mapping[s['id']] == sid]
         scenario['stations'][sid] = {**layout['positions'][sid], 'name': station['name'], 'has_part': False, 'processes': processes, 'setup_station_id': sid}
     for index, (operator, sequence) in enumerate(active_ops):
-        scenario['operators']['Op'+str(index+1)] = {'x': 240 + (index % 5)*300, 'y': 450 + (index // 5)*240,
-            'name': operator['name'], 'color': COLORS[index % len(COLORS)], 'source_operator_id': operator['id'],
+        operator_id = 'Op' + str(index + 1)
+        scenario['operators'][operator_id] = {'x': 240 + (index % 5)*300, 'y': 450 + (index // 5)*240,
+            'name': operator_id, 'color': COLORS[index % len(COLORS)], 'source_operator_id': operator['id'],
             'sequence': [dict(action='work', loc=mapping[sid], process=sid, source_step_id=sid) for sid in sequence]}
     scenario['boxes'] = {
         'IN_1': {**layout['input'], 'name': 'Incoming', 'type': 'in', 'start_count': setup['input_count']},

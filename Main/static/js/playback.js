@@ -3,7 +3,7 @@ import {drawBox, drawStation, drawPart, drawOperator, drawOperatorTracer, drawBa
 import {buildPositionsFromScenario} from "./positions.js";
 import {buildOperatorState, updateOperators} from "./state.js";
 import {requestJson} from "./api.js";
-import {visitedLocationsForOperator, operatorAtLegendPoint} from "./operator-highlight.js";
+import {visitedLocationsForOperator, operatorAtLegendPoint, sortOperatorIds} from "./operator-highlight.js";
 
 // playback.js — Simulation playback, controls and tooltips.
 // ============================================================
@@ -47,12 +47,12 @@ function populateHighlightLegend() {
         const button = document.createElement('button');
         button.type = 'button';
         button.dataset.operatorId = id;
-        button.setAttribute('aria-label', `Highlight ${operator.name || id}'s work area`);
+        button.setAttribute('aria-label', `Highlight ${id}'s work area`);
         button.setAttribute('aria-pressed', 'false');
         button.style.cssText = 'display:inline-flex;align-items:center;gap:6px;padding:7px 11px;background:#fff;border:1px solid #9cacc1;border-radius:18px;cursor:pointer;font-size:13px;';
         const swatch = document.createElement('span');
         swatch.style.cssText = `display:inline-block;width:12px;height:12px;border-radius:50%;background:${Array.isArray(operator.color) ? `rgb(${operator.color.join(',')})` : operator.color || '#888'};`;
-        button.append(swatch, document.createTextNode(operator.name || id));
+        button.append(swatch, document.createTextNode(id));
         button.addEventListener('mouseenter', () => {hoveredChipOperator = id; refreshHighlightUI();});
         button.addEventListener('mouseleave', () => {if (hoveredChipOperator === id) hoveredChipOperator = null; refreshHighlightUI();});
         button.addEventListener('focus', () => {hoveredChipOperator = id; refreshHighlightUI();});
@@ -92,7 +92,7 @@ function updateStationTooltip() {
     if (machine.busy) {
         lines.push(`Current process: ${machine.processName}`);
         lines.push(`Time to completion: ${Math.max(0, machine.until - opState.time).toFixed(2)} min`);
-        if (machine.phase === 'manual') lines.push(`Working operator: ${scenario.operators[machine.operator]?.name || machine.operator}`);
+        if (machine.phase === 'manual') lines.push(`Working operator: ${machine.operator}`);
     }
     const blocked = opNames.filter(op => String(opState.blockedLoc[op]) === sid && opState.isBlocked[op]);
     blocked.forEach(op => lines.push(`Blocked: ${opState.blockedReason[op] || op}`));
@@ -217,7 +217,9 @@ document.getElementById("back-btn").addEventListener("click", () => {
 // PART 4 — Load scenario + events, then initialize
 // ============================================================
 function initOperatorState() {
-    opNames = Object.keys(scenario.operators);
+    // Use one natural numeric order in operator chips, canvas legend,
+    // playback drawing, and legend hover hit targets.
+    opNames = sortOperatorIds(Object.keys(scenario.operators));
     positions = buildPositionsFromScenario(scenario);
 
     opState = buildOperatorState(
@@ -372,7 +374,7 @@ function drawFrame(timestamp) {
             drawPart(ctx, partPos.x, partPos.y, partImage);
         }
 
-        drawOperator(ctx, scenario.operators[op].name || op, pos.x, pos.y, color);
+        drawOperator(ctx, op, pos.x, pos.y, color);
         if (opState.moves[op]) {
             const move = opState.moves[op];
             ctx.save();

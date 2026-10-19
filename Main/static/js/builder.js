@@ -1,6 +1,7 @@
 import {CanvasViewport, drawStationText, stationProcesses, stationTotals, escapeHtml} from "./canvas-tools.js";
 import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-sort.js";
 import {requestJson, postJson} from "./api.js";
+import {orderedOperatorIds, remapOperatorOrder} from "./operator-order.js";
 import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
 import {drawDirection, directionContainsPoint, directionResizeHandle,
     resizeDirectionFromPoint, DIRECTION_MIN_WIDTH, DIRECTION_MIN_HEIGHT} from "./line-direction.js";
@@ -49,7 +50,6 @@ const HANDOFF_KEY = 'capstone-builder-handoff';
 let reviewSnapshot=null,reviewRequest=0;
 
 let nextStationId  = 1;
-let nextOperatorId = 1;
 let nextBoxId       = 1;
 let nextDimensionId = 1;
 
@@ -393,8 +393,134 @@ function createStation(x, y) {
     return id;
 }
 
+// Operator identity is the display name. Reuse the lowest free number so
+// deleting Op2 then creating an operator yields Op2 again, not Op4.
+function nextAvailableOperatorId() {
+    let number = 1;
+    while (Object.hasOwn(scenario.operators, `Op${number}`)) number++;
+    return `Op${number}`;
+}
+
+const operatorOrderPanel = document.getElementById('operator-order-panel');
+const operatorOrderList = document.getElementById('operator-order-list');
+const reorderOperatorsButton = document.getElementById('reorder-operators-btn');
+let operatorOrderSignature = null;
+
+function renderOperatorOrderList(force = false) {
+    if (operatorOrderPanel.hidden) return;
+    const ids = orderedOperatorIds(scenario.operators);
+    // Don't rebuild rows while a drag is starting or in progress.
+    const signature = ids.map(id => `${id}:${scenario.operators[id].color?.join(',') || ''}:${(scenario.operators[id].sequence || []).map(step => step.loc).join(',')}`).join('|');
+    if (!force && signature === operatorOrderSignature) return;
+    operatorOrderSignature = signature;
+    if (!ids.length) {
+        operatorOrderList.innerHTML = '<li>No operators yet. Use + Operator to create one.</li>';
+        return;
+    }
+    operatorOrderList.innerHTML = ids.map(id => {
+        const op = scenario.operators[id];
+        const color = Array.isArray(op.color) ? rgbToHex(op.color) : '#64748b';
+        const count = op.sequence?.length || 0;
+        const places = (op.sequence || []).map(step => {
+            const loc = String(step.loc ?? '');
+            if (scenario.stations[loc]) return `S${loc}`;
+            if (scenario.boxes[loc]) return scenario.boxes[loc].name || scenario.boxes[loc].type.toUpperCase();
+            return '';
+        }).filter(Boolean);
+        const preview = places.length ? places.slice(0,3).join(' → ') + (places.length > 3 ? ' …' : '') : 'No assigned locations';
+        return `<li data-operator-order-id="${escapeHtml(id)}">
+            ${dragHandle('operator-order', id, id)}
+            <span class="operator-color-swatch" style="background:${color};"></span>
+            <strong>${escapeHtml(id)}</strong>
+            <span style="font-size:12px;color:#526173;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(preview)}">${escapeHtml(preview)}</span>
+            <span style="font-size:12px;color:#526173;white-space:nowrap;">${count} step${count === 1 ? '' : 's'}</span>
+        </li>`;
+    }).join('');
+}
+
+function setOperatorOrderPanel(open) {
+    operatorOrderPanel.hidden = !open;
+    reorderOperatorsButton.setAttribute('aria-expanded', String(open));
+    if (open) renderOperatorOrderList(true);
+}
+reorderOperatorsButton.addEventListener('click', () => setOperatorOrderPanel(operatorOrderPanel.hidden));
+document.getElementById('operator-order-close').addEventListener('click', () => setOperatorOrderPanel(false));
+
+// Renumber operator identities against the requested top-to-bottom order.
+// No station/box IDs change: an operator's sequence belongs to their object.
+function applyOperatorOrder(ids) {
+    const {operators, mapping, changed} = remapOperatorOrder(scenario.operators, ids);
+    if (!changed) return false;
+    recordUndo();
+    redoStack.length = 0;
+    const previousSelection = [...selectedKeys];
+    const previousStanding = standingPointEditor;
+    for (const id of Object.keys(scenario.operators)) delete scenario.operators[id];
+    Object.assign(scenario.operators, operators);
+    draggedItem = null;
+    setSelectedKeys(previousSelection.map(key => {
+        const [type, id] = key.split(':');
+        return type === 'operator' && mapping[id] ? selectionKey(type, mapping[id]) : key;
+    }));
+    if (previousStanding && mapping[previousStanding.operatorId] &&
+        selectedItem?.type === 'operator' && selectedItem.id === mapping[previousStanding.operatorId] &&
+        validStandingStep(selectedItem.id, previousStanding.stepIndex)) {
+        standingPointEditor = {...previousStanding, operatorId: selectedItem.id};
+    }
+    renderOperatorOrderList(true);
+    drawFrame();
+    rememberDraft();
+    statusText.textContent = `Operator order updated: ${ids.map(id => `${id} → ${mapping[id]}`).join(', ')}. Assignments and colors preserved.`;
+    return true;
+}
+
+function renumberOperators() {
+    const ids = orderedOperatorIds(scenario.operators);
+    if (!ids.length) {
+        statusText.textContent = 'There are no operators to renumber.';
+        return;
+    }
+    if (!remapOperatorOrder(scenario.operators, ids).changed) {
+        statusText.textContent = 'Operator IDs are already sequential (Op1, Op2, ...).';
+        return;
+    }
+    if (!confirm('Renumber all operators from Op1 in ascending ID order? Assignments, positions and colors are preserved.')) return;
+    applyOperatorOrder(ids);
+}
+
+document.getElementById('renumber-operators-btn').addEventListener('click', renumberOperators);
+
+installDrag(operatorOrderList, {
+    source(node) {
+        if (node.dataset.dragType !== 'operator-order' || !scenario.operators[node.dataset.dragId]) return null;
+        return {type: 'operator-order', id: node.dataset.dragId, label: node.dataset.dragId};
+    },
+    target(hit, event) {
+        const row = hit.closest('[data-operator-order-id]');
+        return row && operatorOrderList.contains(row)
+            ? {...rowDrop(row, event.clientY), id: row.dataset.operatorOrderId} : null;
+    },
+    drop(data, where) {
+        const ids = orderedOperatorIds(scenario.operators);
+        const before = beforeFromDrop(ids, where.id, where.after, id => id);
+        if (moveBefore(ids, data.id, before, id => id)) applyOperatorOrder(ids);
+    },
+    keyboard(data, key) {
+        const ids = orderedOperatorIds(scenario.operators);
+        const index = ids.indexOf(data.id);
+        const target = index + (['ArrowUp', 'ArrowLeft'].includes(key) ? -1 : 1);
+        if (target < 0 || target >= ids.length) return;
+        const moving = ids.splice(index, 1)[0];
+        ids.splice(target, 0, moving);
+        const mapping = Object.fromEntries(ids.map((id, i) => [id, `Op${i + 1}`]));
+        if (applyOperatorOrder(ids)) {
+            operatorOrderList.querySelector(`[data-drag-id="${mapping[data.id]}"]`)?.focus();
+        }
+    },
+});
+
 function createOperator(x, y) {
-    const id = "Op" + nextOperatorId++;
+    const id = nextAvailableOperatorId();
     const color = DEFAULT_COLORS[colorIndex % DEFAULT_COLORS.length];
     colorIndex++;
     scenario.operators[id] = {
@@ -1213,10 +1339,10 @@ function openSidePanel(item) {
 
     } else if (item.type === "operator") {
         const op = scenario.operators[item.id];
-        panelTitle.textContent = `Operator ${op.name}`;
+        panelTitle.textContent = item.id;
         panelFields.innerHTML = `
-            <label>Name</label>
-            <input type="text" id="field-name" value="${escapeHtml(op.name)}" style="width:100%; margin-bottom:8px;">
+            <label>Operator ID</label>
+            <p style="font-weight:600; margin:5px 0 10px;">${escapeHtml(item.id)}</p>
             <label>Color</label>
             <input type="color" id="field-color" value="${rgbToHex(op.color)}" style="width:100%; margin-bottom:12px;">
             <hr>
@@ -1229,10 +1355,6 @@ function openSidePanel(item) {
             <button id="add-step-btn" style="width:100%; padding:6px; background:#e8eef8; border:2px solid #1e3c78;">+ Add Step</button>
         `;
 
-        document.getElementById("field-name").addEventListener("input", (e) => {
-            op.name = e.target.value;
-            drawFrame();
-        });
         document.getElementById("field-color").addEventListener("input", (e) => {
             op.color = hexToRgb(e.target.value);
             drawFrame();
@@ -1402,6 +1524,7 @@ const BOX_COLORS = {
 };
 
 function drawFrame() {
+    renderOperatorOrderList();
     updatePlanningReview();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -1596,7 +1719,7 @@ function drawFrame() {
         ctx.font = "11px Arial";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(op.name, op.x, op.y);
+        ctx.fillText(id, op.x, op.y);
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
 
@@ -1649,7 +1772,8 @@ function serializeScenario() {
         layout_scale_px_per_m: Number(scaleInput.value),
         walking_speed_m_per_s: Number(walkSpeedInput.value),
         stations:  scenario.stations,
-        operators: scenario.operators,
+        operators: Object.fromEntries(Object.entries(scenario.operators).map(
+            ([id, op]) => [id, {...op, name: id}])),
         boxes:     scenario.boxes,
         dimensions: scenario.dimensions,
     };
@@ -1681,13 +1805,13 @@ function restoreEditorSnapshot(json) {
         for(const id of Object.keys(scenario[key])) delete scenario[key][id];
         Object.assign(scenario[key],data[key]||{});
     }
+    for (const [id,op] of Object.entries(scenario.operators)) op.name = id;
     scenarioExtras=Object.fromEntries(Object.entries(data).filter(([key]) =>
         !['schema_version','takt_time','layout_scale_px_per_m','walking_speed_m_per_s',...keys].includes(key)));
     taktTimeInput.value=String(data.takt_time??30);
     scaleInput.value=String(data.layout_scale_px_per_m??DEFAULT_PX_PER_M);
     walkSpeedInput.value=String(data.walking_speed_m_per_s??DEFAULT_WALK_M_PER_S);
     nextStationId=Math.max(nextStationId,1,...Object.keys(scenario.stations).map(id=>Number(id)+1||1));
-    nextOperatorId=Math.max(nextOperatorId,1,...Object.keys(scenario.operators).map(id=>Number(id.replace(/^Op/,''))+1||1));
     nextBoxId=Math.max(nextBoxId,1,...Object.keys(scenario.boxes).map(id=>Number(id.split('_').at(-1))+1||1));
     nextDimensionId=Math.max(nextDimensionId,1,...Object.keys(scenario.dimensions).map(id=>Number(id.replace(/^dim_/,''))+1||1));
     for(const id of Object.keys(scenario.stations)) updateAttachedOperators(scenario.stations,scenario.operators,id);
@@ -1756,8 +1880,8 @@ function pasteCanvasSelection() {
                 do {id=`${String(data.type).toUpperCase()}_${nextBoxId++}`;} while(scenario.boxes[id]);
                 scenario.boxes[id]=data;
             } else if(type==='operator') {
-                do {id=`Op${nextOperatorId++}`;} while(scenario.operators[id]);
-                if(!data.name || data.name===item.id) data.name=id;
+                id=nextAvailableOperatorId();
+                data.name=id;
                 scenario.operators[id]=data;
             } else {
                 do {id=`dim_${nextDimensionId++}`;} while(scenario.dimensions[id]);
@@ -1838,6 +1962,7 @@ function applyLoadedScenario(data) {
 
     Object.assign(scenario.stations,  data.stations  || {});
     Object.assign(scenario.operators, data.operators || {});
+    for (const [id,op] of Object.entries(scenario.operators)) op.name = id;
     Object.assign(scenario.boxes,     data.boxes     || {});
     Object.assign(scenario.dimensions, data.dimensions || {});
     // Older scenarios without attached_to remain free-floating, with original
@@ -1850,7 +1975,7 @@ function applyLoadedScenario(data) {
     scaleInput.value = data.layout_scale_px_per_m ?? DEFAULT_PX_PER_M;
     walkSpeedInput.value = data.walking_speed_m_per_s ?? DEFAULT_WALK_M_PER_S;
 
-    nextStationId = nextOperatorId = nextBoxId = nextDimensionId = 1;
+    nextStationId = nextBoxId = nextDimensionId = 1;
     stopDimensionTool();
     draggedItem = null;
     dragStart = null;
@@ -1859,10 +1984,6 @@ function applyLoadedScenario(data) {
     Object.keys(scenario.stations).forEach(sid => {
         const n = parseInt(sid, 10);
         if (!isNaN(n) && n >= nextStationId) nextStationId = n + 1;
-    });
-    Object.keys(scenario.operators).forEach(oid => {
-        const n = parseInt(oid.replace("Op", ""), 10);
-        if (!isNaN(n) && n >= nextOperatorId) nextOperatorId = n + 1;
     });
     Object.keys(scenario.dimensions).forEach(id=>{
         const n=Number(id.replace(/^dim_/,''));
@@ -2133,7 +2254,6 @@ function startNewLine({persistDraft = true} = {}) {
     lastSavedSnapshot = null;
     suggestedFilename = 'scenario.json';
     nextStationId = 1;
-    nextOperatorId = 1;
     nextBoxId = 1;
     nextDimensionId = 1;
     colorIndex = 0;

@@ -234,6 +234,20 @@ The manual/auto totals printed on a station sum all its configured processes.
 They are not a measurement of operator utilization or the simulated line's
 cycle time. Actual time depends on the selected work steps, walking and waits.
 
+## Reorder operators in the Line Builder
+
+The operator's **ID is also its name** (`Op1`, `Op2`, ...). To change which
+operator occupies each numbered slot, click **↕ Reorder Operators** and drag
+the ⠿ handle in the list. **Alt + Up/Down** reorders from a focused drag handle.
+The list includes each operator's color and assigned locations so operators
+remain distinguishable after renumbering. The top row becomes Op1.
+
+Each operator keeps their color, position, station-side attachment, standing
+point settings and work sequence. **Renumber Operators** separately closes
+gaps left by deleted operators without changing their current numerical order.
+Reordering supports **Ctrl + Z** / **Ctrl + Y**, but does not alter a saved SQL
+scenario until you choose **Save Scenario**.
+
 ## Material movement and processing rules
 
 - Each station holds one part and executes one process at a time.

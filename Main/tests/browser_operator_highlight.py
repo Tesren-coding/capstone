@@ -14,7 +14,7 @@ for filename in SOURCES:
     source=re.sub(r'^import\s*\{[\s\S]*?\}\s*from\s*["\'][^"\']+["\'];\s*','',source,flags=re.M)
     source=re.sub(r'\bexport\s+(?=(?:function|class|const|let|async))','',source)
     BUNDLE+='\n'+source+'\n'
-BUNDLE+='\nwindow.__highlightTest={getActive:activeHighlightOperator,getVisited:()=>[...highlightedLocations],getRawColor:(x,y)=>[...ctx.getImageData(x,y,1,1).data],view};'
+BUNDLE+='\nwindow.__highlightTest={getActive:activeHighlightOperator,getVisited:()=>[...highlightedLocations],getRawColor:(x,y)=>[...ctx.getImageData(x,y,1,1).data],getOrdered:()=>[...opNames],view};'
 STUB='''() => {window.fetch=async()=>new Response(JSON.stringify({
  event_schema_version:1,takt_time:30,
  scenario:{layout_scale_px_per_m:50,walking_speed_m_per_s:1.2,
@@ -23,10 +23,10 @@ STUB='''() => {window.fetch=async()=>new Response(JSON.stringify({
         'swip':{x:360,y:380,w:90,h:60,name:'SWIP',type:'swip',has_part:false},
         'fg':{x:620,y:380,w:90,h:60,name:'Finished',type:'out',capacity:50},
         'direction':{x:100,y:500,w:875,h:85,name:'Arrow',type:'direction'}},
- operators:{'Op1':{x:80,y:170,name:'Alice',color:[220,60,60],attached_to:{station_id:'1',side:'top'},
- sequence:[{action:'pick',loc:'raw'},{action:'work',loc:'2'},{action:'drop',loc:'swip'}]},
- 'Op2':{x:600,y:170,name:'Bob',color:[60,120,220],
- sequence:[{action:'work',loc:'3'},{action:'drop',loc:'fg'}]}}},
+ operators:{'Op10':{x:835,y:170,name:'Tenth Operator',color:[100,150,80],sequence:[{action:'work',loc:'3'}]},
+ 'Op2':{x:600,y:170,name:'Bob',color:[60,120,220],sequence:[{action:'work',loc:'3'},{action:'drop',loc:'fg'}]},
+ 'Op1':{x:80,y:170,name:'Alice',color:[220,60,60],attached_to:{station_id:'1',side:'top'},
+ sequence:[{action:'pick',loc:'raw'},{action:'work',loc:'2'},{action:'drop',loc:'swip'}]}}},
  events:[{time:1,operator:'Op1',status:'operator_ready'}]
 }),{status:200,headers:{'Content-Type':'application/json'}})}'''
 
@@ -37,6 +37,9 @@ def check():
     page.on('pageerror',lambda error:errors.append(str(error)))
     page.set_content(HTML);page.evaluate(STUB);page.add_script_tag(content=BUNDLE)
     page.wait_for_selector('[data-operator-id="Op1"]')
+    expected_order=['Op1', 'Op2', 'Op10']
+    assert page.evaluate('window.__highlightTest.getOrdered()')==expected_order, 'Playback IDs are not numeric-sorted'
+    assert page.locator('#operator-highlight-legend button').evaluate_all('(buttons) => buttons.map(b => b.dataset.operatorId)')==expected_order, 'Hover chips not numeric-sorted'
     def focused(): return page.evaluate('window.__highlightTest.getActive()')
     def visited(): return page.evaluate('window.__highlightTest.getVisited()')
     page.wait_for_timeout(70)

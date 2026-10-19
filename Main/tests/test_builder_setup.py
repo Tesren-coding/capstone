@@ -35,7 +35,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(list(scenario['stations']),['1','3'])
         self.assertEqual([p['id'] for p in scenario['stations']['1']['processes']],['s1','s2'])
         self.assertEqual(scenario['stations']['1']['processes'][0]['auto_time'],2)
-        self.assertEqual(scenario['operators']['Op1']['name'],'Alice')
+        self.assertEqual(scenario['operators']['Op1']['name'],'Op1')
         self.assertEqual([s['process'] for s in scenario['operators']['Op1']['sequence']],['s2','s1'])
         self.assertEqual(scenario['operators']['Op2']['sequence'][0]['loc'],'3')
         self.assertEqual(scenario['planning_origin']['setup_snapshot']['source']['filename'],'balance.json')

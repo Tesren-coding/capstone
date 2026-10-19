@@ -43,6 +43,13 @@ def normalize_scenario(scenario):
     data['schema_version'] = CURRENT_SCHEMA_VERSION
     for key in ('stations', 'operators', 'boxes'):
         data.setdefault(key, {})
+    # Operator IDs also serve as their display names. Keep the name field for
+    # backwards compatibility with stored v1/v2 scenarios and existing clients,
+    # but overwrite old custom names on the normalized COPY (not the caller).
+    if isinstance(data['operators'], dict):
+        for operator_id, operator in data['operators'].items():
+            if isinstance(operator, dict):
+                operator['name'] = operator_id
     for station in data['stations'].values() if isinstance(data['stations'], dict) else []:
         if isinstance(station, dict) and isinstance(station.get('processes'), list):
             times = [p.get(k) for p in station['processes'] if isinstance(p, dict)

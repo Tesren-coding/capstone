@@ -19,7 +19,7 @@ width:1000px!important;height:434.17px!important;max-width:none!important;}
 # Inline the actual source modules for testing on an about:blank document;
 # this environment blocks Chromium navigation, including localhost.
 SOURCES = ['canvas-tools.js','drag-sort.js','api.js','layout-geometry.js',
-           'builder-snapping.js','smart-guides.js','line-direction.js','dimension-tools.js','builder.js']
+           'builder-snapping.js','smart-guides.js','line-direction.js','dimension-tools.js','operator-order.js','builder.js']
 BUNDLE = ''
 for filename in SOURCES:
     js=(ROOT/'static/js'/filename).read_text()
