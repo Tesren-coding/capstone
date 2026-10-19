@@ -1,7 +1,7 @@
 """Flask request handlers. Scenario rules and persistence live in separate modules."""
 from pathlib import Path
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, send_file
 
 from scenario_schema import CURRENT_SCHEMA_VERSION, EVENT_SCHEMA_VERSION, ScenarioValidationError, validate_scenario
 from scenario_store import ScenarioStore, ScenarioStorageError, file_stem
@@ -11,6 +11,7 @@ from planning_pages import planning, MODULES
 from pqpr_routes import pqpr
 from balancing_routes import balancing
 from builder_setup_routes import bridge
+from standard_work_exports import export_sws_pptx, export_swcs_xlsx
 
 app = Flask(__name__)
 app.register_blueprint(planning)
@@ -70,6 +71,30 @@ def launch():
 def get_events():
     return jsonify(LAST_SIMULATION)
 
+
+
+@app.get('/export-sws')
+def export_sws():
+    """PowerPoint standard-work layout using the latest simulated scenario."""
+    scenario = LAST_SIMULATION.get('scenario')
+    if scenario is None:
+        return jsonify(status='missing', error='Run a simulation before exporting standard work.'), 409
+    filename = file_stem(scenario.get('line_name') or 'line') + '_SWS.pptx'
+    return send_file(export_sws_pptx(scenario), as_attachment=True,
+                     download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.presentationml.presentation')
+
+
+@app.get('/export-swcs')
+def export_swcs():
+    """Excel operator combination sheets using the latest simulated scenario."""
+    scenario = LAST_SIMULATION.get('scenario')
+    if scenario is None:
+        return jsonify(status='missing', error='Run a simulation before exporting standard work.'), 409
+    filename = file_stem(scenario.get('line_name') or 'line') + '_SWCS.xlsx'
+    return send_file(export_swcs_xlsx(scenario), as_attachment=True,
+                     download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 @app.route('/save-scenario', methods=['POST'])
 def save_scenario():

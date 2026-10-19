@@ -2,3 +2,5 @@ Flask>=3.1,<4
 simpy>=4.1,<5
 openpyxl>=3.1,<4
 pyodbc>=5.1,<6
+
+python-pptx>=1.0,<2

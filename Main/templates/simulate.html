@@ -34,6 +34,17 @@
     <span id="timeline-help" style="display:block; margin-top:4px;">Drag to review any moment. Playback pauses; press PLAY to continue.</span>
 </div>
 
+<section class="standard-work-export-panel" aria-label="Export standard work documents">
+    <div class="standard-work-export-heading">
+        <div><strong>Standard Work Documents</strong><span>Generate editable drafts from this line and its operator sequences.</span></div>
+        <div class="standard-work-export-actions">
+            <button type="button" id="export-sws-btn" disabled title="PowerPoint layout and curved operator movement routes">Export SWS (.pptx)</button>
+            <button type="button" id="export-swcs-btn" disabled title="Uses the original Stage 4 Nozzle Excel SWCS template. Blue operator fields are populated; review and adjust the editable timing lines manually.">Export SWCS (.xlsx)</button>
+        </div>
+    </div>
+    <p>SWS follows the line layout. SWCS uses the original imported Excel template: blue text is filled automatically, but existing graphic lines must be adjusted manually to match the new timings.</p>
+</section>
+
 <div id="canvas-controls" class="canvas-controls">
     <button type="button" data-zoom-out aria-label="Zoom out">−</button>
     <span data-zoom-label>100%</span>

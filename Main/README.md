@@ -397,3 +397,14 @@ tests generated C layouts. `python tests/browser_builder_smoke.py` tests the
 real Line Builder canvas using Playwright and Chromium with a mocked HTTP API.
 The complete app suite still runs via `python -m unittest discover -s tests -v`
 when dependencies in `requirements.txt` are installed.
+
+
+### Standard Work exports (first draft)
+
+After **Run Simulation**, use **Export SWS (.pptx)** for a line-layout PowerPoint
+with curved operator movement routes, or **Export SWCS (.xlsx)** for an editable
+operator-per-sheet combination chart based on assigned Pick/Work/Drop steps.
+Generated documents are drafts requiring review; see
+[`Updates/STANDARD_WORK_EXPORTS.md`](Updates/STANDARD_WORK_EXPORTS.md).
+After updating the project, install new dependencies with
+`python -m pip install -r requirements.txt`.

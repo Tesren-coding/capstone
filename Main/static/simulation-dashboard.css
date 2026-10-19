@@ -93,3 +93,17 @@
 @media (max-width: 800px) {
     .swip-pie-layout { grid-template-columns: 1fr; }
 }
+
+/* Editable industrial-document exports, available after a simulation loads. */
+.standard-work-export-panel {
+    max-width: 1240px; margin: 12px auto 18px; padding: 13px 17px;
+    background: #f7f9fd; border: 1px solid #d5e0ed; border-radius: 9px;
+}
+.standard-work-export-heading {display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;}
+.standard-work-export-heading strong {display:block;color:#183b67;font-size:15px;}
+.standard-work-export-heading span {font-size:12px;color:#526173;}
+.standard-work-export-actions {display:flex;gap:8px;flex-wrap:wrap;}
+.standard-work-export-actions button {background:#e8eef8;border:1px solid #426a92;padding:8px 12px;color:#193d65;font-weight:650;border-radius:6px;cursor:pointer;}
+.standard-work-export-actions button:hover:not(:disabled) {background:#d7e6fb;}
+.standard-work-export-actions button:disabled {opacity:.45;cursor:not-allowed;}
+.standard-work-export-panel p {font-size:12px;margin:8px 0 0;color:#6e5549;}

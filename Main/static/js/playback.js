@@ -328,6 +328,10 @@ const timelineLabel = document.getElementById('timeline-label');
 const playButton = document.getElementById('start-btn');
 const pauseButton = document.getElementById('stop-btn');
 const restartButton = document.getElementById('restart-btn');
+const exportSwsButton = document.getElementById('export-sws-btn');
+const exportSwcsButton = document.getElementById('export-swcs-btn');
+exportSwsButton.addEventListener('click', () => {window.location.assign('/export-sws');});
+exportSwcsButton.addEventListener('click', () => {window.location.assign('/export-swcs');});
 let totalDuration = 0;
 
 function updatePlaybackControls() {
@@ -458,6 +462,8 @@ async function init() {
             '(separate from playback speed)';
 
         initOperatorState();
+        exportSwsButton.disabled = false;
+        exportSwcsButton.disabled = false;
         renderStartingSwipChart();
         populateHighlightLegend();
         totalDuration = simEvents.reduce((latest, event) => Math.max(latest, event.time), 0);
