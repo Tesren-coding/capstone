@@ -2,6 +2,7 @@ import {CanvasViewport, drawStationText, stationProcesses, stationTotals, escape
 import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-sort.js";
 import {requestJson, postJson} from "./api.js";
 import {orderedOperatorIds, remapOperatorOrder} from "./operator-order.js";
+import {sequenceToTasks, tasksToSequence, taskWorkSequenceIndex, defaultOperatorTask} from "./operator-tasks.js";
 import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
 import {drawDirection, directionContainsPoint, directionResizeHandle,
     resizeDirectionFromPoint, DIRECTION_MIN_WIDTH, DIRECTION_MIN_HEIGHT} from "./line-direction.js";
@@ -1013,11 +1014,103 @@ function selectDefaultProcess(step) {
     } else delete step.process;
 }
 
+// Human-readable task cards compile into Pick/Drop/Work actions. This enables
+// different operators to transfer, process and move the SAME station part.
+function renderOperatorTasks(op) {
+    const container = document.getElementById('operator-task-list');
+    if (!container || selectedItem?.type !== 'operator') return;
+    const tasks = sequenceToTasks(op.sequence);
+    const taskLabel = {transfer:'Transfer part',process:'Process part',cycle:'Collect → Work → Deliver',legacy:'Legacy action'};
+    const location = (value, field, taskIndex, stationsOnly=false) => `
+      <label style="display:block;font-size:11px;margin:5px 0 2px;">${field}</label>
+      <select class="task-field" data-task-index="${taskIndex}" data-field="${value}" style="width:100%;font-size:12px;">
+        ${buildLocationOptions(stationsOnly?'work':'pick',tasks[taskIndex][value] || '')}
+      </select>`;
+    const process = (task,i) => `<label style="display:block;font-size:11px;margin:5px 0 2px;">Process</label>
+      <select class="task-field" data-task-index="${i}" data-field="process" style="width:100%;font-size:12px;">
+        ${processOptions({loc:task.station, process:task.process})}
+      </select>`;
+    const side = (task,i) => {
+        const idx=taskWorkSequenceIndex(tasks,i);
+        return idx < 0 || !scenario.stations[task.station] ? '' : `
+        <div style="font-size:11px;margin:7px 0 0;display:flex;flex-wrap:wrap;align-items:center;gap:5px;">
+          <span>Stand: ${task.work_side ? escapeHtml(task.work_side) : 'Auto (nearest)'}</span>
+          <button type="button" class="task-standing-select" data-task-index="${i}" style="font-size:11px;">◎ Choose side on canvas</button>
+          ${task.work_side ? `<button type="button" class="task-standing-auto" data-task-index="${i}" style="font-size:11px;">Auto</button>` : ''}
+        </div>`;
+    };
+    container.innerHTML = tasks.length ? tasks.map((task,i)=>`
+      <div class="operator-task-card" data-task-index="${i}" style="background:#f8fbff;border:1px solid #c9d8eb;border-radius:7px;padding:9px;margin:8px 0;">
+        <div style="display:flex;align-items:center;gap:5px;justify-content:space-between;">
+          <strong style="font-size:12px;">${i+1}. ${taskLabel[task.kind] || 'Task'}</strong>
+          <div style="display:flex;gap:3px;">
+            <button type="button" class="task-up" data-task-index="${i}" aria-label="Move task up" ${i===0?'disabled':''}>↑</button>
+            <button type="button" class="task-down" data-task-index="${i}" aria-label="Move task down" ${i===tasks.length-1?'disabled':''}>↓</button>
+            <button type="button" class="task-remove" data-task-index="${i}" aria-label="Remove task">✕</button>
+          </div>
+        </div>
+        ${task.kind === 'legacy' ? `<p style="font-size:11px;color:#7c4a11;">Incomplete/legacy action (${escapeHtml(task.step?.action||'?')}). Open Advanced actions to edit.</p>` : ''}
+        ${['transfer','cycle'].includes(task.kind) ? location('source','Collect from',i) : ''}
+        ${['transfer','cycle'].includes(task.kind) && scenario.stations[task.source] ? `<label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:5px;"><input class="task-wait-process" type="checkbox" data-task-index="${i}" ${task.wait_for_process?'checked':''}> Wait until station processing is complete</label>` : ''}
+        ${['process','cycle'].includes(task.kind) ? location('station','Workstation',i,true)+process(task,i)+side(task,i) : ''}
+        ${['transfer','cycle'].includes(task.kind) ? location('target','Deliver to',i) : ''}
+        ${task.kind==='transfer'?'<p style="font-size:11px;color:#536b87;">Material movement only; another operator may process the part.</p>':''}
+      </div>`).join('') : '<p style="font-size:12px;color:#607086;">No tasks. Add a transfer, process, or full cycle below.</p>';
+
+    function commit(updated) {
+        op.sequence = tasksToSequence(updated);
+        renderSequenceList(op);
+        drawFrame();
+    }
+    container.querySelectorAll('.task-wait-process').forEach(input=>input.onchange=e=>{
+        tasks[Number(e.currentTarget.dataset.taskIndex)].wait_for_process=e.currentTarget.checked;
+        commit(tasks);
+    });
+    container.querySelectorAll('.task-field').forEach(select=>{
+        select.onchange=e=>{
+            const i=Number(e.currentTarget.dataset.taskIndex), field=e.currentTarget.dataset.field;
+            const task=tasks[i];
+            task[field]=e.currentTarget.value;
+            if(field==='station') {
+                const processes=scenario.stations[task.station]?.processes || [];
+                task.process=processes.length===1?processes[0].id:'';
+                delete task.work_side;
+            }
+            commit(tasks);
+        };
+    });
+    for(const [kind,change] of [['task-up',-1],['task-down',1]])
+        container.querySelectorAll('.'+kind).forEach(button=>button.onclick=e=>{
+            const i=Number(e.currentTarget.dataset.taskIndex);
+            [tasks[i],tasks[i+change]]=[tasks[i+change],tasks[i]];
+            standingPointEditor=null;
+            commit(tasks);
+        });
+    container.querySelectorAll('.task-remove').forEach(button=>button.onclick=e=>{
+        tasks.splice(Number(e.currentTarget.dataset.taskIndex),1);
+        standingPointEditor=null;
+        commit(tasks);
+    });
+    container.querySelectorAll('.task-standing-select').forEach(button=>button.onclick=e=>{
+        const idx=taskWorkSequenceIndex(tasks,Number(e.currentTarget.dataset.taskIndex));
+        if(idx<0)return;
+        standingPointEditor={operatorId:selectedItem.id,stepIndex:idx};
+        renderSequenceList(op);
+        statusText.textContent='Click a dotted circle around the task workstation to set the standing point.';
+        drawFrame();
+    });
+    container.querySelectorAll('.task-standing-auto').forEach(button=>button.onclick=e=>{
+        delete tasks[Number(e.currentTarget.dataset.taskIndex)].work_side;
+        commit(tasks);
+    });
+}
+
 // Render the ordered list of sequence steps for an operator
 // --------------------------------------------------------
 function renderSequenceList(op) {
     if (selectedItem?.type === 'operator') syncStandingPointEditor(selectedItem.id);
     const container = document.getElementById("sequence-list");
+    renderOperatorTasks(op);
     if (!container) return;
 
     if (op.sequence.length === 0) {
@@ -1330,13 +1423,24 @@ function openSidePanel(item) {
             <label>Color</label>
             <input type="color" id="field-color" value="${rgbToHex(op.color)}" style="width:100%; margin-bottom:12px;">
             <hr>
-            <label>Sequence</label>
+            <label>Operator tasks</label>
             <p style="font-size:11px; color:#45556a; margin:5px 0 9px;">
-              Choose a station step, then click one of its four dotted circles on the canvas.
-              Each step can use a different station side. IN, OUT and SWIP boxes use their center.
+              Assign a transfer, processing work, or the full collect–work–deliver cycle.
+              Different operators can handle the same part at different stages.
+              The simulator creates the walking, pickup, dropoff and work actions automatically.
             </p>
-            <div id="sequence-list" style="margin-bottom:8px;"></div>
-            <button id="add-step-btn" style="width:100%; padding:6px; background:#e8eef8; border:2px solid #1e3c78;">+ Add Step</button>
+            <div id="operator-task-list" style="margin-bottom:8px;"></div>
+            <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:12px;">
+              <button type="button" data-add-task="transfer">+ Transfer</button>
+              <button type="button" data-add-task="process">+ Process</button>
+              <button type="button" data-add-task="cycle">+ Full cycle</button>
+            </div>
+            <details id="advanced-operator-actions">
+              <summary style="cursor:pointer;font-size:12px;">Advanced: individual Pick / Work / Drop actions</summary>
+              <p style="font-size:11px;color:#45556a;">Edit older or unusual sequences here. Station side circles are also available through the task cards.</p>
+              <div id="sequence-list" style="margin-bottom:8px;"></div>
+              <button id="add-step-btn" style="width:100%;padding:6px;">+ Raw step</button>
+            </details>
         `;
 
         document.getElementById("field-color").addEventListener("input", (e) => {
@@ -1350,6 +1454,15 @@ function openSidePanel(item) {
             statusText.textContent = `Select a dotted circle around S${step.loc}, or choose another station step in the Sequence editor.`;
         }
 
+        panelFields.querySelectorAll('[data-add-task]').forEach(button=>{
+            button.onclick=()=>{
+                const tasks=sequenceToTasks(op.sequence);
+                tasks.push(defaultOperatorTask(button.dataset.addTask));
+                op.sequence=tasksToSequence(tasks);
+                renderSequenceList(op);
+                drawFrame();
+            };
+        });
         document.getElementById("add-step-btn").addEventListener("click", () => {
             op.sequence.push({ action: "pick", loc: "" });
             renderSequenceList(op);
@@ -2093,21 +2206,33 @@ document.getElementById('save-scenario-btn').addEventListener('click', async () 
 });
 
 function refreshScenarioList(selectedFilename = loadedFilename) {
-    return fetch("/list-scenarios")
-        .then(res => res.json())
-        .then(data => {
-            const select = document.getElementById("scenario-select");
-            select.innerHTML = '<option value="">-- Select a saved scenario --</option>';
-            data.files.forEach(filename => {
-                const label = filename.replace(".json", "").replace(/_/g, " ");
-                const opt = document.createElement("option");
-                opt.value = filename;
-                opt.textContent = label;
-                select.appendChild(opt);
-            });
-            if (selectedFilename && data.files.includes(selectedFilename)) select.value = selectedFilename;
-        })
-        .catch(err => console.error("Error listing scenarios:", err));
+    const note = document.getElementById('scenario-storage-note');
+    return Promise.all([
+        requestJson('/list-scenarios'),
+        requestJson('/scenario-storage-status'),
+    ]).then(([data, storage]) => {
+        if (!Array.isArray(data.files)) throw new Error('Unexpected response from the saved-scenario list.');
+        const select = document.getElementById('scenario-select');
+        select.replaceChildren(new Option('-- Select a saved scenario --', ''));
+        for (const filename of data.files) {
+            const label = filename.replace(/\.json$/i, '').replace(/_/g, ' ');
+            select.appendChild(new Option(label, filename));
+        }
+        if (selectedFilename && data.files.includes(selectedFilename)) select.value = selectedFilename;
+        if (storage.backend === 'json') {
+            note.textContent = data.files.length
+                ? `JSON storage · ${data.files.length} saved scenario(s) · Folder: ${storage.directory}`
+                : `No JSON scenarios found. This app is reading: ${storage.directory}. Copy your existing .json files into that folder, or set CAPSTONE_SCENARIOS_DIR before running python app.py.`;
+        } else {
+            note.textContent = `SQL Server storage · ${data.files.length} saved scenario(s). ` +
+                (data.files.length ? '' : 'If you expected JSON files, launch with CAPSTONE_STORAGE_BACKEND=json.');
+        }
+        return data.files;
+    }).catch(err => {
+        note.textContent = `Could not list saved scenarios: ${err.message}. Check the Flask terminal and your storage settings.`;
+        console.error('Error listing scenarios:', err);
+        return [];
+    });
 }
 
 // Rename a persisted scenario without saving unsaved edits or changing the canvas.
@@ -2268,36 +2393,58 @@ function isCurrentUnsaved() {
     return current !== lastSavedSnapshot && current !== freshLineSnapshot;
 }
 
+let cancelPendingDraftRestore = false;
 document.getElementById('new-line-btn').addEventListener('click', () => {
-    if (isCurrentUnsaved() && !confirm('Create a new blank line? Unsaved changes to the current line will be discarded. Saved SQL scenarios will not be deleted.')) return;
-    startNewLine();
+    if (isCurrentUnsaved() && !confirm('Create a new blank line? Unsaved canvas changes will be discarded. Previously saved scenarios will NOT be deleted.')) {
+        statusText.textContent = 'New Line cancelled. Your current work is unchanged.';
+        return;
+    }
+    cancelPendingDraftRestore = true;
+    try { startNewLine(); }
+    catch (err) { statusText.textContent = 'Could not reset the canvas: ' + err.message; console.error(err); return; }
     statusText.textContent = 'New blank line created with Raw Material, Line Direction and Finished Goods. Add stations and operators to begin.';
 });
 
 async function initBuilder() {
     const controls = [...document.querySelectorAll('button, input, select')];
     const disabled = controls.map(control => control.disabled);
-    controls.forEach(control => { control.disabled = true; });
+    // Keep New Line usable even while a stale draft is being restored.
+    controls.forEach(control => { if (control.id !== 'new-line-btn') control.disabled = true; });
     try {
         const draft = JSON.parse(sessionStorage.getItem(DRAFT_KEY) || 'null');
         if (draft?.scenario) {
             const result = await postJson('/import-scenario', {scenario: draft.scenario});
-            applyLoadedScenario(result.scenario);
-            loadedFilename = draft.loadedFilename || null;
-            loadedRevision = draft.loadedRevision || null;
-            lastSavedSnapshot = draft.lastSavedSnapshot || null;
-            suggestedFilename = draft.suggestedFilename || loadedFilename || 'scenario.json';
-        } else {
+            if (!cancelPendingDraftRestore) {
+                applyLoadedScenario(result.scenario);
+                loadedFilename = draft.loadedFilename || null;
+                loadedRevision = draft.loadedRevision || null;
+                lastSavedSnapshot = draft.lastSavedSnapshot || null;
+                suggestedFilename = draft.suggestedFilename || loadedFilename || 'scenario.json';
+            }
+        } else if (!cancelPendingDraftRestore) {
             startNewLine({persistDraft: false});
         }
-        if(new URLSearchParams(location.search).get('source')==='planning')await applyPlanningHandoff();
-        else document.getElementById('planning-handoff-notice').hidden=!sessionStorage.getItem(HANDOFF_KEY);
+        if (!cancelPendingDraftRestore) {
+            if(new URLSearchParams(location.search).get('source')==='planning')await applyPlanningHandoff();
+            else document.getElementById('planning-handoff-notice').hidden=!sessionStorage.getItem(HANDOFF_KEY);
+        }
     } catch (err) {
-        statusText.textContent = 'Could not restore the previous draft: ' + err.message;
-        const previous = sessionStorage.getItem(DRAFT_KEY);
-        if (previous) sessionStorage.setItem(DRAFT_KEY + '-unrestored', previous);
+        console.error('Draft restore failed:', err);
+        if (!cancelPendingDraftRestore) {
+            const previous = sessionStorage.getItem(DRAFT_KEY);
+            if (previous) sessionStorage.setItem(DRAFT_KEY + '-unrestored', previous);
+            // A broken draft must not trap the editor. Keep the original draft
+            // under -unrestored, and open a usable blank line.
+            try {
+                startNewLine();
+                statusText.textContent = 'A previous browser draft could not be restored. A blank line is ready; the unrecovered draft remains backed up in this tab.';
+            } catch (resetErr) {
+                statusText.textContent = 'Builder failed to initialize: ' + resetErr.message;
+                console.error(resetErr);
+            }
+        }
     } finally {
-        controls.forEach((control, index) => { control.disabled = disabled[index]; });
+        controls.forEach((control, index) => { control.disabled = control.id === 'new-line-btn' ? false : disabled[index]; });
         document.body.dataset.builderReady = 'true';
     }
     window.addEventListener('pagehide', rememberDraft);

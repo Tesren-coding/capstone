@@ -31,7 +31,8 @@ LAST_SIMULATION = {'events': [], 'takt_time': 30, 'scenario': None,
 def template_versions():
     return {'scenario_schema_version': CURRENT_SCHEMA_VERSION,
             'event_schema_version': EVENT_SCHEMA_VERSION,
-            'navigation_modules': MODULES}
+            'navigation_modules': MODULES,
+            'builder_asset_version': int((Path(__file__).resolve().parent / 'static' / 'js' / 'builder.js').stat().st_mtime)}
 
 
 @app.errorhandler(ScenarioValidationError)
@@ -110,6 +111,20 @@ def save_scenario():
 @app.route('/list-scenarios')
 def list_scenarios():
     return jsonify(files=scenario_store.list_files())
+
+
+@app.get('/scenario-storage-status')
+def scenario_storage_status():
+    # Show which backend the *running* app is using. This is important when
+    # a newly unzipped project has no copied-over scenarios/ directory.
+    files = scenario_store.list_files()
+    json_backend = isinstance(scenario_store, ScenarioStore)
+    result = {'backend': 'json' if json_backend else 'sqlserver', 'count': len(files)}
+    if json_backend:
+        # Only show an absolute local path to callers on the host machine.
+        result['directory'] = (str(scenario_store.directory.resolve())
+            if request.remote_addr in ('127.0.0.1', '::1') else 'scenarios/ beside app.py')
+    return jsonify(result)
 
 
 @app.route('/load-scenario/<filename>')

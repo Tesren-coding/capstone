@@ -2,6 +2,17 @@
 
 Saved PQPR projects, Yamazumi plans, builder setups and line scenarios can now be stored in SQL Server Express. **See [SQLSERVER_SETUP.md](Updates/SQLSERVER_SETUP.md)** for Windows setup, SQL connection configuration, safe migration of existing JSON save directories, and verification. The default local JSON backend remains available until SQL mode is enabled with `CAPSTONE_STORAGE_BACKEND=sqlserver`.
 
+**Where did my saved scenarios go after unzipping an update?** `python app.py` reads `scenarios/*.json` **beside the `app.py` you are currently running**, not from an earlier extracted project. New release ZIPs do not contain your personal saved JSON files. Copy (do not move or overwrite) the old `scenarios/` JSON files into your new project's `scenarios/` folder, or point the new app at the old folder explicitly:
+
+```powershell
+$env:CAPSTONE_STORAGE_BACKEND = "json"
+$env:CAPSTONE_SCENARIOS_DIR = "C:\path\to\your\existing\scenarios"
+python app.py
+```
+
+The Line Builder now shows which backend and JSON folder are active beneath **Load Scenario**. Visit `http://127.0.0.1:5000/scenario-storage-status` to check the current source. These settings do not alter or migrate saved files. If the browser has a broken session draft, the Builder backs it up in the tab and starts a new blank line instead of blocking the editor.
+
+
 # Capstone Line Planning Toolkit
 
 **Simulation update:** Hover an operator in the canvas legend or the new operator chips to isolate their full assigned work area. See [Updates/OPERATOR_WORK_AREA_HIGHLIGHT.md](Updates/OPERATOR_WORK_AREA_HIGHLIGHT.md).
@@ -408,3 +419,8 @@ Generated documents are drafts requiring review; see
 [`Updates/STANDARD_WORK_EXPORTS.md`](Updates/STANDARD_WORK_EXPORTS.md).
 After updating the project, install new dependencies with
 `python -m pip install -r requirements.txt`.
+
+
+## Operator tasks and handoffs
+
+The Line Builder operator panel offers **Transfer part**, **Process part**, and **Collect → Work → Deliver** task cards. Separate operators can transfer parts into a station, perform work there, and take processed parts to the next location. Task cards compile to the existing Pick/Work/Drop simulation actions. The Advanced action editor remains available for older and unusual sequences. See [`Updates/OPERATOR_TASKS_AND_HANDOFFS.md`](Updates/OPERATOR_TASKS_AND_HANDOFFS.md).

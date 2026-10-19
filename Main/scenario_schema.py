@@ -248,6 +248,8 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
                 errors.append(f'{label} must be an object.')
                 continue
             action, loc = step.get('action'), step.get('loc')
+            if 'wait_for_process' in step and (action != 'pick' or not isinstance(step['wait_for_process'], bool)):
+                errors.append(f'{label}: wait_for_process must be a boolean on a Pick action.')
             # A standing side identifies where this operator performs the step.
             # Older saves omit the setting and use the nearest available side.
             standing_side = step.get('standing_side')

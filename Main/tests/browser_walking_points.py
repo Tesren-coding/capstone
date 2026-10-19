@@ -63,9 +63,11 @@ def check():
         click_world(slot['x'],slot['y'])
         step=page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence'][0]
         assert step['standing_side']=='right',step
+        page.locator('#advanced-operator-actions').evaluate('(el)=>el.open=true')
         assert 'Right' in page.locator('.sequence-step').first.inner_text()
         assert page.locator('.step-standing-auto').count()==1
         # Choose second step: ONLY its station shows the four rings.
+        page.locator('#advanced-operator-actions').evaluate('(el)=>el.open=true')
         page.locator('.step-standing-select').nth(1).click()
         slots=page.evaluate('window.__walkingTest.standingSlots()')
         assert len(slots)==4 and {s['stationId'] for s in slots}=={info['otherSid']},slots
@@ -109,6 +111,7 @@ def check():
         assert page.input_value('#walk-speed-input')=='1.4'
         assert page.evaluate('window.__walkingTest.snapshot()')==saved
         page.evaluate('(id) => window.__walkingTest.activateOperator(id)',info['opId'])
+        page.locator('#advanced-operator-actions').evaluate('(el)=>el.open=true')
         page.locator('.step-standing-auto').first.click()
         assert 'standing_side' not in page.evaluate('window.__walkingTest.snapshot()')['operators'][info['opId']]['sequence'][0]
         # Boxes have no dotted side-selection and don't receive standing_side.

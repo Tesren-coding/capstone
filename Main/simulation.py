@@ -19,8 +19,45 @@ def run_scenario_simulation(scenario):
     env = simpy.Environment()
     stop = env.event()
     events = []
-    machine = {sid: {'has_part': bool(s.get('has_part')), 'busy': False, 'done': None} for sid, s in stations.items()}
+    # Required processes are per station, not per operator. A different
+    # operator can deliver a part, process it, and pick up the finished part.
+    required_processes = {sid: set() for sid in stations}
+    for definition in operators.values():
+        for step in definition['sequence']:
+            if step['action'] == 'work' and step['loc'] in required_processes:
+                required_processes[step['loc']].add(step['process'])
+
+    machine = {}
+    for sid, station in stations.items():
+        has_part = bool(station.get('has_part'))
+        part_event, space_event, completed_event = env.event(), env.event(), env.event()
+        if has_part: part_event.succeed()
+        else: space_event.succeed()
+        if not required_processes[sid]: completed_event.succeed()
+        machine[sid] = {'has_part': has_part, 'busy': False, 'done': None,
+                        'part_event': part_event, 'space_event': space_event,
+                        'completed_event': completed_event,
+                        'completed_processes': set(), 'required_processes': required_processes[sid]}
     inventory = {bid: (b.get('start_count', 0) if b['type'] == 'in' else 0 if b['type'] == 'out' else int(bool(b.get('has_part')))) for bid, b in boxes.items()}
+    box_part_event = {bid: env.event() for bid,b in boxes.items() if b['type'] == 'swip'}
+    for bid,event in box_part_event.items():
+        if inventory[bid]: event.succeed()
+
+    def set_station_part(sid, has_part):
+        state = machine[sid]
+        state['has_part'] = has_part
+        if has_part:
+            state['space_event'] = env.event()
+            state['completed_processes'].clear()
+            state['completed_event'] = env.event()
+            if not state['required_processes']:
+                state['completed_event'].succeed()
+            if not state['part_event'].triggered: state['part_event'].succeed()
+        else:
+            state['part_event'] = env.event()
+            state['completed_processes'].clear()
+            state['completed_event'] = env.event()
+            if not state['space_event'].triggered: state['space_event'].succeed()
 
     def emit(status, op=None, loc=None, **extra):
         if not stop.triggered:
@@ -34,6 +71,10 @@ def run_scenario_simulation(scenario):
     def finish_machine(sid, op, process):
         state = machine[sid]
         emit('process_complete', op, sid, process=process['id'])
+        state['completed_processes'].add(process['id'])
+        if state['required_processes'].issubset(state['completed_processes']):
+            if not state['completed_event'].triggered:
+                state['completed_event'].succeed()
         state['busy'] = False
         done = state['done']
         state['done'] = None
@@ -72,22 +113,41 @@ def run_scenario_simulation(scenario):
                 if stop.triggered:
                     return
                 label = f"S{loc} ({stations[loc].get('name', loc)})" if loc in stations else boxes[loc].get('name', loc)
-                # Picking/next-process work can wait for the existing cycle. Drops never wait.
+                # Cross-operator handoffs are synchronized with station inventory.
+                # A collecting operator waits for incoming stock; a processing
+                # operator waits for delivery; outbound transport waits for all
+                # processes assigned to the station to finish.
                 if action in ('pick', 'work') and loc in machine:
-                    while machine[loc]['busy']:
-                        emit('waiting', op, loc, reason=f'Waiting for {label} to finish processing.')
-                        yield machine[loc]['done']
-                        if stop.triggered:
-                            return
+                    state = machine[loc]
+                    while not stop.triggered:
+                        if state['busy']:
+                            emit('waiting', op, loc, reason=f'Waiting for {label} to finish processing.')
+                            yield state['done']
+                        elif not state['has_part']:
+                            emit('waiting', op, loc, reason=f'Waiting for a part at {label}.')
+                            yield state['part_event']
+                        elif action == 'pick' and step.get('wait_for_process', False) and not state['required_processes'].issubset(state['completed_processes']):
+                            emit('waiting', op, loc, reason=f'Waiting for processing at {label}.')
+                            yield state['completed_event']
+                        else:
+                            break
+                    if stop.triggered: return
+                elif action == 'pick' and loc in box_part_event:
+                    while inventory[loc] <= 0 and not stop.triggered:
+                        emit('waiting', op, loc, reason=f'Waiting for a part at {label}.')
+                        yield box_part_event[loc]
+                    if stop.triggered: return
                 if action == 'pick':
                     available = machine[loc]['has_part'] if loc in machine else inventory[loc] > 0
                     if holding or not available:
                         fail(op, loc, f'{op}: cannot pick from {label}; ' + ('already carrying a part.' if holding else 'no part is available.'))
                         return
                     if loc in machine:
-                        machine[loc]['has_part'] = False
+                        set_station_part(loc, False)
                     else:
                         inventory[loc] -= 1
+                        if loc in box_part_event and inventory[loc] == 0:
+                            box_part_event[loc] = env.event()
                     holding = True
                     emit('pickup', op, loc)
                 elif action == 'drop':
@@ -96,25 +156,25 @@ def run_scenario_simulation(scenario):
                         return
                     if loc in machine:
                         state = machine[loc]
-                        if state['busy']:
-                            fail(op, loc, f'{op}: cannot move/drop a part into {label}; station is in process.')
-                            return
-                        if state['has_part']:
-                            fail(op, loc, f'{op}: cannot drop at {label}; station already contains a part.')
-                            return
-                        state['has_part'] = True
+                        while state['busy'] or state['has_part']:
+                            emit('waiting', op, loc, reason=f'Waiting for free space at {label}.')
+                            yield state['space_event'] if state['has_part'] else state['done']
+                            if stop.triggered: return
+                        set_station_part(loc, True)
                     else:
                         capacity = boxes[loc].get('capacity', 1) if boxes[loc]['type'] in ('out', 'swip') else float('inf')
                         if inventory[loc] >= capacity:
                             fail(op, loc, f'{op}: cannot drop at {label}; location is full.')
                             return
                         inventory[loc] += 1
+                        if loc in box_part_event and not box_part_event[loc].triggered:
+                            box_part_event[loc].succeed()
                     holding = False
                     emit('dropoff', op, loc)
                 elif action == 'work':
                     state = machine[loc]
                     if not state['has_part']:
-                        fail(op, loc, f'{op}: cannot work at {label}; station has no part.')
+                        fail(op, loc, f'{op}: cannot work at {label}; station has no part after waiting.')
                         return
                     process = next(p for p in stations[loc]['processes'] if p['id'] == step['process'])
                     state['busy'] = True
