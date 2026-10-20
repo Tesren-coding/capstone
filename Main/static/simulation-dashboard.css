@@ -107,3 +107,63 @@
 .standard-work-export-actions button:hover:not(:disabled) {background:#d7e6fb;}
 .standard-work-export-actions button:disabled {opacity:.45;cursor:not-allowed;}
 .standard-work-export-panel p {font-size:12px;margin:8px 0 0;color:#6e5549;}
+
+/* Playback scrubbing belongs to the displayed simulation canvas, not the
+   top-level playback controls. Keep the slider directly beneath the canvas. */
+.simulation-canvas-and-timeline {
+    width: 100%;
+    max-width: 100%;
+    margin: 20px auto 16px;
+}
+.simulation-canvas-and-timeline #sim-canvas {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    background: #fff;
+}
+.simulation-playback-timeline {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 18px 13px;
+    border: 1px solid #d5deec;
+    border-top: 0;
+    border-radius: 0 0 8px 8px;
+    background: #f8fafd;
+}
+.simulation-timeline-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-bottom: 7px;
+    font-size: 13px;
+}
+.simulation-timeline-heading label { font-weight: 700; color: #1e3c78; }
+.simulation-timeline-heading output {
+    color: #23364f;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}
+.simulation-playback-timeline #timeline {
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    margin: 0;
+    cursor: pointer;
+    accent-color: #2858a1;
+}
+.simulation-playback-timeline #timeline:disabled { cursor: not-allowed; }
+.simulation-playback-timeline #timeline-help {
+    display: block;
+    margin-top: 8px;
+    color: #596b82;
+    font-size: 12px;
+}
+@media (max-width: 640px) {
+    .simulation-playback-timeline { padding: 12px; }
+}

@@ -8,7 +8,7 @@ from zipfile import ZipFile
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 from pptx.enum.dml import MSO_LINE_DASH_STYLE
-from standard_work_exports import planned_steps, swip_total, export_sws_pptx, export_swcs_xlsx
+from standard_work_exports import planned_steps, swip_total, movement_visits, export_sws_pptx, export_swcs_xlsx
 
 NS={'m':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
 
@@ -78,9 +78,54 @@ class StandardWorkExportsTest(unittest.TestCase):
         numbered=[sh for sh in op_slide.shapes if sh.shape_type==MSO_SHAPE_TYPE.AUTO_SHAPE and
                   sh.auto_shape_type.name=='OVAL' and sh.has_text_frame and sh.text.strip().isdigit()]
         numbers={sh.text.strip() for sh in numbered}
-        self.assertTrue({'1','2','3'}.issubset(numbers))
+        self.assertEqual(numbers, {'1','2'})  # Work + Pick at S1 is one SWS visit
         self.assertTrue(any(sh.shape_type==MSO_SHAPE_TYPE.FREEFORM and
                             sh.fill.type is not None for sh in op_slide.shapes))
+
+    def test_sws_repeating_loop_rotates_initial_swip_and_ignores_idle(self):
+        scenario = self.sample()
+        scenario['operators'] = {'Op1': scenario['operators']['Op1']}
+        scenario['operators']['Op1']['sequence'] = [
+            {'action':'pick','loc':'swip1'},
+            {'action':'drop','loc':'1'},
+            {'action':'work','loc':'1','process':'p1'},
+            {'action':'pick','loc':'1'},
+            {'action':'drop','loc':'2'},
+            {'action':'work','loc':'2','process':'p2'},
+            {'action':'pick','loc':'swip1'},
+        ]
+        route = movement_visits(scenario, 'Op1')
+        self.assertEqual([visit['loc'] for visit in route], ['1', '2', 'swip1'])
+        self.assertEqual([visit['number'] for visit in route], [1, 2, 3])
+        prs = Presentation(BytesIO(export_sws_pptx(scenario).getvalue()))
+        self.assertEqual(len(prs.slides), 2)
+        operator_slide = prs.slides[1]
+        numbered = [shape.text for shape in operator_slide.shapes
+                    if shape.shape_type == MSO_SHAPE_TYPE.AUTO_SHAPE and
+                       shape.auto_shape_type.name == 'OVAL' and shape.text.strip().isdigit()]
+        self.assertCountEqual(numbered, ['1', '2', '3'])
+        self.assertEqual(sum(shape.text == 'Op1' for shape in operator_slide.shapes
+                             if shape.has_text_frame), 1)
+        # 3 route sections -> 3 editable polylines and their 3 arrowheads.
+        self.assertEqual(sum(shape.shape_type == MSO_SHAPE_TYPE.FREEFORM
+                             for shape in operator_slide.shapes), 6)
+
+    def test_sws_in_box_rotates_to_end_and_single_station_no_spurious_loop(self):
+        scenario = self.sample()
+        op = scenario['operators']['Op1']
+        op['sequence'] = [
+            {'action':'pick','loc':'in1'},
+            {'action':'drop','loc':'1'},
+            {'action':'work','loc':'1','process':'p1'},
+            {'action':'drop','loc':'out1'},
+        ]
+        self.assertEqual([v['loc'] for v in movement_visits(scenario, 'Op1')], ['1', 'out1', 'in1'])
+        op['sequence'] = [{'action':'work','loc':'1','process':'p1'},
+                          {'action':'pick','loc':'1'}]
+        self.assertEqual([v['loc'] for v in movement_visits(scenario, 'Op1')], ['1'])
+        ppt = Presentation(BytesIO(export_sws_pptx(scenario).getvalue()))
+        self.assertEqual(sum(shape.shape_type == MSO_SHAPE_TYPE.FREEFORM
+                             for shape in ppt.slides[1].shapes), 0)
 
     def test_sws_template_frame_is_unchanged_and_canvas_is_separate(self):
         from copy import deepcopy

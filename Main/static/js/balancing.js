@@ -48,7 +48,7 @@ function renderOperators(analysis){
 function renderChart(analysis){
     const labels=plan.chart_color_mode==='process'?categoryNames:valueClasses,colors=plan.chart_color_mode==='process'?processColors:valueColors;
     document.getElementById('balance-chart-legend').innerHTML=Object.entries(labels).map(([key,name])=>`<span><i style="background:${colors[key]}"></i>${name}</span>`).join('')+'<span><i class="balance-takt-key"></i>Takt time</span>';
-    chart.innerHTML=yamazumiSvg(plan,analysis)||'<div class="balance-empty">Add operators to display their Yamazumi bars.</div>';
+    chart.innerHTML=yamazumiSvg(plan,analysis)||'<div class="balance-empty">Add operators to display their workload bars.</div>';
     document.getElementById('balance-export-chart').disabled=!plan.operators.length;
 }
 function update({keepOperators=false}={}){

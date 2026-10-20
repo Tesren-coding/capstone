@@ -21,7 +21,7 @@ def payload():
 
 @balancing.get('')
 def editor():
-    return render_template('balancing.html', page_title='Line Balancing & Yamazumi', active_module='line-balancing', balancing_schema_version=BALANCING_SCHEMA_VERSION)
+    return render_template('balancing.html', page_title='Line Balancing', active_module='line-balancing', balancing_schema_version=BALANCING_SCHEMA_VERSION)
 
 
 @balancing.post('/api/from-pqpr')

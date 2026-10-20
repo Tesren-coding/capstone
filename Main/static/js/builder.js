@@ -1,6 +1,7 @@
 import {CanvasViewport, drawStationText, stationProcesses, stationTotals, escapeHtml} from "./canvas-tools.js";
 import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-sort.js";
 import {requestJson, postJson} from "./api.js";
+import * as localFiles from "./local-folder-store.js";
 import {orderedOperatorIds, remapOperatorOrder} from "./operator-order.js";
 import {sequenceToTasks, tasksToSequence, defaultOperatorTask} from "./operator-tasks.js";
 import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
@@ -44,6 +45,8 @@ let scenarioExtras = {};
 let suggestedFilename = 'scenario.json';
 let loadedFilename = null;
 let loadedRevision = null;
+let loadedSaveLocation = null; // 'local' or 'server' for the file currently loaded/saved
+let loadedFileText = null; // original raw JSON, for local external-edit detection
 let lastSavedSnapshot = null;
 let freshLineSnapshot = null; // unchanged defaults do not require a discard warning
 const DRAFT_KEY = 'capstone-builder-draft';
@@ -2111,7 +2114,7 @@ function applyLoadedScenario(data) {
 
 function rememberDraft() {
     try {
-        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ scenario: serializeScenario(), loadedFilename, loadedRevision, lastSavedSnapshot, suggestedFilename }));
+        sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ scenario: serializeScenario(), loadedFilename, loadedRevision, lastSavedSnapshot, suggestedFilename, loadedSaveLocation, loadedFileText }));
     } catch (err) { console.warn('Could not keep the builder draft:', err); }
 }
 function reviewCore() {
@@ -2153,12 +2156,137 @@ async function applyPlanningHandoff() {
     if(hasItems&&isCurrentUnsaved()&&!confirm('Open the generated line as a new draft and replace your unsaved builder changes? Save or export your current work first if you want to keep it.')){
         statusText.textContent='Generated draft not opened. Your current builder changes are kept.';return;
     }
-    applyLoadedScenario(result.scenario);ensureDefaultLineArtifacts();loadedFilename=loadedRevision=lastSavedSnapshot=null;
+    applyLoadedScenario(result.scenario);ensureDefaultLineArtifacts();loadedFilename=loadedRevision=lastSavedSnapshot=loadedSaveLocation=loadedFileText=null;
     suggestedFilename=pending.suggestedFilename||'generated_line.json';rememberDraft();sessionStorage.removeItem(HANDOFF_KEY);
     document.getElementById('planning-handoff-notice').hidden=true;statusText.textContent='Opened a new generated line draft. Review material movement before simulation; Save Scenario creates a new file or version.';
 }
 document.getElementById('apply-planning-handoff').onclick=async()=>{try{await applyPlanningHandoff();}catch(error){statusText.textContent='Generated draft could not open: '+error.message;}};
 document.getElementById('dismiss-planning-handoff').onclick=()=>{sessionStorage.removeItem(HANDOFF_KEY);document.getElementById('planning-handoff-notice').hidden=true;};
+
+// ============================================================
+// Device folder saves (File System Access API). The original Flask/SQL/JSON
+// endpoints remain available via the explicitly selected Server mode.
+// ============================================================
+const storageModeSelect = document.getElementById('save-location-mode');
+const chooseFolderButton = document.getElementById('choose-local-folder-btn');
+const refreshFolderButton = document.getElementById('refresh-local-folder-btn');
+const localFolderStatus = document.getElementById('local-folder-status');
+const STORAGE_MODE_KEY = 'capstone-builder-scenario-save-location';
+const localFolderCapable = localFiles.folderSupported();
+if (!localFolderCapable) {
+    // Fallback retains compatibility with browsers that do not expose the
+    // directory picker. JSON import/export remains accessible on every browser.
+    storageModeSelect.querySelector('option[value="local"]').disabled = true;
+}
+let preferredStorageMode = 'local';
+try { preferredStorageMode = localStorage.getItem(STORAGE_MODE_KEY) || 'local'; }
+catch { /* Blocked storage does not prevent use of the editor. */ }
+if (!['local', 'server', 'download'].includes(preferredStorageMode)) preferredStorageMode = 'local';
+if (!localFolderCapable && preferredStorageMode === 'local') preferredStorageMode = 'server';
+storageModeSelect.value = preferredStorageMode;
+
+function storageMode() {return storageModeSelect.value;}
+function updateStorageControls() {
+    const mode = storageMode();
+    chooseFolderButton.hidden = refreshFolderButton.hidden = mode !== 'local';
+    document.getElementById('rename-scenario-btn').disabled = mode === 'download';
+    document.getElementById('load-scenario-btn').disabled = mode === 'download';
+    const select = document.getElementById('scenario-select');
+    select.disabled = mode === 'download';
+    if (mode === 'local') {
+        localFolderStatus.textContent = localFiles.folderLabel() ? `Device folder: ${localFiles.folderLabel()}` : 'No folder selected';
+        document.getElementById('save-scenario-btn').title = 'Save directly to your chosen device folder';
+    } else if (mode === 'server') {
+        localFolderStatus.textContent = localFolderCapable
+            ? 'Server saves are separate from device files'
+            : 'Folder picker unavailable here: use Chrome/Edge with HTTPS or localhost, or choose Download / Import JSON';
+        document.getElementById('save-scenario-btn').title = 'Save on the Flask server';
+    } else {
+        localFolderStatus.textContent = 'Save downloads a JSON file; use Import JSON to reopen it';
+        document.getElementById('save-scenario-btn').title = 'Download a JSON copy to your device';
+    }
+}
+
+async function connectLocalFolder() {
+    // Must execute directly from a click; see File System Access API gesture rule.
+    await localFiles.chooseFolder();
+    updateStorageControls();
+    await refreshScenarioList();
+    statusText.textContent = `Connected device folder "${localFiles.folderLabel()}". Saves go to this folder, not the server.`;
+}
+chooseFolderButton.addEventListener('click', async () => {
+    try {await connectLocalFolder();}
+    catch (error) {if (error.name !== 'AbortError') statusText.textContent = 'Folder selection failed: ' + error.message;}
+});
+refreshFolderButton.addEventListener('click', async () => {await refreshScenarioList();});
+storageModeSelect.addEventListener('change', async () => {
+    try {localStorage.setItem(STORAGE_MODE_KEY, storageMode());}catch{}
+    updateStorageControls();
+    await refreshScenarioList();
+});
+
+function downloadScenario(filename, snapshot) {
+    const blob = new Blob([JSON.stringify(snapshot, null, 2) + '\n'], {type:'application/json'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = filename; document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function saveDeviceScenario(snapshot) {
+    if (!localFiles.currentFolder()) {
+        // User initiated Save: show the picker, rather than saving somewhere
+        // on the server or to a silently chosen default directory.
+        await connectLocalFolder();
+    }
+    if (await localFiles.permission('readwrite') !== 'granted')
+        throw new Error('Folder permission has expired. Click Choose Folder and grant write access.');
+    let filename = loadedSaveLocation === 'local' ? loadedFilename : null;
+    let mode = 'create';
+    if (filename) {
+        mode = await chooseSaveMode(filename);
+        if (!mode) return;
+    } else {
+        const input = prompt('Name this device scenario file:', suggestedFilename.replace(/\.json$/i,''));
+        if (!input?.trim()) return;
+        filename = localFiles.jsonFilename(input);
+        if (await localFiles.exists(filename)) {
+            mode = await chooseSaveMode(filename);
+            if (!mode) return;
+        }
+    }
+    if (mode === 'duplicate') filename = await localFiles.numberedName(filename);
+    const overwrite = mode === 'overwrite';
+    const contents = JSON.stringify(snapshot, null, 2) + '\n';
+    const expectedText = overwrite && filename === loadedFilename && loadedSaveLocation === 'local'
+        ? loadedFileText : null;
+    if (overwrite && expectedText === null && filename === loadedFilename && loadedSaveLocation === 'local')
+        throw new Error('The original file must be loaded again before overwriting after a page reload. Choose Save new version.');
+    const actual = await localFiles.writeFile(filename, contents, {overwrite, expectedText});
+    loadedFilename = actual; loadedRevision = null; loadedSaveLocation = 'local'; loadedFileText = contents;
+    suggestedFilename = actual;
+    lastSavedSnapshot = JSON.stringify(snapshot);
+    rememberDraft();
+    statusText.textContent = `Saved "${actual}" to device folder "${localFiles.folderLabel()}".`;
+    await refreshScenarioList(actual);
+}
+
+async function loadDeviceScenario(filename) {
+    const original = await localFiles.readFile(filename);
+    // The existing normalization endpoint handles old scenario schema versions;
+    // it does NOT store the file on the server.
+    const imported = await postJson('/import-scenario', {scenario: original.scenario});
+    applyLoadedScenario(imported.scenario);
+    loadedFilename = filename;
+    loadedRevision = null;
+    loadedSaveLocation = 'local';
+    loadedFileText = original.text;
+    suggestedFilename = filename;
+    lastSavedSnapshot = JSON.stringify(serializeScenario());
+    rememberDraft();
+    statusText.textContent = `Opened "${filename}" from your device folder` +
+        (imported.migrated_from ? ` (updated in memory from v${imported.migrated_from}).` : '.');
+}
 
 function chooseSaveMode(filename) {
     return new Promise(resolve => {
@@ -2176,7 +2304,22 @@ document.getElementById('save-scenario-btn').addEventListener('click', async () 
     const button = document.getElementById('save-scenario-btn');
     button.disabled = true;
     try {
-        let filename = loadedFilename;
+        const selectedMode = storageMode();
+        const snapshot = JSON.parse(JSON.stringify(serializeScenario()));
+        if (selectedMode === 'local') {
+            await saveDeviceScenario(snapshot);
+            return;
+        }
+        if (selectedMode === 'download') {
+            const input = prompt('Download file name:', suggestedFilename.replace(/\.json$/i, ''));
+            if (input?.trim()) {
+                const filename = localFiles.jsonFilename(input);
+                downloadScenario(filename, snapshot);
+                statusText.textContent = `Downloaded "${filename}". Keep the file somewhere backed up; Import JSON reopens it.`;
+            }
+            return;
+        }
+        let filename = loadedSaveLocation === 'server' ? loadedFilename : null;
         let name = null;
         let mode = 'create';
         if (filename) {
@@ -2186,7 +2329,6 @@ document.getElementById('save-scenario-btn').addEventListener('click', async () 
             name = prompt('Enter a name for this scenario:', suggestedFilename.replace(/\.json$/i, ''));
             if (!name?.trim()) return;
         }
-        const snapshot = JSON.parse(JSON.stringify(serializeScenario()));
         async function submit() {
             const res = await fetch('/save-scenario', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2206,6 +2348,7 @@ document.getElementById('save-scenario-btn').addEventListener('click', async () 
         loadedFilename = data.filename;
         suggestedFilename = data.filename;
         loadedRevision = data.revision;
+        loadedSaveLocation = 'server'; loadedFileText = null;
         lastSavedSnapshot = JSON.stringify(snapshot);
         rememberDraft();
         statusText.textContent = `Saved "${loadedFilename}"`;
@@ -2215,8 +2358,32 @@ document.getElementById('save-scenario-btn').addEventListener('click', async () 
     } finally { button.disabled = false; }
 });
 
-function refreshScenarioList(selectedFilename = loadedFilename) {
+async function refreshScenarioList(selectedFilename = loadedFilename) {
     const note = document.getElementById('scenario-storage-note');
+    const select = document.getElementById('scenario-select');
+    updateStorageControls();
+    if (storageMode() === 'download') {
+        select.replaceChildren(new Option('-- Use Import JSON to open a file --', ''));
+        note.textContent = 'Download / Import mode · Save downloads a JSON file to your device. No files are stored on the Flask server.';
+        return [];
+    }
+    if (storageMode() === 'local') {
+        select.replaceChildren(new Option('-- Select a saved scenario --', ''));
+        if (!localFiles.currentFolder()) {
+            note.textContent = 'Local device folder · Click Choose Folder to select where scenarios are saved. Your existing server scenarios are still available by switching to Server.';
+            return [];
+        }
+        try {
+            const files = await localFiles.listFiles();
+            for (const filename of files) select.appendChild(new Option(filename.replace(/\.json$/i,''), filename));
+            if (selectedFilename && files.includes(selectedFilename)) select.value = selectedFilename;
+            note.textContent = `Local device folder "${localFiles.folderLabel()}" · ${files.length} JSON file(s) · Files are stored on this computer, not on the server.`;
+            return files;
+        } catch (error) {
+            note.textContent = `Device folder "${localFiles.folderLabel()}" is not accessible: ${error.message} Use Choose Folder to reconnect.`;
+            return [];
+        }
+    }
     return Promise.all([
         requestJson('/list-scenarios'),
         requestJson('/scenario-storage-status'),
@@ -2261,6 +2428,18 @@ document.getElementById('rename-scenario-btn').addEventListener('click', async (
     }
     button.disabled = true;
     try {
+        if (storageMode() === 'local') {
+            const expected = selected === loadedFilename && loadedSaveLocation === 'local' ? loadedFileText : null;
+            if (selected === loadedFilename && loadedSaveLocation === 'local' && expected === null)
+                throw new Error('Reload the file before renaming a restored draft.');
+            const renamed = await localFiles.renameFile(selected, input.trim(), {expectedText: expected});
+            if (selected === loadedFilename && loadedSaveLocation === 'local') {
+                loadedFilename = renamed; suggestedFilename = renamed; rememberDraft();
+            }
+            await refreshScenarioList(renamed);
+            statusText.textContent = `Renamed device file "${selected}" to "${renamed}". Unsaved canvas edits were not saved.`;
+            return;
+        }
         // The loaded scenario carries a revision for optimistic-concurrency
         // protection. Other selected files get their current revision from SQL.
         let revision = selected === loadedFilename ? loadedRevision : null;
@@ -2301,6 +2480,10 @@ document.getElementById("load-scenario-btn").addEventListener("click", () => {
     const current = JSON.stringify(serializeScenario());
     const hasItems = Object.values(scenario).some(items => Object.keys(items).length > 0) || taktTimeInput.value !== '30';
     if (hasItems && isCurrentUnsaved() && !confirm('Replace your unsaved builder changes with the selected scenario?')) return;
+    if (storageMode() === 'local') {
+        loadDeviceScenario(filename).catch(error => {statusText.textContent = 'Open device file failed: ' + error.message;});
+        return;
+    }
     requestJson("/load-scenario/" + encodeURIComponent(filename))
         .then(data => {
             if (data.found) {
@@ -2308,6 +2491,7 @@ document.getElementById("load-scenario-btn").addEventListener("click", () => {
                 loadedFilename = data.filename || filename;
                 suggestedFilename = loadedFilename;
                 loadedRevision = data.revision || null;
+                loadedSaveLocation = 'server'; loadedFileText = null;
                 lastSavedSnapshot = JSON.stringify(serializeScenario());
                 rememberDraft();
                 statusText.textContent = `Loaded "${filename.replace(".json", "")}"`;
@@ -2370,6 +2554,7 @@ function startNewLine({persistDraft = true} = {}) {
     scenarioExtras = {};
     loadedFilename = null;
     loadedRevision = null;
+    loadedSaveLocation = null; loadedFileText = null;
     lastSavedSnapshot = null;
     suggestedFilename = 'scenario.json';
     nextStationId = 1;
@@ -2428,6 +2613,8 @@ async function initBuilder() {
                 applyLoadedScenario(result.scenario);
                 loadedFilename = draft.loadedFilename || null;
                 loadedRevision = draft.loadedRevision || null;
+                loadedSaveLocation = draft.loadedSaveLocation || 'server';
+                loadedFileText = draft.loadedFileText || null; // detect external edits across reload
                 lastSavedSnapshot = draft.lastSavedSnapshot || null;
                 suggestedFilename = draft.suggestedFilename || loadedFilename || 'scenario.json';
             }
@@ -2458,6 +2645,8 @@ async function initBuilder() {
         document.body.dataset.builderReady = 'true';
     }
     window.addEventListener('pagehide', rememberDraft);
+    if (localFolderCapable) await localFiles.restoreFolder();
+    updateStorageControls();
     await refreshScenarioList();
     drawFrame();
 }
@@ -2480,6 +2669,7 @@ importFile.addEventListener('change', async () => {
         applyLoadedScenario(result.scenario);
         loadedFilename = null;
         loadedRevision = null;
+        loadedSaveLocation = null; loadedFileText = null;
         lastSavedSnapshot = null;
         suggestedFilename = file.name;
         rememberDraft();
@@ -2496,17 +2686,10 @@ document.getElementById('export-scenario-btn').addEventListener('click', async (
     const button = document.getElementById('export-scenario-btn');
     button.disabled = true;
     try {
-        const data = await postJson('/export-scenario', {scenario: serializeScenario(), filename: loadedFilename || suggestedFilename});
-        const blob = new Blob([JSON.stringify(data, null, 2) + '\n'], {type: 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = loadedFilename || suggestedFilename;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-        statusText.textContent = `Exported scenario in format v${schemaVersion}.`;
+        // Download is entirely client-side. No server write or validation call.
+        const filename = localFiles.jsonFilename(loadedFilename || suggestedFilename);
+        downloadScenario(filename, serializeScenario());
+        statusText.textContent = `Exported "${filename}" to your browser downloads (format v${schemaVersion}).`;
     } catch (err) {
         statusText.textContent = 'Export failed: ' + err.message;
     } finally { button.disabled = false; }

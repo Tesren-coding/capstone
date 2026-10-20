@@ -19,13 +19,16 @@ width:1000px!important;height:434.17px!important;max-width:none!important;}
 # Inline the actual source modules for testing on an about:blank document;
 # this environment blocks Chromium navigation, including localhost.
 SOURCES = ['canvas-tools.js','drag-sort.js','api.js','layout-geometry.js',
-           'builder-snapping.js','smart-guides.js','line-direction.js','dimension-tools.js','operator-order.js','operator-tasks.js','builder.js']
+           'builder-snapping.js','smart-guides.js','line-direction.js','dimension-tools.js','operator-order.js','operator-tasks.js','local-folder-store.js','builder.js']
 BUNDLE = ''
 for filename in SOURCES:
     js=(ROOT/'static/js'/filename).read_text()
     js=re.sub(r'^import\s*\{[\s\S]*?\}\s*from\s*[\"\'][^\"\']+[\"\'];\s*', '', js, flags=re.M)
+    js=re.sub(r'^import\s+\*\s+as\s+\w+\s+from\s*[\"\'][^\"\']+[\"\'];\s*', '', js, flags=re.M)
     js=re.sub(r'\bexport\s+(?=(?:function|class|const|let|async))', '', js)
     BUNDLE+='\n'+js+'\n'
+    if filename == 'local-folder-store.js':
+        BUNDLE+='\nconst localFiles={folderSupported,restoreFolder,chooseFolder,currentFolder,folderLabel,permission,listFiles,readFile,exists,jsonFilename,numberedName,writeFile,renameFile};\n'
 BUNDLE+='\nwindow.__builderTest={serializeScenario,applyLoadedScenario,changeStationId,reorderStations,view};'
 
 FETCH_STUB = r'''() => {

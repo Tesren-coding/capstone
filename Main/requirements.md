@@ -2,7 +2,7 @@
 
 This guide explains how to run the Capstone Line Building Simulator on your own PC.
 The toolkit uses Python, Flask and SimPy, with a browser dashboard.
-Line Builder, PQPR and Line Balancing & Yamazumi are available.
+Line Builder, PQPR and Line Balancing is available (under active development).
 
 ## 1. Requirements
 
@@ -73,7 +73,7 @@ commands use its Python directly, so you do not need to activate it first.
 Once the server starts, open **http://localhost:5000** in your browser.
 You should see the dashboard. Select **Open Line Builder** to use the existing
 editor and simulation, **Open PQPR** for project/process planning, or
-**Open Line Balancing & Yamazumi** for operator assignments and workload charts. Keep the terminal open while
+**Open Line Balancing** for operator assignments and workload charts. Keep the terminal open while
 using the app.
 
 Create or load a scenario, configure its stations and operators, then select

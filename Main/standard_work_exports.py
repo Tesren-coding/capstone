@@ -233,14 +233,9 @@ def add_part_icon(slide, x, y, size=.18, count=None):
         sws_text(slide,x+size*.65,y-.10,.43,.14,f'×{count}',size=7.4,color='#1D3954',bold=True)
 
 
-def add_numbered_steps(slide, visits, *, overview=False):
-    """Place one circular badge per movement stop, with small offsets.
-
-    `visits` is a flat list of per-stop dictionaries:
-      {'operator': 'Op1', 'hue': '#RRGGBB', 'point': (x,y), 'number': 1}
-    Repeated visits to the same physical location remain separate circles.
-    """
-    taken = []
+def add_numbered_steps(slide, visits, *, reserved=()):
+    """Position simple numbered stops, avoiding operator start badges and peers."""
+    taken = [tuple(pos) for pos in reserved]
     for visit in sorted(visits, key=lambda item: (item['operator'], item['number'])):
         anchor = visit['point']
         hue = visit['hue']
@@ -254,7 +249,7 @@ def add_numbered_steps(slide, visits, *, overview=False):
                 x = anchor[0] + radius * math.cos(theta) - d / 2
                 y = anchor[1] + radius * math.sin(theta) - d / 2
                 overflow = max(0, .25 - x) + max(0, x + d - 13.05) + max(0, 1.28 - y) + max(0, y + d - 6.04)
-                collision = sum(max(0, d + .05 - math.hypot((x + d/2) - ox, (y + d/2) - oy))**2 for ox, oy in taken)
+                collision = sum(max(0, d + .12 - math.hypot((x + d/2) - ox, (y + d/2) - oy))**2 for ox, oy in taken)
                 score = overflow * 500 + collision * 800 + radius * .15
                 if best is None or score < best[0]:
                     best = (score, x, y)
@@ -278,29 +273,81 @@ def add_numbered_steps(slide, visits, *, overview=False):
         run = para.add_run(); run.text = str(number)
         run.font.bold = True; run.font.size = Pt(7.7 if len(str(number)) < 3 else 6.6)
         run.font.color.rgb = rgb(hue)
-        if overview and number == 1:
-            sws_text(slide, x - .06, y - .14, .60, .13, visit['operator'], size=5.6, color=hue, bold=True)
 
 
 def movement_visits(scenario, operator_id):
-    """Return only movement destinations in visit order.
+    """A *standard repeatable loop*, not a chronological event trace.
 
-    The underlying simulator still uses action-level Pick/Work/Drop data, but
-    the SWS route should present only the operator's physical movement from one
-    location to another. Consecutive steps at the same destination collapse into
-    one visit, so Work/Pick/Drop at one station becomes a single numbered stop.
+    - Each distinct assigned station/material location appears once.
+    - Work/Pick/Drop at the same location do not create new route stops.
+    - An initial pickup from IN/SWIP is shifted to the end of the loop, so the
+      route starts at the first workstation and shows where the operator
+      collects material *before the next cycle*.
+    - Home/idle position is not a route stop. The slide closes back to the
+      first station instead. This has NO effect on SimPy walking calculations.
     """
-    visits = []
-    previous = None
-    for row in planned_steps(scenario, operator_id):
-        point = row.get('position')
-        if not point:
+    operator = scenario.get('operators', {}).get(operator_id, {})
+    stations = scenario.get('stations', {})
+    boxes = scenario.get('boxes', {})
+    unique = []
+    seen = set()
+    last_position = {'x': float(operator.get('x', 0)), 'y': float(operator.get('y', 0))}
+    for step in operator.get('sequence', []):
+        loc = str(step.get('loc', ''))
+        if loc not in stations and loc not in boxes:
             continue
-        current = (float(point['x']), float(point['y']))
-        if previous is None or math.dist(current, previous) > 1e-6:
-            visits.append({'number': len(visits) + 1, 'point': current, 'loc': row.get('loc')})
-            previous = current
-    return visits
+        if loc in seen:
+            continue
+        if loc in stations:
+            target = station_destination(stations, loc, step, last_position, operator)
+            kind = 'station'
+        elif boxes[loc].get('type') in ('swip', 'in', 'out'):
+            target = box_center(boxes[loc])
+            kind = boxes[loc].get('type')
+        else:
+            continue
+        seen.add(loc)
+        unique.append({'loc': loc, 'kind': kind,
+                       'point': (float(target['x']), float(target['y']))})
+        last_position = target
+
+    if any(item['kind'] == 'station' for item in unique):
+        # Common cycle: SWIP -> first work station -> remaining stations.
+        # Show instead: first station -> ... -> SWIP -> first station.
+        first_station = next(i for i, item in enumerate(unique) if item['kind'] == 'station')
+        if first_station and all(item['kind'] in ('swip', 'in') for item in unique[:first_station]):
+            unique = unique[first_station:] + unique[:first_station]
+
+    for index, item in enumerate(unique, 1):
+        item['number'] = index
+    return unique
+
+
+def add_operator_start_icon(slide, operator_id, hue, point, offset_index=0):
+    """Builder-style operator circle at the first assigned station."""
+    d = .32
+    # Keep multiple operators using the same station distinguishable.
+    angle = math.radians(-50 + offset_index * 52)
+    radius = .13 if offset_index else 0
+    cx = max(.45, min(12.90, point[0] + math.cos(angle) * radius))
+    cy = max(1.50, min(5.85, point[1] + math.sin(angle) * radius))
+    if math.dist((cx, cy), point) > .025:
+        tether = slide.shapes.add_connector(MSO_CONNECTOR.STRAIGHT, Inches(point[0]), Inches(point[1]),
+                                            Inches(cx), Inches(cy))
+        tether.line.color.rgb = rgb(hue); tether.line.width = Pt(.75)
+    badge = slide.shapes.add_shape(MSO_SHAPE.OVAL,
+                                   Inches(cx - d/2), Inches(cy - d/2), Inches(d), Inches(d))
+    badge.fill.solid(); badge.fill.fore_color.rgb = rgb(hue)
+    badge.line.color.rgb = rgb('#FFFFFF'); badge.line.width = Pt(1.3)
+    tf = badge.text_frame; tf.clear()
+    tf.margin_left = tf.margin_right = tf.margin_top = tf.margin_bottom = 0
+    tf.vertical_anchor = MSO_ANCHOR.MIDDLE
+    para = tf.paragraphs[0]; para.alignment = PP_ALIGN.CENTER
+    run = para.add_run(); run.text = str(operator_id)
+    run.font.name = 'Arial'; run.font.bold = True
+    run.font.size = Pt(8 if len(str(operator_id)) < 5 else 7)
+    run.font.color.rgb = rgb('#FFFFFF')
+    return (cx, cy)
 
 
 def _copy_template_shapes(target_slide, source_slide):
@@ -360,12 +407,6 @@ def sws_slide(prs, scenario, selected_operator=None, template_slide=None, reuse_
         y1 = max(float(v['y']) + float(v['h']) for v in objects)
     else:
         x0 = y0 = 0.; x1 = 875.; y1 = 500.
-    operator_positions = [p for op in scenario.get('operators', {}).values() for p in [(float(op['x']), float(op['y']))]]
-    if operator_positions:
-        x0 = min(x0, *(p[0] for p in operator_positions))
-        y0 = min(y0, *(p[1] for p in operator_positions))
-        x1 = max(x1, *(p[0] for p in operator_positions))
-        y1 = max(y1, *(p[1] for p in operator_positions))
     x0 -= 35.0; y0 -= 35.0; x1 += 35.0; y1 += 35.0
     world_w = max(250., x1 - x0); world_h = max(190., y1 - y0)
 
@@ -415,19 +456,35 @@ def sws_slide(prs, scenario, selected_operator=None, template_slide=None, reuse_
             add_part_icon(slide, x + w - .16, y + h - .18, size=.15)
 
     annotation_visits = []
+    start_icons = []
+    starts_per_location = {}
     for i, opid in enumerate(ids):
         operator = scenario['operators'][opid]
         hue = route_color(operator)
-        origin = xy({'x': operator['x'], 'y': operator['y']})
         visits = movement_visits(scenario, opid)
-        previous = origin
-        for visit in visits:
-            current = xy({'x': visit['point'][0], 'y': visit['point'][1]})
-            add_curved_path(slide, previous, current, hue, bend=(.055 + (i % 4) * .03) * (-1 if (i + visit['number']) % 2 else 1))
-            previous = current
-            annotation_visits.append({'operator': opid, 'hue': hue, 'point': current, 'number': visit['number']})
+        if not visits:
+            continue
+        points = [xy({'x': visit['point'][0], 'y': visit['point'][1]}) for visit in visits]
+        for j, current in enumerate(points):
+            annotation_visits.append({'operator': opid, 'hue': hue,
+                                      'point': current, 'number': j + 1})
+        # This is a schematic, repeating operator work loop. No operator-home
+        # or initial pickup arrow; connect each location and close the loop.
+        if len(points) > 1:
+            for j, start in enumerate(points):
+                end = points[(j + 1) % len(points)]
+                bend = .065 + (i % 4) * .03
+                add_curved_path(slide, start, end, hue, bend=bend)
+        start_loc = visits[0]['loc']
+        offset_index = starts_per_location.get(start_loc, 0)
+        starts_per_location[start_loc] = offset_index + 1
+        start_icons.append((opid, hue, points[0], offset_index))
 
-    add_numbered_steps(slide, annotation_visits, overview=selected_operator is None)
+    # Draw the circular operator avatar at the starting location, then place
+    # numbered circles around it without overlap.
+    occupied = [add_operator_start_icon(slide, opid, hue, point, idx)
+                for opid, hue, point, idx in start_icons]
+    add_numbered_steps(slide, annotation_visits, reserved=occupied)
 
 
 

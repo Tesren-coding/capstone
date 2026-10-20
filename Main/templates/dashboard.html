@@ -13,7 +13,7 @@
         <article class="app-card app-card--{{ module.id }}">
             <div class="app-card-top">
                 <span class="app-icon" aria-hidden="true">{{ module.icon }}</span>
-                <span class="module-status module-status--{{ module.status }}">{{ 'Available' if module.status == 'available' else 'Planned' }}</span>
+                <span class="module-status module-status--{{ module.status }}">{{ 'Available' if module.status == 'available' else 'In Development' if module.status == 'development' else 'Planned' }}</span>
             </div>
             <h3>{{ module.title }}</h3>
             <p class="app-description">{{ module.description }}</p>
@@ -22,7 +22,7 @@
             </ul>
             <a class="app-link {{ 'app-link--primary' if module.status == 'available' else '' }}"
                href="{{ url_for(module.endpoint) }}">
-                {% if module.status == 'available' %}Open {{ module.title }}{% else %}View planned module{% endif %}
+                {% if module.status == 'available' %}Open {{ module.title }}{% elif module.status == 'development' %}Open {{ module.title }}{% else %}View planned module{% endif %}
                 <span aria-hidden="true">→</span>
             </a>
         </article>

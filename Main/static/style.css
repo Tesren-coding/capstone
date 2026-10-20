@@ -299,6 +299,7 @@ main { max-width: 1600px; }
 .app-card--line-balancing .app-icon { background:#fbf2e3; color:#91661d; }
 .module-status { display:inline-block; font-size:11px; font-weight:650; border-radius:20px; padding:5px 10px; }
 .module-status--available { color:#246a41; background:#e9f5ee; }
+.module-status--development { color:#856119; background:#fff4d7; }
 .module-status--planned { color:#5f6b7e; background:#eff2f6; }
 .app-card h3 { color:#17345e; font-size:22px; line-height:1.3; margin-bottom:12px; }
 .app-description { color:#5a677d; line-height:1.65; font-size:14px; }

@@ -17,7 +17,7 @@
             <a href="{{ url_for('planning.dashboard') }}" {% if active_module == 'dashboard' %}aria-current="page"{% endif %}>Dashboard</a>
             {% for module in navigation_modules %}
             <a href="{{ url_for(module.endpoint) }}" {% if active_module == module.id %}aria-current="page"{% endif %}>
-                {{ module.title }}{% if module.status == 'planned' %}<span class="nav-planned">Planned</span>{% endif %}
+                {{ module.title }}{% if module.status == 'development' %}<span class="nav-planned">Dev</span>{% elif module.status == 'planned' %}<span class="nav-planned">Planned</span>{% endif %}
             </a>
             {% endfor %}
         </nav>

@@ -5,18 +5,18 @@ planning = Blueprint('planning', __name__)
 
 # One registry drives dashboard cards and shared navigation.
 MODULES = [
-    {'id': 'line-builder', 'title': 'Line Builder', 'icon': 'LB',
+    {'id': 'pqpr', 'title': 'PQPR', 'icon': 'PQ',
+     'description': 'List the processes each product framesize needs to go through.',
+     'status': 'development', 'endpoint': 'pqpr.editor',
+     'features': ['Product framesizes', 'Ordered process routes', 'Process counts']},
+    {'id': 'line-balancing', 'title': 'Line Balancing', 'icon': 'LB',
+     'description': 'Assign processes to operators and compare their workloads against takt time.',
+     'status': 'development', 'endpoint': 'balancing.editor',
+     'features': ['Independent process steps', 'Operator assignments', 'Draggable workload charts']},
+    {'id': 'line-builder', 'title': 'Line Builder', 'icon': 'LN',
      'description': 'Arrange stations, define operator sequences and simulate material flow.',
      'status': 'available', 'endpoint': 'builder',
      'features': ['Station layout', 'Manual and automatic time', 'Simulation playback']},
-    {'id': 'pqpr', 'title': 'PQPR', 'icon': 'PQ',
-     'description': 'List the processes each product framesize needs to go through.',
-     'status': 'available', 'endpoint': 'pqpr.editor',
-     'features': ['Product framesizes', 'Ordered process routes', 'Process counts']},
-    {'id': 'line-balancing', 'title': 'Line Balancing & Yamazumi', 'icon': 'YZ',
-     'description': 'Assign processes to operators and compare their workloads against takt time.',
-     'status': 'available', 'endpoint': 'balancing.editor',
-     'features': ['Independent process steps', 'Operator assignments', 'Draggable Yamazumi charts']},
 ]
 
 

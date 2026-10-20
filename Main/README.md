@@ -34,7 +34,7 @@ python app.py
 
 Open http://localhost:5000 in your browser to see the dashboard. Select
 **Open Line Builder** to edit or simulate a line, or **Open PQPR** to plan
-product/process applicability. Select **Open Line Balancing & Yamazumi** to
+product/process applicability. Select **Open Line Balancing** to
 create an independent process list and assign its steps to operators. Existing `/builder` links
 still open the builder directly.
 
@@ -42,13 +42,13 @@ For full Windows, macOS and Linux setup instructions, see `requirements.md`.
 
 ## Dashboard and planning apps: stages 1–4
 
-The main page is a hub for three apps:
+The main page is a hub for three apps, ordered PQPR → Line Balancing → Line Builder. The first two are marked **In Development** but their editors remain accessible:
 
 | App | Current availability |
 | --- | --- |
-| Line Builder | Available: the existing editor, scenario files and simulation. |
-| PQPR | Available: projects, framesizes, shared processes, applicability, manual/auto timings and colors. |
-| Line Balancing & Yamazumi | Available: independent process steps, optional PQPR import, assignments, manual-workload charts and plan files. |
+| PQPR | In Development: existing framesizes, processes, applicability, manual/auto timings and colors remain available for refinement. |
+| Line Balancing | In Development: process assignments, workload charts and plan files remain available for refinement. |
+| Line Builder | Available: station layout, operator tasks, local-folder scenario saves, simulation and SWS/SWCS exports. |
 
 Use the header navigation to move between apps. Returning to Line Builder in
 this tab restores its draft. Save or export scenarios to retain them beyond
@@ -80,7 +80,7 @@ Install updated requirements before running this release: Excel import adds
 `openpyxl`. Scenario format 2 and event format 1 remain unchanged; PQPR uses its
 own document type and format version 1.
 
-## Line balancing and Yamazumi
+## Line Balancing
 
 Open Line Balancing and click **+ Process step** to add your own steps. Edit
 names, categories, applicability and manual/auto minutes directly. Add named
