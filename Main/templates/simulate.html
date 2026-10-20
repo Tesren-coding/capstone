@@ -11,17 +11,6 @@
     <p id="status-text">Loading scenario...</p>
 </section>
 
-<div style="text-align:center; margin:12px 0;">
-    <button id="start-btn" disabled style="padding:10px 24px; font-size:14px; margin-right:8px;">PLAY</button>
-    <button id="stop-btn" disabled style="padding:10px 24px; font-size:14px; margin-right:8px;">PAUSE</button>
-    <button id="restart-btn" disabled style="padding:10px 24px; font-size:14px; margin-right:8px;">RESTART</button>
-    <button id="back-btn"  style="padding:10px 24px; font-size:14px; background:#e8eef8; border:2px solid #1e3c78; margin-right:24px;">BACK TO BUILDER</button>
-
-    <label for="speed-dial" style="font-weight:bold;">Speed:</label>
-    <input type="range" id="speed-dial" min="0.25" max="5" step="0.25" value="1" style="width:200px; vertical-align:middle;">
-    <span id="speed-label" style="min-width:50px; font-weight:bold; display:inline-block;">1.00x</span>
-</div>
-
 <p id="physical-walking-summary" style="text-align:center; font-size:13px; color:#1e3c78; margin:6px auto;">
     Walking settings will appear when the scenario loads. Playback Speed (x) only changes the animation speed.
 </p>
@@ -47,7 +36,10 @@
 <div id="operator-highlight-panel" style="max-width:900px;margin:10px auto 0;padding:10px 14px;background:#f7f9fc;border:1px solid #d7e0ed;border-radius:6px;">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <strong style="font-size:13px;">Operator work areas</strong>
-        <button id="clear-operator-highlight" type="button" style="padding:5px 10px;" disabled>Show all</button>
+        <div class="simulation-operator-actions">
+            <button id="clear-operator-highlight" type="button" style="padding:5px 10px;" disabled>Show all</button>
+            <button id="back-btn" type="button">← Back to Builder</button>
+        </div>
     </div>
     <div id="operator-highlight-legend" role="group" aria-label="Highlight an operator's assigned stations and material locations"
          style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;"></div>
@@ -65,7 +57,19 @@
         </div>
         <input id="timeline" type="range" min="0" max="0" step="any" value="0" disabled
                aria-describedby="timeline-help">
+        <div class="simulation-video-controls" role="group" aria-label="Simulation playback controls">
+            <div class="simulation-video-buttons">
+                <button id="start-btn" disabled type="button">▶ PLAY</button>
+                <button id="stop-btn" disabled type="button">Ⅱ PAUSE</button>
+                <button id="restart-btn" disabled type="button">↺ RESTART</button>
+            </div>
+            <label class="simulation-video-speed" for="speed-dial">Speed
+                <input type="range" id="speed-dial" min="0.25" max="5" step="0.25" value="1">
+                <span id="speed-label">1.00x</span>
+            </label>
+        </div>
         <span id="timeline-help">Drag to review any moment. Playback pauses; press PLAY to continue.</span>
+        <div id="simulation-error-panel" class="simulation-error-panel" role="alert" hidden></div>
     </div>
 </div>
 <div id="station-tooltip" class="station-tooltip" role="tooltip" hidden></div>

@@ -50,7 +50,23 @@ def normalize_scenario(scenario):
         for operator_id, operator in data['operators'].items():
             if isinstance(operator, dict):
                 operator['name'] = operator_id
+                # Older task editors could retain a station standing side when
+                # a Pick/Drop location was changed to an IN, OUT or SWIP box.
+                # Material boxes use their centre; the unused side is safe to
+                # remove on the normalized *copy*, without changing the task.
+                boxes = data.get('boxes', {})
+                if isinstance(boxes, dict) and isinstance(operator.get('sequence'), list):
+                    for step in operator['sequence']:
+                        if not isinstance(step, dict):
+                            continue
+                        box = boxes.get(step.get('loc')) if isinstance(step.get('loc'), str) else None
+                        if isinstance(box, dict) and box.get('type') in ('in', 'out', 'swip'):
+                            step.pop('standing_side', None)
     for station in data['stations'].values() if isinstance(data['stations'], dict) else []:
+        if isinstance(station, dict):
+            # Old saved scenarios must retain the original behavior: a starting
+            # part still requires the station's assigned processing.
+            station.setdefault('starting_part_processed', False)
         if isinstance(station, dict) and isinstance(station.get('processes'), list):
             times = [p.get(k) for p in station['processes'] if isinstance(p, dict)
                      for k in ('manual_time', 'auto_time')]
@@ -146,6 +162,8 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
     for sid, station in stations.items():
         if not isinstance(station, dict):
             continue
+        if not isinstance(station.get('starting_part_processed'), bool):
+            errors.append(f'Station S{sid}: starting part status must be Not Processed or Already Processed.')
         processes = station.get('processes')
         if not isinstance(processes, list) or not processes:
             errors.append(f'Station S{sid} needs at least one process.')

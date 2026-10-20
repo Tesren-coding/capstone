@@ -3,7 +3,7 @@ import {installDrag,dragHandle,moveBefore,rowDrop,beforeFromDrop} from "./drag-s
 import {requestJson, postJson} from "./api.js";
 import * as localFiles from "./local-folder-store.js";
 import {orderedOperatorIds, remapOperatorOrder} from "./operator-order.js";
-import {sequenceToTasks, tasksToSequence, defaultOperatorTask} from "./operator-tasks.js";
+import {sequenceToTasks, tasksToSequence, defaultOperatorTask, clearMaterialBoxStandingSides} from "./operator-tasks.js";
 import {STATION_WIDTH, STATION_HEIGHT} from "./layout-geometry.js";
 import {drawDirection, directionContainsPoint, directionResizeHandle,
     resizeDirectionFromPoint, DIRECTION_MIN_WIDTH, DIRECTION_MIN_HEIGHT} from "./line-direction.js";
@@ -57,6 +57,9 @@ let nextStationId  = 1;
 let nextBoxId       = 1;
 let nextDimensionId = 1;
 
+const MIN_SWIP_WIDTH=44;
+const MIN_SWIP_HEIGHT=38;
+
 const SIZES = {
     station: { w: STATION_WIDTH, h: STATION_HEIGHT },
     swip:    { w: 90,  h: 60 },
@@ -85,6 +88,7 @@ let groupDrag = null; // {start, original} snapshot for translating a selection
 // No extra persisted setting is needed; the existing sequence standing_side
 // remains authoritative for walking, saves and standard-work exports.
 let pendingStandingClick = null; // defer click until mouseup so operators remain draggable
+let pendingCopyDrag = null; // Ctrl-click toggles selection; Ctrl-drag copies after moving
 let smartGuideData = null; // Only visible while dragging or previewing; never saved.
 let draggingWithoutSnap = false;
 let dimensionTool = false;
@@ -163,7 +167,7 @@ function setSelectedKeys(keys) {
         panelTitle.textContent = `${selectedKeys.size} items selected`;
         panelFields.innerHTML = '<p>Drag any selected item to move the group. Ctrl-click to add or remove items. All station/operator connections are maintained when their station moves.</p>';
         deleteItemBtn.textContent = `Delete ${selectedKeys.size} Selected`;
-        sidePanel.style.display = 'block';
+        sidePanel.style.display = 'flex';
     } else {
         deleteItemBtn.textContent = 'Delete';
         openSidePanel(selectedItem);
@@ -407,6 +411,7 @@ function createStation(x, y) {
         cycle_time: 10,
         processes: [{id: 'p1', name: 'Process 1', manual_time: 10, auto_time: 0}],
         has_part: false,
+        starting_part_processed: false,
     };
     return id;
 }
@@ -667,6 +672,14 @@ canvas.addEventListener("click", (evt) => {
 // PART 5 — Drag + selection logic
 // ============================================================
 function findItemAtPosition(mx, my) {
+    // SWIP boxes support the same corner handles as stations.
+    if (selectedItem?.type === 'box' && selectedKeys.size === 1) {
+        const swip = scenario.boxes[selectedItem.id];
+        if (swip?.type === 'swip') {
+            const corner = hitStationCorner(swip, {x:mx, y:my}, view.scale);
+            if (corner) return {type:'swip-resize', id:selectedItem.id, pos:swip, corner};
+        }
+    }
     // A selected station reveals four independent resize handles.
     if(selectedItem?.type==='station' && selectedKeys.size===1) {
         const station=scenario.stations[selectedItem.id];
@@ -726,15 +739,15 @@ canvas.addEventListener("mousedown", (evt) => {
     const additive = evt.ctrlKey || evt.metaKey;
 
     if (item) {
-        const key=selectionKey(item.type==='direction-resize'?'box':item.type==='station-resize'?'station':item.type==='dimension-endpoint'?'dimension':item.type,item.id);
+        const key=selectionKey(['direction-resize','swip-resize'].includes(item.type)?'box':item.type==='station-resize'?'station':item.type==='dimension-endpoint'?'dimension':item.type,item.id);
         if (additive) {
-            const next=new Set(selectedKeys);
-            if (next.has(key)) next.delete(key); else next.add(key);
-            setSelectedKeys(next);
-            drawFrame();
+            // A stationary Ctrl-click remains additive selection. Only an actual
+            // pointer drag duplicates objects, so existing multi-select works.
+            pendingCopyDrag = {start:mouse, key};
+            canvas.style.cursor = 'copy';
             return;
         }
-        if (['direction-resize','station-resize','dimension-endpoint'].includes(item.type)) {
+        if (['direction-resize','station-resize','swip-resize','dimension-endpoint'].includes(item.type)) {
             setSelectedKeys([key]);
             draggedItem=item;
         } else if (selectedKeys.size > 1 && selectedKeys.has(key)) {
@@ -744,17 +757,17 @@ canvas.addEventListener("mousedown", (evt) => {
             draggedItem=item;
         }
         if (draggedItem) {
-            if(['station-resize','dimension-endpoint','dimension'].includes(item.type)) {
+            if(['station-resize','swip-resize','dimension-endpoint','dimension'].includes(item.type)) {
                 dragStart={x:mouse.x,y:mouse.y,rect:{...item.pos},
                     points:item.type.startsWith('dimension')?dimensionPoints(item.pos):null,
                     offset:item.type==='dimension'?Number(item.pos.offset||0):null};
             }
             dragOffset.x = mouse.x-item.pos.x;
             dragOffset.y = mouse.y-item.pos.y;
-            if(!['station-resize','dimension-endpoint','dimension'].includes(item.type))
+            if(!['station-resize','swip-resize','dimension-endpoint','dimension'].includes(item.type))
                 dragStart = {x:item.pos.x,y:item.pos.y};
         }
-        canvas.style.cursor = ['direction-resize','station-resize'].includes(item.type)?'nwse-resize':item.type==='dimension-endpoint'?'crosshair':'grabbing';
+        canvas.style.cursor = ['direction-resize','station-resize','swip-resize'].includes(item.type)?'nwse-resize':item.type==='dimension-endpoint'?'crosshair':'grabbing';
     } else {
         // Drag from empty space to draw a marquee; Ctrl-drag adds to selection.
         marquee = {start:mouse,current:mouse,base:additive?new Set(selectedKeys):new Set()};
@@ -773,6 +786,26 @@ canvas.addEventListener("mousemove", (evt) => {
         return;
     }
     draggingWithoutSnap = evt.altKey;
+    if (pendingCopyDrag) {
+        if (Math.hypot(mouse.x-pendingCopyDrag.start.x,
+                       mouse.y-pendingCopyDrag.start.y) * view.scale < 6) return;
+        const {start, key} = pendingCopyDrag;
+        pendingCopyDrag = null;
+        const toCopy = selectedKeys.has(key) && selectedKeys.size > 1
+            ? [...selectedKeys] : [key];
+        const copies = toCopy.map(itemForKey).filter(Boolean).map(item=>({
+            type:item.type,id:item.id,pos:structuredClone(item.pos),
+            endpoints:item.type==='dimension'?dimensionPoints(item.pos):null,
+        }));
+        if (pasteCanvasSelection(0, copies)) {
+            beginGroupDrag(start);
+            moveGroup(mouse);
+            statusText.textContent = `Duplicated ${copies.length} item(s). Drag to position the copies.`;
+            canvas.style.cursor = 'copy';
+        }
+        drawFrame();
+        return;
+    }
     if (pendingStandingClick) {
         if (Math.hypot(mouse.x-pendingStandingClick.start.x,
                        mouse.y-pendingStandingClick.start.y) * view.scale < 6) return;
@@ -804,7 +837,7 @@ canvas.addEventListener("mousemove", (evt) => {
     if (!draggedItem) {
         if (!placingType) {
             const item=findItemAtPosition(mouse.x,mouse.y);
-            canvas.style.cursor=standingSlotAt(mouse)?'pointer':['station-resize','direction-resize'].includes(item?.type)?'nwse-resize':item?.type==='dimension-endpoint'?'crosshair':item?'grab':'default';
+            canvas.style.cursor=standingSlotAt(mouse)?'pointer':['station-resize','direction-resize','swip-resize'].includes(item?.type)?'nwse-resize':item?.type==='dimension-endpoint'?'crosshair':item?'grab':'default';
             return;
         }
         if (placingType==='station') {
@@ -825,7 +858,18 @@ canvas.addEventListener("mousemove", (evt) => {
         return;
     }
     const newX=mouse.x-dragOffset.x, newY=mouse.y-dragOffset.y;
-    if (draggedItem.type==='station-resize') {
+    if (draggedItem.type === 'swip-resize') {
+        const box = scenario.boxes[draggedItem.id];
+        const snap = guidePosition({x:mouse.x,y:mouse.y,w:0,h:0},
+            new Set([selectionKey('box',draggedItem.id)]));
+        Object.assign(box, resizeStationRect(dragStart.rect, draggedItem.corner,
+            {x:snap.x,y:snap.y}, {w:MIN_SWIP_WIDTH,h:MIN_SWIP_HEIGHT}));
+        const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
+        const wField=document.getElementById('field-swip-width');
+        const hField=document.getElementById('field-swip-height');
+        if(wField) wField.value=(box.w/ppm).toFixed(2);
+        if(hField) hField.value=(box.h/ppm).toFixed(2);
+    } else if (draggedItem.type==='station-resize') {
         const sid=draggedItem.id;
         const original=dragStart.rect;
         const snap=guidePosition({x:mouse.x,y:mouse.y,w:0,h:0},new Set([selectionKey('station',sid)]));
@@ -898,6 +942,14 @@ canvas.addEventListener("mousemove", (evt) => {
 });
 
 function finishCanvasPointer() {
+    if (pendingCopyDrag) {
+        const {key} = pendingCopyDrag;
+        pendingCopyDrag = null;
+        const next = new Set(selectedKeys);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        setSelectedKeys(next);
+        statusText.textContent = `${selectedKeys.size} item(s) selected. Hold Ctrl and drag an item to duplicate the selection.`;
+    }
     if (pendingStandingClick) {
         const {slot} = pendingStandingClick;
         pendingStandingClick = null;
@@ -929,8 +981,27 @@ canvas.addEventListener('mouseup',finishCanvasPointer);
 canvas.addEventListener('mouseleave',()=>{
     // End active drag on leaving the canvas so movement cannot get stuck.
     if(pendingStandingClick) { pendingStandingClick=null; canvas.style.cursor='default'; }
+    if(pendingCopyDrag) { pendingCopyDrag=null; canvas.style.cursor='default'; }
     if(marquee||groupDrag||draggedItem) finishCanvasPointer();
     if(placementPreview){placementPreview=null;smartGuideData=null;drawFrame();}
+});
+
+// Double-click an editable layout item to jump directly to its name field.
+// Operator names are deliberately their immutable Op IDs; reordering can
+// change IDs, but an operator does not have a separate name to rename.
+canvas.addEventListener('dblclick', evt => {
+    if (placingType || dimensionTool || view.isPanning) return;
+    const point=getCanvasMousePos(evt);
+    const hit=findItemAtPosition(point.x,point.y);
+    if (!hit) return;
+    const type=['swip-resize','direction-resize'].includes(hit.type)?'box':
+        hit.type==='station-resize'?'station':hit.type;
+    if (!['station','box','operator'].includes(type)) return;
+    setSelectedKeys([selectionKey(type,hit.id)]);
+    const field=document.getElementById('field-name');
+    if (field) {field.focus();field.select();statusText.textContent='Rename the selected item, then click outside the field.';}
+    else statusText.textContent='Operator names follow their IDs. Use Reorder Operators to change ID order.';
+    drawFrame();
 });
 
 // ============================================================
@@ -1059,7 +1130,6 @@ function renderOperatorTasks(op) {
         </div>
         ${task.kind === 'legacy' ? `<p style="font-size:11px;color:#7c4a11;">Incomplete/legacy action (${escapeHtml(task.step?.action||'?')}). Open Advanced actions to edit.</p>` : ''}
         ${['transfer','cycle'].includes(task.kind) ? location('source','Collect from',i) : ''}
-        ${['transfer','cycle'].includes(task.kind) && scenario.stations[task.source] ? `<label style="font-size:11px;display:flex;align-items:center;gap:4px;margin-top:5px;"><input class="task-wait-process" type="checkbox" data-task-index="${i}" ${task.wait_for_process?'checked':''}> Wait until station processing is complete</label>` : ''}
         ${['process','cycle'].includes(task.kind) ? location('station','Workstation',i,true)+process(task,i) : ''}
         ${['transfer','cycle'].includes(task.kind) ? location('target','Deliver to',i) : ''}
         ${task.kind==='transfer'?'<p style="font-size:11px;color:#536b87;">Material movement only; another operator may process the part.</p>':''}
@@ -1067,22 +1137,25 @@ function renderOperatorTasks(op) {
 
     function commit(updated) {
         op.sequence = tasksToSequence(updated);
+        clearMaterialBoxStandingSides({operator: op}, scenario.boxes);
         renderSequenceList(op);
         drawFrame();
     }
-    container.querySelectorAll('.task-wait-process').forEach(input=>input.onchange=e=>{
-        tasks[Number(e.currentTarget.dataset.taskIndex)].wait_for_process=e.currentTarget.checked;
-        commit(tasks);
-    });
     container.querySelectorAll('.task-field').forEach(select=>{
         select.onchange=e=>{
             const i=Number(e.currentTarget.dataset.taskIndex), field=e.currentTarget.dataset.field;
             const task=tasks[i];
             task[field]=e.currentTarget.value;
+            // Standing-side selections belong to the previous location; do
+            // not carry them when a task is reassigned to a new destination.
+            if (field === 'source') delete task.source_side;
+            if (field === 'target') delete task.target_side;
             if(field==='station') {
                 const processes=scenario.stations[task.station]?.processes || [];
                 task.process=processes.length===1?processes[0].id:'';
                 delete task.work_side;
+                delete task.drop_side;
+                delete task.pick_side;
             }
             commit(tasks);
         };
@@ -1349,7 +1422,7 @@ function openSidePanel(item) {
         sidePanel.style.display = "none";
         return;
     }
-    sidePanel.style.display = "block";
+    sidePanel.style.display = "flex";
 
     if (item.type === 'dimension') {
         const d=scenario.dimensions[item.id];
@@ -1388,6 +1461,14 @@ function openSidePanel(item) {
                 <input type="checkbox" id="field-haspart" ${s.has_part ? "checked" : ""}>
                 Starts with a part
             </label>
+            <div id="starting-part-status" style="margin:8px 0 12px 0;${s.has_part ? '' : 'display:none;'}">
+                <label for="field-starting-part-processed">Starting part status</label>
+                <select id="field-starting-part-processed" style="width:100%;margin-top:4px;">
+                    <option value="unprocessed" ${s.starting_part_processed === true ? '' : 'selected'}>Not Processed — needs station work</option>
+                    <option value="processed" ${s.starting_part_processed === true ? 'selected' : ''}>Already Processed — ready for transfer</option>
+                </select>
+                <p style="font-size:11px;color:#506177;margin:5px 0;">Applies only to the part present at the start of the simulation. Newly delivered parts still require assigned work.</p>
+            </div>
         `;
         document.getElementById('station-id-apply').onclick = () => changeStationId(item.id, document.getElementById('field-station-id').value);
         document.getElementById('field-station-id').onkeydown = e => {
@@ -1418,6 +1499,16 @@ function openSidePanel(item) {
         };
         document.getElementById("field-haspart").addEventListener("change", (e) => {
             s.has_part = e.target.checked;
+            if (!s.has_part) {
+                // An empty station cannot have a completed *starting* part.
+                s.starting_part_processed = false;
+                document.getElementById('field-starting-part-processed').value = 'unprocessed';
+            }
+            document.getElementById('starting-part-status').style.display = s.has_part ? '' : 'none';
+            drawFrame();
+        });
+        document.getElementById('field-starting-part-processed').addEventListener('change', (e) => {
+            s.starting_part_processed = e.target.value === 'processed';
             drawFrame();
         });
 
@@ -1509,7 +1600,15 @@ function openSidePanel(item) {
                 <p id="direction-flip-state" style="font-size:11px; color:#556; margin:0;"></p>
             `;
         } else if (b.type === "swip") {
+            const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
             extraFieldsHtml = `
+                <p style="font-size:11px;color:#506177;">Drag a corner of the selected SWIP box to resize it, or enter its dimensions in metres.</p>
+                <div style="display:flex;gap:10px;margin-bottom:10px;">
+                    <label style="flex:1;">Width (m)
+                        <input id="field-swip-width" type="number" min="0.01" step="0.01" value="${(b.w/ppm).toFixed(2)}" style="width:100%;"></label>
+                    <label style="flex:1;">Height (m)
+                        <input id="field-swip-height" type="number" min="0.01" step="0.01" value="${(b.h/ppm).toFixed(2)}" style="width:100%;"></label>
+                </div>
                 <label style="display:flex; align-items:center; gap:6px;">
                     <input type="checkbox" id="field-haspart" ${b.has_part ? "checked" : ""}>
                     Starts with a part
@@ -1581,6 +1680,15 @@ function openSidePanel(item) {
             syncFlipState();
         }
         if (b.type === "swip") {
+            for (const [id,key,minimum] of [['field-swip-width','w',MIN_SWIP_WIDTH],['field-swip-height','h',MIN_SWIP_HEIGHT]]) {
+                document.getElementById(id).addEventListener('change', evt => {
+                    const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
+                    const metres=Number(evt.target.value);
+                    if(Number.isFinite(metres) && metres>0) b[key]=Math.max(minimum,metres*ppm);
+                    evt.target.value=(b[key]/ppm).toFixed(2);
+                    drawFrame();
+                });
+            }
             document.getElementById("field-haspart").addEventListener("change", (e) => {
                 b.has_part = e.target.checked;
                 drawFrame();
@@ -1709,6 +1817,14 @@ function drawFrame() {
             ctx.setLineDash([4, 4]);
             ctx.strokeRect(b.x - 5, b.y - 5, b.w + 10, b.h + 10);
             ctx.setLineDash([]);
+        }
+    }
+
+    if (selectedItem?.type === 'box' && selectedKeys.size === 1) {
+        const selectedBox=scenario.boxes[selectedItem.id];
+        if (selectedBox?.type === 'swip') {
+            drawStationDimensions(ctx,selectedBox,Number(scaleInput.value)||DEFAULT_PX_PER_M,view.scale);
+            drawStationHandles(ctx,selectedBox,view.scale);
         }
     }
 
@@ -1875,6 +1991,9 @@ function drawFrame() {
 // PART 7 — Save / Load full scenario
 // ============================================================
 function serializeScenario() {
+    // Old drafts can contain invalid station-side hints on material boxes.
+    // Strip the unused hints before sending to Flask or writing a local file.
+    clearMaterialBoxStandingSides(scenario.operators, scenario.boxes);
     return {
         ...scenarioExtras,
         schema_version: schemaVersion,
@@ -1916,6 +2035,7 @@ function restoreEditorSnapshot(json) {
         Object.assign(scenario[key],data[key]||{});
     }
     for (const [id,op] of Object.entries(scenario.operators)) op.name = id;
+    clearMaterialBoxStandingSides(scenario.operators, scenario.boxes);
     scenarioExtras=Object.fromEntries(Object.entries(data).filter(([key]) =>
         !['schema_version','takt_time','layout_scale_px_per_m','walking_speed_m_per_s',...keys].includes(key)));
     taktTimeInput.value=String(data.takt_time??30);
@@ -1970,15 +2090,16 @@ function copyCanvasSelection() {
     statusText.textContent=`Copied ${items.length} canvas item(s). Press Ctrl+V to paste.`;
     return true;
 }
-function pasteCanvasSelection() {
-    if(!objectClipboard?.length) return false;
+function pasteCanvasSelection(offset=null, contents=objectClipboard) {
+    if(!contents?.length) return false;
     recordUndo();
     redoStack.length=0;
-    const shift=35*(++pasteGeneration), mappings={station:{},box:{},operator:{},dimension:{}};
+    const shift=offset===null?35*(++pasteGeneration):offset;
+    const mappings={station:{},box:{},operator:{},dimension:{}};
     const staged=[];
     // Insert stations/boxes first to build reference maps for the operators/rulers.
     for(const type of ['station','box','operator','dimension']) {
-        for(const item of objectClipboard.filter(i=>i.type===type)) {
+        for(const item of contents.filter(i=>i.type===type)) {
             const data=structuredClone(item.pos);
             data.x+=shift;data.y+=shift;
             if(type==='dimension') {data.x2+=shift;data.y2+=shift;}
@@ -2075,6 +2196,7 @@ function applyLoadedScenario(data) {
     for (const [id,op] of Object.entries(scenario.operators)) op.name = id;
     Object.assign(scenario.boxes,     data.boxes     || {});
     Object.assign(scenario.dimensions, data.dimensions || {});
+    clearMaterialBoxStandingSides(scenario.operators, scenario.boxes);
     // Older scenarios without attached_to remain free-floating, with original
     // coordinates/sizes untouched. Attached operators use their side anchor.
     Object.keys(scenario.stations).forEach(id =>
@@ -2702,12 +2824,18 @@ initBuilder();
 smartSnapInput?.addEventListener('change', () => {smartGuideData=null;drawFrame();});
 scaleInput?.addEventListener('input', () => {
     updateDimensionPanel();
+    const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
     if(selectedItem?.type==='station') {
         const station=scenario.stations[selectedItem.id];
-        const ppm=Number(scaleInput.value)||DEFAULT_PX_PER_M;
         for(const [id,value] of [['field-station-width',station?.w],['field-station-height',station?.h]]) {
             const input=document.getElementById(id);
             if(input&&value) input.value=(value/ppm).toFixed(2);
+        }
+    } else if (selectedItem?.type==='box') {
+        const swip=scenario.boxes[selectedItem.id];
+        if(swip?.type==='swip') for(const [id,value] of [['field-swip-width',swip.w],['field-swip-height',swip.h]]) {
+            const input=document.getElementById(id);
+            if(input) input.value=(value/ppm).toFixed(2);
         }
     }
     drawFrame();

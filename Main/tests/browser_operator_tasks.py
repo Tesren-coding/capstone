@@ -33,6 +33,7 @@ def check():
         first=page.evaluate('(id) => scenario.operators[id].sequence',data['transfer'])
         assert [s['action'] for s in first]==['pick','drop'],first
         assert [s['loc'] for s in first]==[data['input'],str(data['station'])]
+        assert not any('wait_for_process' in s for s in first), first
 
         page.evaluate('(id) => setSelectedKeys([selectionKey("operator",id)])',data['process'])
         page.locator('[data-add-task="process"]').click()
@@ -44,6 +45,7 @@ def check():
         page.locator('[data-add-task="transfer"]').click()
         page.locator('.task-field[data-field="source"]').select_option(str(data['station']))
         page.locator('.task-field[data-field="target"]').select_option(data['output'])
+        assert page.locator('.task-wait-process').count()==0
         scenario=page.evaluate('serializeScenario()')
         assert [s['loc'] for s in scenario['operators'][data['outbound']]['sequence']]==[str(data['station']),data['output']]
         page.evaluate('(scenario)=>applyLoadedScenario(scenario)',scenario)
@@ -61,6 +63,28 @@ def check():
         assert page.locator('.operator-task-card').count()==1
         assert 'Collect' in page.locator('.operator-task-card strong').first.inner_text()
         assert len(page.evaluate('(id)=>scenario.operators[id].sequence',data['process']))==5
+        # Changing a transfer source/target must clear the old station's side.
+        page.evaluate('''(d) => {
+            scenario.operators[d.outbound].sequence = [
+                {action:'pick',loc:String(d.station),standing_side:'left'},
+                {action:'drop',loc:String(d.station),standing_side:'right'}
+            ];
+            setSelectedKeys([selectionKey('operator',d.outbound)]);
+        }''',data)
+        page.locator('.task-field[data-field="source"]').select_option(data['input'])
+        page.locator('.task-field[data-field="target"]').select_option(data['output'])
+        changed=page.evaluate('(id)=>scenario.operators[id].sequence',data['outbound'])
+        assert [step['loc'] for step in changed]==[data['input'],data['output']],changed
+        assert all('standing_side' not in step for step in changed),changed
+        # Old JSON drafts are fixed on load and before any save/simulation request.
+        page.evaluate('''(d) => {
+            const old=JSON.parse(JSON.stringify(serializeScenario()));
+            old.operators[d.outbound].sequence[0].standing_side='top';
+            old.operators[d.outbound].sequence[1].standing_side='right';
+            applyLoadedScenario(old);
+        }''',data)
+        fresh=page.evaluate('serializeScenario()')
+        assert all('standing_side' not in step for step in fresh['operators'][data['outbound']]['sequence'])
         assert not errors,errors
         browser.close()
         print('Chromium: transfer/work/deliver across 3 operators, save/load and full-cycle task cards passed.')

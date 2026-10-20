@@ -36,6 +36,8 @@ function action(name, loc, options = {}) {
     const result = {action:name,loc:loc ?? ''};
     if (name === 'work') result.process = options.process ?? '';
     if (options.side) result.standing_side = options.side;
+    // Preserve legacy flags when converting older saved tasks; simulation no
+    // longer uses them as station-wide completion prerequisites.
     if (options.wait_for_process !== undefined && name === 'pick') result.wait_for_process = options.wait_for_process;
     return result;
 }
@@ -70,9 +72,28 @@ export function taskWorkSequenceIndex(tasks, taskIndex) {
 
 export function defaultOperatorTask(kind) {
     switch (kind) {
-        case 'transfer': return {kind, source:'', target:'',wait_for_process:true};
+        case 'transfer': return {kind, source:'', target:''};
         case 'process': return {kind,station:'',process:''};
-        case 'cycle': return {kind,source:'',station:'',process:'',target:'',wait_for_process:true};
+        case 'cycle': return {kind,source:'',station:'',process:'',target:''};
         default: throw new Error('Unknown task type.');
     }
+}
+
+
+// A standing side only applies to stations. Older saved tasks can retain a
+// side after their source/destination changes to an IN/OUT/SWIP box. Remove
+// those unused hints while keeping the operator's actions and station sides.
+export function clearMaterialBoxStandingSides(operators = {}, boxes = {}) {
+    let count = 0;
+    for (const operator of Object.values(operators || {})) {
+        for (const step of Array.isArray(operator?.sequence) ? operator.sequence : []) {
+            const box = boxes?.[step?.loc];
+            if (box && ['in', 'out', 'swip'].includes(box.type) &&
+                    Object.hasOwn(step, 'standing_side')) {
+                delete step.standing_side;
+                count++;
+            }
+        }
+    }
+    return count;
 }

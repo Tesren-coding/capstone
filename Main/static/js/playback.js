@@ -285,9 +285,11 @@ function updateStationTooltip() {
     const machine = opState.stationState[sid];
     const totals = stationTotals(s);
     const lines = [`Station S${sid}`, `Name: ${s.name}`, `Manual total: ${Number(totals.manual.toFixed(3))} min`, `Auto total: ${Number(totals.auto.toFixed(3))} min`,
-        `Starts with a part: ${s.has_part ? 'Yes' : 'No'}`, `Position: (${s.x}, ${s.y})`, `Size: ${s.w} × ${s.h}`];
+        `Starts with a part: ${s.has_part ? 'Yes' : 'No'}`,
+        ...(s.has_part ? [`Starting part: ${s.starting_part_processed === true ? 'Already Processed' : 'Not Processed'}`] : []),
+        `Position: (${s.x}, ${s.y})`, `Size: ${s.w} × ${s.h}`];
     stationProcesses(s).forEach((process, index) => lines.push(`Process ${index + 1}: ${process.name} — manual ${process.manual_time}, auto ${process.auto_time} min`));
-    const known = new Set(['name', 'processes', 'cycle_time', 'has_part', 'x', 'y', 'w', 'h', 'next_process_id']);
+    const known = new Set(['name', 'processes', 'cycle_time', 'has_part', 'starting_part_processed', 'x', 'y', 'w', 'h', 'next_process_id']);
     Object.entries(s).filter(([key]) => !known.has(key)).forEach(([key, value]) => lines.push(`${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`));
     lines.push(`Has part now: ${machine.hasPart ? 'Yes' : 'No'}`);
     lines.push(`Machine: ${machine.busy ? machine.phase : 'Idle'}`);
@@ -325,6 +327,7 @@ let   msPerSimMinute      = baseMsPerSimMinute / speedMultiplier;
 
 const timeline = document.getElementById('timeline');
 const timelineLabel = document.getElementById('timeline-label');
+const simulationErrorPanel = document.getElementById('simulation-error-panel');
 const playButton = document.getElementById('start-btn');
 const pauseButton = document.getElementById('stop-btn');
 const restartButton = document.getElementById('restart-btn');
@@ -343,6 +346,8 @@ function updatePlaybackControls() {
     restartButton.disabled = !opState;
     statusText.style.color = '';
     statusText.style.fontWeight = '';
+    simulationErrorPanel.hidden = !opState?.stopReason;
+    simulationErrorPanel.textContent = opState?.stopReason ? '⛔ Simulation stopped — ' + opState.stopReason : '';
     if (opState?.stopReason) {
         statusText.textContent = '⛔ SIMULATION STOPPED — ' + opState.stopReason;
         statusText.style.color = '#cc0000';
@@ -470,7 +475,14 @@ async function init() {
         timeline.max = totalDuration;
         timeline.disabled = totalDuration <= 0;
         updatePlaybackControls();
-        statusText.textContent = "Ready. Press PLAY.";
+        const terminalError = simEvents.find(event => event.status === 'blocked');
+        if (terminalError) {
+            statusText.textContent = `⚠ This simulation has an error at ${Number(terminalError.time).toFixed(2)} min: ${terminalError.reason}. Playback will stop at that point.`;
+            statusText.style.color = '#ad251d';
+            statusText.style.fontWeight = 'bold';
+        } else {
+            statusText.textContent = 'Ready. Press PLAY.';
+        }
         requestAnimationFrame(animationLoop);
     } catch (err) {
         console.error("Error during init():", err);

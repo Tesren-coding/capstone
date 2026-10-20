@@ -167,3 +167,17 @@
 @media (max-width: 640px) {
     .simulation-playback-timeline { padding: 12px; }
 }
+
+/* Video-style controls stay directly underneath the playback scrubber. */
+.simulation-operator-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+#operator-highlight-panel #back-btn { padding:7px 13px; background:#e8eef8; border:2px solid #1e3c78; color:#17365d; font-weight:700; border-radius:6px; cursor:pointer; }
+#operator-highlight-panel #back-btn:hover { background:#d5e2f6; }
+.simulation-error-panel { margin-top:10px; padding:11px 13px; color:#8f1f18; background:#fff1f0; border:1px solid #c6413a; border-radius:6px; font-weight:700; line-height:1.4; }
+.simulation-error-panel[hidden] { display:none; }
+.simulation-video-controls { display:flex; gap:16px 26px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin-top:12px; }
+.simulation-video-buttons { display:flex; gap:8px; flex-wrap:wrap; }
+.simulation-video-buttons button { padding:9px 16px; font-weight:700; }
+.simulation-video-speed { display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:13px; font-weight:700; }
+.simulation-video-speed input { width:145px; accent-color:#2858a1; }
+.simulation-video-speed #speed-label { min-width:45px; font-variant-numeric:tabular-nums; }
+@media(max-width:680px) { .simulation-video-controls { align-items:stretch; flex-direction:column; } .simulation-video-speed { justify-content:flex-start; } }

@@ -3,6 +3,45 @@
 {% block styles %}<style>
 #dimension-tool-btn.active-tool{background:#0f766e!important;color:white;font-weight:bold;}
 #operator-order-panel[hidden]{display:none !important;}
+.builder-tool-groups { display:grid; grid-template-columns:repeat(auto-fit,minmax(255px,1fr)); gap:12px; margin:14px 0; }
+.builder-tool-group { border:1px solid #d1dce8; border-radius:10px; background:#f8fafd; padding:12px 14px; text-align:left; }
+.builder-tool-group h3 { margin:0 0 4px; font-size:15px; color:#1e3c78; }
+.builder-tool-group p { margin:0 0 10px; font-size:12px; color:#53677e; }
+.builder-tool-buttons { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.builder-tool-buttons button { padding:8px 11px !important; margin:0 !important; }
+.builder-tool-wide { grid-column:1 / -1; }
+.builder-input-row { display:flex; flex-wrap:wrap; align-items:center; gap:12px 22px; }
+.builder-input-row label { display:inline-flex; gap:5px; align-items:center; font-size:13px; }
+.builder-scenario-controls { display:flex; flex-wrap:wrap; gap:9px; align-items:center; }
+.builder-scenario-controls button { margin:0 !important; padding:9px 13px !important; }
+.builder-scenario-controls select { margin:0 !important; }
+.builder-tool-group #save-location-controls { justify-content:flex-start !important; margin:8px 0 !important; }
+
+/* The selected-item editor, not the site navigation, has a persistent header. */
+#side-panel {overflow:hidden !important; flex-direction:column;}
+#panel-header {flex:0 0 auto; z-index:1;}
+#panel-scroll-body {flex:1 1 auto; min-height:0; overflow-y:auto; overscroll-behavior:contain;}
+.builder-canvas-shell { position:relative; margin:14px auto 0; border:1px solid #d4e0ed; background:white; isolation:isolate; }
+.builder-under-canvas {display:grid; grid-template-columns:repeat(auto-fit,minmax(330px,1fr)); gap:12px; margin:12px 0 20px;}
+.builder-under-canvas .builder-tool-group {min-width:0;}
+.line-tool-panel {position:absolute;z-index:25;display:flex;flex-direction:column;left:8px;top:8px;max-width:min(92%,360px);background:#f8fafd;border:1px solid #8da8c7;border-radius:9px;box-shadow:0 4px 15px #0e315b30;overflow:hidden;}
+.line-tool-handle {display:flex;align-items:center;gap:8px;background:#1e3c78;color:white;padding:7px 8px;cursor:grab;user-select:none;touch-action:none;min-height:38px;}
+.line-tool-handle:active {cursor:grabbing;}
+.line-tool-dock-hint {font-size:10px;opacity:.8;margin-left:auto;white-space:nowrap;}
+#line-tool-collapse {padding:2px 7px !important; margin:0 !important; border-radius:5px;min-width:28px;}
+.line-tool-buttons {display:flex; flex-direction:column;gap:5px;padding:8px;max-height:65vh;overflow:auto;}
+.line-tool-buttons button {margin:0 !important;padding:7px 9px !important;white-space:nowrap;text-align:left;}
+.line-tool-panel[data-dock="right"] {left:auto;right:8px;top:8px;}
+.line-tool-panel[data-dock="top"],.line-tool-panel[data-dock="bottom"] {left:8px;right:8px;max-width:none;width:auto;}
+.line-tool-panel[data-dock="bottom"] {top:auto;bottom:8px;}
+.line-tool-panel[data-dock="top"] {top:8px;}
+.line-tool-panel[data-dock="top"] .line-tool-buttons,.line-tool-panel[data-dock="bottom"] .line-tool-buttons {flex-direction:row;flex-wrap:wrap;max-height:148px;}
+.line-tool-panel.collapsed .line-tool-buttons {display:none;}
+.line-tool-panel.collapsed {max-width:185px;}
+.line-tool-panel.collapsed .line-tool-dock-hint {display:none;}
+.line-tool-panel.collapsed[data-dock="top"],.line-tool-panel.collapsed[data-dock="bottom"] {right:auto;width:auto;}
+@media(max-width:700px){.line-tool-dock-hint{display:none}.line-tool-buttons button{font-size:12px;}.builder-under-canvas{grid-template-columns:1fr;}}
+
 #operator-order-list li{display:flex;align-items:center;gap:12px;border:1px solid #cbd5e1;border-radius:6px;padding:8px 10px;margin:5px 0;background:#fff;}
 #operator-order-list .drag-handle{cursor:grab;font-size:19px;touch-action:none;}
 #operator-order-list li.drag-before{border-top:3px solid #2563eb;}
@@ -19,18 +58,6 @@
     <p id="status-text">Click a button below, then click the canvas to place an item.</p>
 </section>
 
-<div id="toolbar" style="text-align:center; margin:12px 0;">
-    <button class="add-btn" data-type="station"  style="padding:10px 18px; margin-right:6px;">+ Station</button>
-    <button class="add-btn" data-type="operator" style="padding:10px 18px; margin-right:6px;">+ Operator</button>
-    <button type="button" id="reorder-operators-btn" aria-controls="operator-order-panel" aria-expanded="false" style="padding:10px 18px; margin-right:6px;">↕ Reorder Operators</button>
-    <button class="add-btn" data-type="swip"      style="padding:10px 18px; margin-right:6px;">+ SWIP Box</button>
-    <button class="add-btn" data-type="in"        style="padding:10px 18px; margin-right:6px;">+ IN Box</button>
-    <button class="add-btn" data-type="out"       style="padding:10px 18px; margin-right:24px;">+ OUT Box</button>
-    <button class="add-btn" data-type="direction" style="padding:10px 18px; margin-right:6px;">+ Line Direction</button>
-    <button type="button" id="dimension-tool-btn" aria-pressed="false" title="Click two object edges to measure, then drag the dimension line outward with dotted extension lines" style="padding:10px 18px; background:#e8f7f7; border:2px solid #0f766e; margin-right:6px;">↔ Dimension</button>
-    <button id="cancel-place-btn" style="padding:10px 18px; display:none; background:#fde8e8; border:2px solid #b52a2a;">Cancel Placement</button>
-</div>
-
 <section id="operator-order-panel" class="card" hidden aria-label="Reorder operators" style="max-width:600px; margin:10px auto; padding:14px 18px;">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
         <h3 style="margin:0;">Reorder Operators</h3>
@@ -39,21 +66,10 @@
     <p style="font-size:12px; margin:8px 0;">Drag ⠿ to change who is Op1, Op2, etc. Each operator keeps their assigned steps, position, and color. Use Alt + ↑ / ↓ on a drag handle for keyboard reordering.</p>
     <ol id="operator-order-list" class="operator-order-list" style="margin:0; padding-left:32px;"></ol>
 </section>
-<div id="toolbar2" style="text-align:center; margin:12px 0;">
-    <label style="margin-right:24px;">
-        Takt Time (min):
-        <input type="text" id="takt-time-input" value="30" style="width:60px; margin-left:4px;">
-    </label>
-
-    <label for="layout-scale-input" style="margin-right:12px; display:inline-block;" title="Canvas layout units per physical meter. Calibrate this against a known station dimension.">
-        Scale (px/m):
-        <input type="number" id="layout-scale-input" min="1" max="10000" step="1" value="50" style="width:70px; margin-left:4px;">
-    </label>
-    <label for="walk-speed-input" style="margin-right:18px; display:inline-block;" title="Real operator walking speed, in meters per second; separate from playback speed.">
-        Walking Speed (m/s):
-        <input type="number" id="walk-speed-input" min="0.1" max="5" step="0.1" value="1.2" style="width:65px; margin-left:4px;">
-    </label>
-
+<div id="toolbar2" class="builder-tool-groups" aria-label="Line settings and scenario management">
+    <section class="builder-tool-group builder-tool-wide" aria-labelledby="scenario-files-heading">
+        <h3 id="scenario-files-heading">Scenario Files</h3>
+        <p>Start a new line, save or open an existing scenario, or use a folder on this device.</p>
     <div id="save-location-controls" style="display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;margin:9px auto 12px;">
         <label for="save-location-mode" style="font-weight:600;">Scenario storage:</label>
         <select id="save-location-mode" aria-label="Scenario storage location" style="padding:8px;">
@@ -65,9 +81,10 @@
         <button type="button" id="refresh-local-folder-btn" style="padding:8px 12px;">Refresh Files</button>
         <span id="local-folder-status" role="status" aria-live="polite" style="font-size:12px;color:#465a73;"></span>
     </div>
+        <div class="builder-scenario-controls">
     <button type="button" id="new-line-btn" title="Clear the canvas and start with Raw Material, Line Direction and Finished Goods" style="padding:10px 18px; background:#eef3fc; border:2px solid #315f9f; margin-right:8px;">+ New Line</button>
     <button id="save-scenario-btn" style="padding:10px 18px; background:#e8f4ea; border:2px solid #2d7a3a; margin-right:8px;">Save Scenario</button>
-    <button id="import-scenario-btn" style="padding:10px 18px; margin-right:8px;">Import JSON</button>
+    <button id="import-scenario-btn" type="button" hidden aria-hidden="true" tabindex="-1">Import JSON</button>
     <input id="import-scenario-file" type="file" accept=".json,application/json" hidden>
     <button id="export-scenario-btn" style="padding:10px 18px; margin-right:8px;">Export JSON</button>
 
@@ -76,10 +93,13 @@
     </select>
     <button id="load-scenario-btn" style="padding:10px 18px; background:#e8eef8; border:2px solid #1e3c78; margin-right:8px;">Load Scenario</button>
     <div id="scenario-storage-note" role="status" aria-live="polite"
-         style="margin:6px auto 0;max-width:1000px;font-size:12px;color:#465a73;line-height:1.5;"></div>
+         style="flex-basis:100%;font-size:12px;color:#465a73;line-height:1.5;"></div>
     <button type="button" id="rename-scenario-btn" title="Rename the scenario selected in the list without changing its saved data" style="padding:10px 18px; background:#fff6df; border:2px solid #bb8529; margin-right:24px;">Rename Scenario</button>
 
-    <button id="run-scenario-btn" style="padding:10px 18px; background:#fff4e0; border:2px solid #c47a00;">▶ Run Simulation</button>
+
+        </div>
+    </section>
+
 </div>
 
 <div id="canvas-controls" class="canvas-controls">
@@ -92,22 +112,55 @@
     </label>
     <span>Select a station to resize from its corners · Dimension: two edge points, drag ruler to offset · Ctrl+Z undo · Ctrl+C copy · Ctrl+V paste · Pink = alignment · Blue = meters · Alt + drag bypasses snapping · Shift + drag pans · Drag empty space to multi-select · Ctrl-click adds</span>
 </div>
+<div id="builder-canvas-shell" class="builder-canvas-shell">
+<div id="line-tool-panel" class="line-tool-panel" data-dock="left" aria-label="Line Tool" >
+  <div id="line-tool-handle" class="line-tool-handle" role="toolbar" aria-label="Drag to dock Line Tool">
+    <span aria-hidden="true">⠿</span><strong>Line Tool</strong>
+    <span class="line-tool-dock-hint">Drag to an edge</span>
+    <button type="button" id="line-tool-collapse" aria-label="Hide Line Tool" title="Hide or show Line Tool">−</button>
+  </div>
+  <div id="toolbar" class="line-tool-buttons" aria-label="Line creation tools">
+    <button class="add-btn" data-type="station">+ Station</button>
+    <button class="add-btn" data-type="swip">+ SWIP Box</button>
+    <button class="add-btn" data-type="in">+ IN Box</button>
+    <button class="add-btn" data-type="out">+ OUT Box</button>
+    <button class="add-btn" data-type="operator">+ Operator</button>
+    <button type="button" id="reorder-operators-btn" aria-controls="operator-order-panel" aria-expanded="false">↕ Reorder Operators</button>
+    <button class="add-btn" data-type="direction">+ Line Direction</button>
+    <button type="button" id="dimension-tool-btn" aria-pressed="false" title="Click two object edges to measure, then drag the dimension line outward with dotted extension lines" style="background:#e8f7f7;border:2px solid #0f766e;">↔ Dimension</button>
+    <button id="cancel-place-btn" style="display:none;background:#fde8e8;border:2px solid #b52a2a;">Cancel Placement</button>
+  </div>
+</div>
 <canvas id="builder-canvas" width="2400" height="1042"
         data-line-direction-image-url="{{ url_for('static', filename='images/line_direction.png') }}"
         style="border:1px solid #ccc; background:#ffffff; display:block;
-               margin:20px auto; max-width:100%;">
+               margin:0 auto; max-width:100%;">
 </canvas>
+
+</div>
+<div id="builder-under-canvas" class="builder-under-canvas">
+    <section class="builder-tool-group builder-tool-wide" aria-labelledby="line-settings-heading">
+        <h3 id="line-settings-heading">Line Settings</h3>
+        <p>Set production pace and real-world walking distances.</p>
+        <div class="builder-input-row">
+            <label for="takt-time-input">Takt Time (min): <input type="text" id="takt-time-input" value="30" style="width:60px;"></label>
+            <label for="layout-scale-input" title="Canvas layout units per physical meter.">Scale (px/m): <input type="number" id="layout-scale-input" min="1" max="10000" step="1" value="50" style="width:70px;"></label>
+            <label for="walk-speed-input" title="Physical walking speed, distinct from playback speed.">Walking Speed (m/s): <input type="number" id="walk-speed-input" min="0.1" max="5" step="0.1" value="1.2" style="width:65px;"></label>
+            <button id="run-scenario-btn" style="padding:10px 18px; background:#fff4e0; border:2px solid #c47a00; margin-left:auto; white-space:nowrap;">▶ Run Simulation</button>
+        </div>
+    </section>
+</div>
 
 <div id="side-panel" style="position:fixed; top:150px; right:20px; width:360px; height:560px;
      background:#f7f7f7; border:2px solid #1e3c78; border-radius:6px;
      display:none; z-index:10; min-width:220px; min-height:200px;
-     max-width:600px; max-height:90vh; overflow:auto; resize:both;">
+     max-width:600px; max-height:90vh; overflow:hidden; resize:both;">
     <div id="panel-header" style="background:#1e3c78; color:#fff; padding:8px 12px;
          cursor:move; border-radius:4px 4px 0 0; font-weight:bold; user-select:none;">
         <span id="panel-title">Edit Item</span>
         <button type="button" id="panel-close" aria-label="Close editor" style="float:right; padding:0 5px; cursor:pointer;">✕</button>
     </div>
-    <div style="padding:16px;">
+    <div id="panel-scroll-body" style="padding:16px; overflow-y:auto; min-height:0; flex:1 1 auto;">
         <div id="panel-fields"></div>
         <button id="delete-item-btn"
                 style="margin-top:12px; width:100%; padding:8px; background:#fde8e8; border:2px solid #b52a2a;">
@@ -131,5 +184,6 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/line-tool-dock.js') }}" defer></script>
 <script type="module" src="{{ url_for('static', filename='js/builder.js', v=builder_asset_version) }}"></script>
 {% endblock %}

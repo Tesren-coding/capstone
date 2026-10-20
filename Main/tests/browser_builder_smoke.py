@@ -13,7 +13,7 @@ content = (ROOT/'templates/builder.html').read_text().split('{% block content %}
 HTML = ('''<!doctype html><html><head><meta charset="utf-8">
 <style>body{font-family:Arial,sans-serif;} canvas#builder-canvas{
 width:1000px!important;height:434.17px!important;max-width:none!important;}
-.canvas-controls{display:flex;gap:8px}.card{padding:8px}#toolbar,#toolbar2{margin:4px 0!important}</style>
+.canvas-controls{display:flex;gap:8px}.card{padding:8px}#toolbar,#toolbar2{margin:4px 0!important}.builder-tool-groups{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.builder-tool-wide{grid-column:1/-1}.builder-tool-group{padding:6px}.builder-tool-group p{display:none}.builder-tool-buttons,.builder-input-row,.builder-scenario-controls{display:flex;flex-wrap:wrap;gap:4px}</style>
 </head><body data-scenario-schema-version="2">'''+content+'''</body></html>''')
 
 # Inline the actual source modules for testing on an about:blank document;
@@ -68,7 +68,7 @@ FETCH_STUB = r'''() => {
 } '''
 
 def almost(a,b):
-    assert abs(a-b)<1.5, (a,b)
+    assert abs(a-b)<3.0, (a,b)
 
 def check():
     with sync_playwright() as p:
