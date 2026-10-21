@@ -1108,7 +1108,7 @@ function renderOperatorTasks(op) {
     const container = document.getElementById('operator-task-list');
     if (!container || selectedItem?.type !== 'operator') return;
     const tasks = sequenceToTasks(op.sequence);
-    const taskLabel = {transfer:'Transfer part',process:'Process part',cycle:'Collect → Work → Deliver',legacy:'Legacy action'};
+    const taskLabel = {transfer:'Transfer part',process:'Process part',cycle:'Collect → Work → Deliver',wait:'Wait (idle)',legacy:'Legacy action'};
     const location = (value, field, taskIndex, stationsOnly=false) => `
       <label style="display:block;font-size:11px;margin:5px 0 2px;">${field}</label>
       <select class="task-field" data-task-index="${taskIndex}" data-field="${value}" style="width:100%;font-size:12px;">
@@ -1132,6 +1132,10 @@ function renderOperatorTasks(op) {
         ${['transfer','cycle'].includes(task.kind) ? location('source','Collect from',i) : ''}
         ${['process','cycle'].includes(task.kind) ? location('station','Workstation',i,true)+process(task,i) : ''}
         ${['transfer','cycle'].includes(task.kind) ? location('target','Deliver to',i) : ''}
+        ${task.kind==='wait' ? `<label style="display:block;font-size:11px;margin:7px 0 2px;">Wait duration (simulation minutes)</label>
+            <input class="task-wait-duration" data-task-index="${i}" type="number" min="0.001" step="any" required
+                value="${Number.isFinite(Number(task.duration)) ? escapeHtml(String(task.duration)) : ''}" style="width:100%;font-size:12px;">
+            <p style="font-size:11px;color:#536b87;margin:5px 0 0;">The operator remains at their current location and performs no work or movement. This intentional wait does not trigger the 5-minute blocked-task timer.</p>` : ''}
         ${task.kind==='transfer'?'<p style="font-size:11px;color:#536b87;">Material movement only; another operator may process the part.</p>':''}
       </div>`).join('') : '<p style="font-size:12px;color:#607086;">No tasks. Add a transfer, process, or full cycle below.</p>';
 
@@ -1157,6 +1161,20 @@ function renderOperatorTasks(op) {
                 delete task.drop_side;
                 delete task.pick_side;
             }
+            commit(tasks);
+        };
+    });
+    container.querySelectorAll('.task-wait-duration').forEach(input => {
+        input.onchange = e => {
+            const value = Number(e.currentTarget.value);
+            if (!Number.isFinite(value) || value <= 0) {
+                e.currentTarget.setCustomValidity('Enter a wait duration greater than zero minutes.');
+                e.currentTarget.reportValidity();
+                return;
+            }
+            e.currentTarget.setCustomValidity('');
+            const i = Number(e.currentTarget.dataset.taskIndex);
+            tasks[i].duration = value;
             commit(tasks);
         };
     });
@@ -1233,10 +1251,11 @@ function renderSequenceList(op) {
                     <option value="pick" ${step.action === "pick" ? "selected" : ""}>Pick</option>
                     <option value="work" ${step.action === "work" ? "selected" : ""}>Work</option>
                     <option value="drop" ${step.action === "drop" ? "selected" : ""}>Drop</option>
+                    <option value="wait" ${step.action === "wait" ? "selected" : ""}>Wait</option>
                 </select>
-                <select class="step-loc" data-idx="${i}" style="flex:1; font-size:11px; min-width:0;">
+                ${step.action !== 'wait' ? `<select class="step-loc" data-idx="${i}" style="flex:1; font-size:11px; min-width:0;">
                     ${buildLocationOptions(step.action, step.loc)}
-                </select>
+                </select>` : `<label style="flex:1;font-size:11px;">Minutes <input class="step-wait-duration" data-idx="${i}" type="number" min="0.001" step="any" value="${Number(step.duration ?? 1)}" style="width:100%;"></label>`}
                 ${dragHandle('builder-sequence',String(i),'work step '+(i+1))}
                 <button class="step-remove" data-idx="${i}" style="padding:2px 6px; background:#fde8e8;">✕</button>
               </div>
@@ -1252,9 +1271,17 @@ function renderSequenceList(op) {
         sel.addEventListener("change", (e) => {
             const idx = parseInt(e.target.getAttribute("data-idx"));
             op.sequence[idx].action = e.target.value;
-            op.sequence[idx].loc = "";
-            delete op.sequence[idx].standing_side;
-            selectDefaultProcess(op.sequence[idx]);
+            if (e.target.value === 'wait') {
+                delete op.sequence[idx].loc;
+                delete op.sequence[idx].process;
+                delete op.sequence[idx].standing_side;
+                op.sequence[idx].duration = 1;
+            } else {
+                op.sequence[idx].loc = "";
+                delete op.sequence[idx].duration;
+                delete op.sequence[idx].standing_side;
+                selectDefaultProcess(op.sequence[idx]);
+            }
             renderSequenceList(op);
             drawFrame();
         });
@@ -1274,6 +1301,20 @@ function renderSequenceList(op) {
         select.onchange = e => { op.sequence[Number(e.target.dataset.idx)].process = e.target.value; };
     });
 
+    container.querySelectorAll('.step-wait-duration').forEach(input => {
+        input.onchange = e => {
+            const value = Number(e.currentTarget.value);
+            if (!Number.isFinite(value) || value <= 0) {
+                e.currentTarget.setCustomValidity('Wait duration must be greater than zero.');
+                e.currentTarget.reportValidity();
+                return;
+            }
+            e.currentTarget.setCustomValidity('');
+            op.sequence[Number(e.currentTarget.dataset.idx)].duration = value;
+            renderSequenceList(op);
+            drawFrame();
+        };
+    });
     container.querySelectorAll(".step-remove").forEach(btn => {
         btn.addEventListener("click", (e) => {
             const idx = parseInt(e.target.getAttribute("data-idx"));
@@ -1530,7 +1571,7 @@ function openSidePanel(item) {
             <hr>
             <label>Operator tasks</label>
             <p style="font-size:11px; color:#45556a; margin:5px 0 9px;">
-              Assign a transfer, processing work, or the full collect–work–deliver cycle.
+              Assign a transfer, processing work, the full collect–work–deliver cycle, or an intentional timed wait.
               Different operators can handle the same part at different stages.
               The simulator creates the walking, pickup, dropoff and work actions automatically.
             </p>
@@ -1539,6 +1580,7 @@ function openSidePanel(item) {
               <button type="button" data-add-task="transfer">+ Transfer</button>
               <button type="button" data-add-task="process">+ Process</button>
               <button type="button" data-add-task="cycle">+ Full cycle</button>
+              <button type="button" data-add-task="wait">+ Wait</button>
             </div>
             <details id="advanced-operator-actions">
               <summary style="cursor:pointer;font-size:12px;">Advanced: individual Pick / Work / Drop actions</summary>

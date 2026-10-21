@@ -73,6 +73,8 @@ function applySimulationEvent(state, event) {
             Object.assign(machine, {busy: false, phase: 'idle', until: null, operator: null});
             break;
         case 'waiting': state.phase[op] = 'waiting'; break;
+        case 'planned_wait_start': state.phase[op] = 'idle'; break;
+        case 'planned_wait_end': state.phase[op] = 'ready'; break;
         case 'idle': state.phase[op] = 'idle'; break;
         case 'blocked':
             state.isBlocked[op] = true;

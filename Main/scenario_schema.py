@@ -266,6 +266,14 @@ def validate_scenario(scenario, require_runnable=True, skip_planning_review=Fals
                 errors.append(f'{label} must be an object.')
                 continue
             action, loc = step.get('action'), step.get('loc')
+            if action == 'wait':
+                if not is_number(step.get('duration'), positive=True):
+                    errors.append(f'{label}: Wait duration must be a finite number greater than 0 minutes.')
+                if step.get('standing_side') is not None:
+                    errors.append(f'{label}: Wait has no standing-side destination.')
+                # Wait is deliberate inactivity at the operator's current
+                # position. It has no location and does not affect carrying.
+                continue
             if 'wait_for_process' in step and (action != 'pick' or not isinstance(step['wait_for_process'], bool)):
                 errors.append(f'{label}: wait_for_process must be a boolean on a Pick action.')
             # A standing side identifies where this operator performs the step.

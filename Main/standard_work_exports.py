@@ -95,6 +95,17 @@ def planned_steps(scenario, operator_id):
     stations = scenario['stations']
     boxes = scenario['boxes']
     for index, step in enumerate(operator.get('sequence', []), 1):
+        if step.get('action') == 'wait':
+            duration = float(step.get('duration') or 0)
+            rows.append({'index': index, 'action': 'wait',
+                         'description': f'Wait / idle for {duration:g} min (no movement or work)',
+                         'loc': None, 'manual': 0.0, 'auto': 0.0, 'walk': 0.0,
+                         'distance_m': 0.0, 'planned_wait': duration,
+                         'walk_start': clock, 'manual_start': clock,
+                         'auto_start': clock, 'auto_end': clock + duration,
+                         'position': dict(position)})
+            clock += duration
+            continue
         loc = step.get('loc')
         if loc in stations:
             target = station_destination(stations, loc, step, position, operator)

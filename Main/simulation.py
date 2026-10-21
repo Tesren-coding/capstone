@@ -28,6 +28,7 @@ def run_scenario_simulation(scenario):
     operator_wait_limit_minutes = 5.0
     last_progress_time = 0.0
     waiting_by_operator = {}
+    planned_waits = set()  # intentional Wait tasks are NOT blocked operators
     last_output_time = None
     # Only evaluate takt-based finished output when at least one operator has
     # an explicit delivery task to an OUT box. A decorative OUT box alone is
@@ -92,6 +93,12 @@ def run_scenario_simulation(scenario):
             if status in productive_statuses:
                 last_progress_time = env.now
             if op is not None:
+                if status == 'planned_wait_start':
+                    planned_waits.add(op)
+                elif status == 'planned_wait_end':
+                    planned_waits.discard(op)
+                    # A deliberate pause is not an unexplained line stall.
+                    last_progress_time = env.now
                 if status == 'waiting':
                     waiting_by_operator[op] = (loc, extra.get('reason', 'Waiting for material or processing'))
                 elif status in productive_statuses or status in ('moving', 'idle'):
@@ -124,7 +131,7 @@ def run_scenario_simulation(scenario):
             # The per-operator wait timer below supplies a more precise error
             # than this line-wide watchdog. Never preempt an active wait with a
             # generic 'no progress' message before its own five minutes expire.
-            if waiting_by_operator:
+            if waiting_by_operator or planned_waits:
                 continue
             elapsed = env.now - last_progress_time
             if elapsed + 1e-8 < max_stall_minutes:
@@ -184,7 +191,18 @@ def run_scenario_simulation(scenario):
         while not stop.triggered:
             cycle_start = env.now
             for index, step in enumerate(sequence):
-                loc, action = step['loc'], step['action']
+                action = step['action']
+                if action == 'wait':
+                    # A planned pause is not a material/processing blockage.
+                    # Stay exactly where the operator is, even if carrying a part.
+                    duration = step['duration']
+                    emit('planned_wait_start', op, None, duration=duration, step=index + 1)
+                    yield env.timeout(duration)
+                    if stop.triggered:
+                        return
+                    emit('planned_wait_end', op, None, step=index + 1)
+                    continue
+                loc = step['loc']
                 destination = station_destination(stations, loc, step, position, definition) if loc in stations else box_center(boxes[loc])
                 yield from travel(destination, loc)
                 if stop.triggered:
@@ -306,6 +324,8 @@ def run_scenario_simulation(scenario):
     if not stop.triggered:
         if expects_finished_output and last_output_time is None:
             fail(None, None, 'Simulation completed without delivering any finished parts to OUT.')
+        elif planned_waits:
+            fail(None, None, 'Simulation horizon reached while operators were still completing explicitly assigned Wait tasks.')
         elif waiting_by_operator:
             op, (loc, reason) = next(iter(sorted(waiting_by_operator.items())))
             fail(op, loc, f'Simulation reached its limit with unresolved waiting: {op}: {reason}')

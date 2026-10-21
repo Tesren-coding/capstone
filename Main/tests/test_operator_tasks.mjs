@@ -37,4 +37,12 @@ assert.equal(clearMaterialBoxStandingSides(mixedLocations, {
 assert.equal(clearMaterialBoxStandingSides(mixedLocations, {IN_1:{type:'in'}, SWIP_1:{type:'swip'}, OUT_1:{type:'out'}}),0);
 assert.deepEqual(mixedLocations.Op6.sequence.filter(x => x.standing_side).map(x => x.loc),['1']);
 
+const withWait = [
+    {action:'pick',loc:'IN_1'}, {action:'drop',loc:'1'},
+    {action:'wait',duration:7.5}, {action:'work',loc:'1',process:'p1'},
+];
+assert.deepEqual(sequenceToTasks(withWait).map(t=>t.kind),['transfer','wait','process']);
+assert.deepEqual(tasksToSequence(sequenceToTasks(withWait)),withWait);
+assert.deepEqual(tasksToSequence([defaultOperatorTask('wait')]), [{action:'wait',duration:1}]);
+
 console.log('Operator task compilation, cross-operator handoffs, standing side and legacy roundtrip passed.');

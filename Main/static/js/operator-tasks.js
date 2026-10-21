@@ -20,6 +20,9 @@ export function sequenceToTasks(sequence = []) {
             tasks.push({kind:'transfer',source:a.loc,source_side:a.standing_side,
                 target:b.loc,target_side:b.standing_side,wait_for_process:a.wait_for_process});
             i += 2;
+        } else if (a?.action === 'wait') {
+            tasks.push({kind:'wait', duration:a.duration});
+            i += 1;
         } else if (a?.action === 'work') {
             tasks.push({kind:'process',station:a.loc,process:a.process,work_side:a.standing_side});
             i += 1;
@@ -56,6 +59,8 @@ export function tasksToSequence(tasks = []) {
                     action('work',task.station,{process:task.process,side:task.work_side}),
                     action('pick',task.station,{side:task.pick_side,wait_for_process:task.wait_for_process}),
                     action('drop',task.target,{side:task.target_side})];
+            case 'wait':
+                return [{action:'wait', duration:task.duration}];
             case 'legacy':
                 return task.step ? [copy(task.step)] : [];
             default: return [];
@@ -75,6 +80,7 @@ export function defaultOperatorTask(kind) {
         case 'transfer': return {kind, source:'', target:''};
         case 'process': return {kind,station:'',process:''};
         case 'cycle': return {kind,source:'',station:'',process:'',target:''};
+        case 'wait': return {kind, duration:1};
         default: throw new Error('Unknown task type.');
     }
 }
