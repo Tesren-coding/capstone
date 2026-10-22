@@ -36,6 +36,12 @@ FETCH_STUB = r'''() => {
  Object.defineProperty(window,'sessionStorage',{configurable:true,value:{
    getItem:k=>store[k]??null,setItem:(k,v)=>{store[k]=v},removeItem:k=>{delete store[k]}
  }});
+ // Most existing browser regression cases intentionally exercise server-save
+ // behavior. In production, insecure HTTP defaults to device downloads instead.
+ const prefs={'capstone-builder-scenario-save-location':'server'};
+ Object.defineProperty(window,'localStorage',{configurable:true,value:{
+   getItem:k=>prefs[k]??null,setItem:(k,v)=>{prefs[k]=v},removeItem:k=>{delete prefs[k]}
+ }});
  window.__savedByTest={};
  window.fetch=async(url,options={})=>{
    const payload=options.body?JSON.parse(options.body):{};

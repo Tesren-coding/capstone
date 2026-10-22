@@ -40,6 +40,7 @@ def test():
         page.set_content(HTML)
         page.evaluate(FETCH_STUB)
         page.evaluate(FAKE_FOLDER)
+        page.evaluate('localStorage.setItem("capstone-builder-scenario-save-location","local")')
         page.add_script_tag(content=BUNDLE)
         page.wait_for_selector('body[data-builder-ready="true"]')
         assert page.locator('#save-location-mode').input_value() == 'local'

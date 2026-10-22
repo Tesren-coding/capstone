@@ -8,9 +8,9 @@ Select one of three storage modes above the Line Builder canvas:
 
 1. **Local Folder (your device)** — recommended. Choose a folder, save `.json` scenario files there, reopen them from the list, rename files or create numbered versions. The browser tries to remember the selected folder for this site on this device, but may ask you to reconnect and grant access in a later session.
 2. **Server (existing saves)** — retains the original Flask JSON and SQL Server scenario save/load/rename endpoints. Select this mode to access existing server saves. This option does not move or delete server files.
-3. **Download / Import JSON** — browser-only JSON download and import fallback; suitable if direct folder permissions are not supported or the site is opened over insecure HTTP.
+3. **Download / Open File** — browser-only JSON download and import fallback; suitable if direct folder permissions are not supported or the site is opened over insecure HTTP.
 
-The existing Import JSON and Export JSON buttons remain accessible. Export JSON now uses the browser directly and does not POST the data to a server for a download.
+The **Open Device File…** and **Export JSON** buttons remain accessible. The old Import JSON button has been replaced by the more descriptive file-opening action. Export JSON now uses the browser directly and does not POST the data to a server for a download.
 
 ## How to use Local Folder
 
@@ -30,11 +30,11 @@ The existing Import JSON and Export JSON buttons remain accessible. Export JSON 
 - Files are not auto-deleted, and switching storage modes never moves or erases files.
 - Browser permissions and the remembered folder handle are scoped to the browser profile and website origin. A different device, browser profile, or website hostname may need its own folder selection.
 - Any unsaved browser draft still uses existing sessionStorage recovery; that is not a reliable long-term backup.
-- The app still sends scenario data to Flask when running simulations or importing legacy-format JSON to normalize the schema. **Local saving only changes persistence**; it does not make the simulation run entirely offline.
+- The app still sends scenario data to Flask when running simulations or opening JSON files for schema normalization; these validation calls do not persist a scenario on the server. **Local saving only changes persistence**; it does not make the simulation run entirely offline.
 
 ## Compatibility and limits
 
-- Direct device folder access requires the File System Access API in a secure context, typically **desktop Chrome or Edge + HTTPS** (or `localhost`). Accessing a LAN server by plain `http://192.168.x.x` often does not qualify; set up HTTPS or use Download / Import JSON.
+- Direct device folder access requires the File System Access API in a secure context, typically **desktop Chrome or Edge + HTTPS** (or `localhost`). Accessing a LAN server by plain `http://192.168.x.x` often does not qualify; set up HTTPS or use Download / Open File.
 - Folder access is permission-based. Browsers may revoke permission or ask for a new confirmation in future visits; click **Choose Folder…** to reconnect.
 - Browser-managed folder handles are remembered in IndexedDB if permitted. Scenario contents are not saved in IndexedDB, just the folder handle. Scenario JSON remains in the folder chosen by the user.
 - This changes **Line Builder scenario** storage only. PQPR, Line Balancing, and Builder Setup still use their existing storage systems. A single `.capstone` project file spanning all modules is a separate future enhancement.
@@ -47,5 +47,6 @@ The existing Import JSON and Export JSON buttons remain accessible. Export JSON 
 - `static/js/builder.js` — store selector integration, safe save/load, conflict detection, client-side JSON export and session draft compatibility.
 - `tests/browser_local_folder_saves.py` — browser exercise of local folder save/load/rename/switch/fallback with mocked File System Access API.
 - `tests/browser_builder_smoke.py` — loads the additional module in existing browser tests.
+- `Updates/HOSTED_SERVER_DEVICE_FILE_ACCESS.md` — deployment fallback for insecure HTTP.
 
 No SQL migration or backend storage change is necessary.

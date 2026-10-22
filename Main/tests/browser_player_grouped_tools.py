@@ -19,7 +19,7 @@ for name, selector in [('Line Settings','line-settings-heading'),('Scenario File
 assert builder.select_one('#builder-under-canvas #line-settings-heading')
 # Run Simulation belongs in the combined Line Settings row, not its own heading.
 assert builder.select_one('#builder-under-canvas #run-scenario-btn')
-assert builder.select_one('#import-scenario-btn').has_attr('hidden')
+assert builder.select_one('#open-device-file-btn').text.strip() == 'Import JSON…'
 for id_ in ('new-line-btn','save-scenario-btn','load-scenario-btn','run-scenario-btn','choose-local-folder-btn','dimension-tool-btn','reorder-operators-btn'):
     assert len(builder.select('#'+id_))==1,id_
 print('Playback controls and dockable Line Tool verified; control IDs preserved.')

@@ -2346,7 +2346,8 @@ let preferredStorageMode = 'local';
 try { preferredStorageMode = localStorage.getItem(STORAGE_MODE_KEY) || 'local'; }
 catch { /* Blocked storage does not prevent use of the editor. */ }
 if (!['local', 'server', 'download'].includes(preferredStorageMode)) preferredStorageMode = 'local';
-if (!localFolderCapable && preferredStorageMode === 'local') preferredStorageMode = 'server';
+// Do not silently redirect device saves to Flask when direct folder access is unavailable.
+if (!localFolderCapable && preferredStorageMode === 'local') preferredStorageMode = 'download';
 storageModeSelect.value = preferredStorageMode;
 
 function storageMode() {return storageModeSelect.value;}
@@ -2363,10 +2364,12 @@ function updateStorageControls() {
     } else if (mode === 'server') {
         localFolderStatus.textContent = localFolderCapable
             ? 'Server saves are separate from device files'
-            : 'Folder picker unavailable here: use Chrome/Edge with HTTPS or localhost, or choose Download / Import JSON';
+            : 'Folder access unavailable on this website. Import JSON works here; direct folder saving requires Chrome/Edge on HTTPS or localhost.';
         document.getElementById('save-scenario-btn').title = 'Save on the Flask server';
     } else {
-        localFolderStatus.textContent = 'Save downloads a JSON file; use Import JSON to reopen it';
+        localFolderStatus.textContent = localFolderCapable
+            ? 'Save downloads a JSON file. Use Import JSON to reopen it, or select Local Folder for direct saving.'
+            : 'Direct folder access needs HTTPS + Chrome/Edge (or localhost). Save downloads JSON; Import JSON reads it from this computer. No scenario files are saved on the server.';
         document.getElementById('save-scenario-btn').title = 'Download a JSON copy to your device';
     }
 }
@@ -2527,8 +2530,8 @@ async function refreshScenarioList(selectedFilename = loadedFilename) {
     const select = document.getElementById('scenario-select');
     updateStorageControls();
     if (storageMode() === 'download') {
-        select.replaceChildren(new Option('-- Use Import JSON to open a file --', ''));
-        note.textContent = 'Download / Import mode · Save downloads a JSON file to your device. No files are stored on the Flask server.';
+        select.replaceChildren(new Option('-- Click Import JSON to open a saved file --', ''));
+        note.textContent = 'Device file mode · Import JSON loads local scenarios; Save downloads JSON to your computer. Direct folder listing requires HTTPS + Chrome/Edge. The app does not persist this file on the server.';
         return [];
     }
     if (storageMode() === 'local') {
@@ -2816,32 +2819,61 @@ async function initBuilder() {
 }
 
 const importFile = document.getElementById('import-scenario-file');
-document.getElementById('import-scenario-btn').addEventListener('click', () => importFile.click());
+const importJsonButton = document.getElementById('open-device-file-btn');
+importJsonButton.addEventListener('click', () => {
+    // The browser file picker works on HTTP and HTTPS and requires no access
+    // to a folder on the user's device from the Flask server.
+    importFile.click();
+});
 importFile.addEventListener('change', async () => {
-    const file = importFile.files[0];
+    const file = importFile.files?.[0];
     if (!file) return;
-    const button = document.getElementById('import-scenario-btn');
-    button.disabled = true;
+    importJsonButton.disabled = true;
     try {
+        if (!/\.json$/i.test(file.name))
+            throw new Error('Select a .json scenario file.');
         let original;
         try { original = JSON.parse(await file.text()); }
-        catch { throw new Error('This file is not valid JSON. Choose a scenario JSON file.'); }
+        catch { throw new Error('This file is not valid JSON. Choose a Line Builder scenario file.'); }
+        if (!original || typeof original !== 'object' || Array.isArray(original))
+            throw new Error('This JSON file does not contain a valid Line Builder scenario.');
+        // The server validates and normalizes the schema; this endpoint does
+        // not save the imported file in the server's JSON/SQL scenario store.
         const result = await postJson('/import-scenario', {scenario: original});
-        const current = JSON.stringify(serializeScenario());
-        const hasItems = Object.values(scenario).some(items => Object.keys(items).length > 0) || taktTimeInput.value !== '30';
-        if (hasItems && isCurrentUnsaved() && !confirm('Replace your unsaved builder changes with the imported scenario?')) return;
+        if (!result || result.status !== 'imported' || !result.scenario)
+            throw new Error('The server did not return a valid imported scenario.');
+        if (isCurrentUnsaved() && !confirm('Import this JSON scenario and replace unsaved changes in the editor? Your existing saved files will not be changed.')) {
+            statusText.textContent = 'JSON import cancelled. Your current line is unchanged.';
+            return;
+        }
         applyLoadedScenario(result.scenario);
         loadedFilename = null;
         loadedRevision = null;
-        loadedSaveLocation = null; loadedFileText = null;
+        loadedSaveLocation = null;
+        loadedFileText = null;
         lastSavedSnapshot = null;
-        suggestedFilename = file.name;
+        suggestedFilename = localFiles.jsonFilename(file.name);
+        // Opening a personal JSON file must never silently change it into a
+        // server-side saved scenario. If the user had selected Server, use
+        // download mode until they explicitly choose another save location.
+        if (storageMode() === 'server') {
+            storageModeSelect.value = 'download';
+            try { localStorage.setItem(STORAGE_MODE_KEY, 'download'); } catch {}
+            updateStorageControls();
+            await refreshScenarioList();
+        }
         rememberDraft();
-        statusText.textContent = `Imported "${file.name}"` + (result.migrated_from ? ` — upgraded from format v${result.migrated_from} to v${schemaVersion}.` : '.');
+        const saveMessage = storageMode() === 'local'
+            ? 'Use Save Scenario to choose or use a device folder.'
+            : 'Use Save Scenario to download a copy. No server save was created.';
+        statusText.textContent = `Imported JSON \"${file.name}\"` +
+            (result.migrated_from ? ` (converted from format v${result.migrated_from}). ` : '. ') +
+            saveMessage;
     } catch (err) {
-        statusText.textContent = 'Import failed: ' + err.message;
+        statusText.textContent = 'JSON import failed: ' + (err.message || 'Unable to read scenario.');
     } finally {
-        button.disabled = false;
+        importJsonButton.disabled = false;
+        // Re-selecting the same file later must fire change again.
         importFile.value = '';
     }
 });

@@ -69,13 +69,13 @@
 <div id="toolbar2" class="builder-tool-groups" aria-label="Line settings and scenario management">
     <section class="builder-tool-group builder-tool-wide" aria-labelledby="scenario-files-heading">
         <h3 id="scenario-files-heading">Scenario Files</h3>
-        <p>Start a new line, save or open an existing scenario, or use a folder on this device.</p>
+        <p>Start a new line, import a JSON scenario from your device, or open a saved scenario.</p>
     <div id="save-location-controls" style="display:flex;align-items:center;justify-content:center;gap:9px;flex-wrap:wrap;margin:9px auto 12px;">
         <label for="save-location-mode" style="font-weight:600;">Scenario storage:</label>
         <select id="save-location-mode" aria-label="Scenario storage location" style="padding:8px;">
             <option value="local">Local Folder (your device)</option>
             <option value="server">Server (existing saves)</option>
-            <option value="download">Download / Import JSON</option>
+            <option value="download">Download / Open File</option>
         </select>
         <button type="button" id="choose-local-folder-btn" style="padding:8px 12px;border:2px solid #315f9f;">Choose Folder…</button>
         <button type="button" id="refresh-local-folder-btn" style="padding:8px 12px;">Refresh Files</button>
@@ -84,7 +84,7 @@
         <div class="builder-scenario-controls">
     <button type="button" id="new-line-btn" title="Clear the canvas and start with Raw Material, Line Direction and Finished Goods" style="padding:10px 18px; background:#eef3fc; border:2px solid #315f9f; margin-right:8px;">+ New Line</button>
     <button id="save-scenario-btn" style="padding:10px 18px; background:#e8f4ea; border:2px solid #2d7a3a; margin-right:8px;">Save Scenario</button>
-    <button id="import-scenario-btn" type="button" hidden aria-hidden="true" tabindex="-1">Import JSON</button>
+    <button id="open-device-file-btn" type="button" title="Import a Line Builder scenario from a JSON file on your device; works over HTTP or HTTPS" style="padding:10px 18px; background:#eef4ff; border:2px solid #537cb0; margin-right:8px;">Import JSON…</button>
     <input id="import-scenario-file" type="file" accept=".json,application/json" hidden>
     <button id="export-scenario-btn" style="padding:10px 18px; margin-right:8px;">Export JSON</button>
 

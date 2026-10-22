@@ -40,7 +40,7 @@ with sync_playwright() as p:
     assert page.locator('#toolbar .add-btn').count()==6
     assert page.locator('#builder-under-canvas #run-scenario-btn').count()==1
     assert page.locator('#builder-under-canvas #takt-time-input').count()==1
-    assert page.locator('#import-scenario-btn').is_hidden()
+    assert page.locator('#open-device-file-btn').is_visible()
     assert page.locator('#save-scenario-btn').is_visible()
     browser.close()
 print('Line Tool docking, layout orientation, hide/show and tool placements passed.')
